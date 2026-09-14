@@ -1,6 +1,5 @@
 # Architecture Overview
 
-
 This document specifies the technical architecture and component interactions of the MCP Local Memory system.
 
 ## 1. Physical & Process Architecture
@@ -75,7 +74,7 @@ graph TD
 
 - **Local-First**: No data leaves the machine. Embeddings are generated locally using ONNX.
 - **Modular Storage**: Logic is decoupled into specialized entities (`MemoryEntity`, `TaskEntity`, `StandardEntity`, etc.) that inherit from a shared `BaseEntity` for consistent DB access.
-- **SQLite**: Single shared DB — platform config dir → `./storage/memory.db` fallback (AGENTS.md:128); both MCP server and Dashboard access the same file.
+- **SQLite**: Shared primary DB (`memory.db`) — `MEMORY_DB_PATH` → platform config dir (created) → `./storage/memory.db` when it already exists (AGENTS.md:129); both MCP server and Dashboard access the same file, and archived memories offload to `cold-archive.db` (enabled by default).
 - **Scope Injection**: `owner`, `repo`, and `folder` are auto-injected from MCP session context (roots) into tool arguments.
 - **Write Locking**: All mutation tools run under `WriteLock.withLock()` using `proper-lockfile`.
 - **Activity Tracking**: Every tool call is logged to the `action_log` table for full audit visibility.
@@ -108,7 +107,7 @@ End-to-end flows per layer (transport → validation → persistence → retriev
 
 ### Codebase index path
 
-`discover` → `compare` (mtime pre-filter) → `parse` (tree-sitter WASM, per-language grammar) → `store` (`writeParseBatch`, 100 rows/txn) → `clean` (stale deletion). Read via `codebase-read` (SEARCH / TRACE / FILE / CONTENT / ARCHITECTURE modes) backed by `codebase_symbols_fts` + `codebase_references` edges. See [Codebase Index Architecture](../codebase-index/architecture.md) and [Operations runbook](../../application/modules/codebase-index/runbook.md).
+`discover` → `compare` (mtime pre-filter) → `parse` (tree-sitter WASM, per-language grammar) → `store` (`writeParseBatch`, 100 rows/txn) → `clean` (stale deletion). Read via `codebase-read` (SEARCH / TRACE / FILE / CONTENT / ARCHITECTURE modes) backed by `codebase_symbols_fts` + `codebase_references` edges. See [Codebase Index Architecture](../../application/modules/codebase-index/specs/design-architecture.md) and [Operations runbook](../../application/modules/codebase-index/runbook.md).
 
 ### Task coordination path
 

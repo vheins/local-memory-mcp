@@ -14,4 +14,4 @@ Workspace-first via `WorkspaceSwitcher` (9 shared primitives, lazy route splitti
 | UI      | `src/dashboard/ui/src/App.svelte`, `src/dashboard/ui/src/lib/`, `views/`                        |
 | API     | `/api/memories`, `/api/tasks`, `/api/codebase/*`, `/api/queue/*`, `/api/health`, `/api/metrics` |
 
-Build: `npm run build` (vite + tsup + `scripts/copy-grammar-wasm.sh` + `scripts/gen-bins.mjs`). Dev: `npm run dashboard:dev` (:5173 proxy → :3456). See [brief.md](../../../brief.md) and [design/ui/](../../design/ui/).
+Build: `npm run build` (vite + tsup + `scripts/copy-grammar-wasm.sh` + `scripts/gen-bins.mjs`). Dev: `npm run dashboard:dev` (:5173 proxy → :3456). See [brief.md](../../../brief.md) and [design/ui/](../../../design/ui/).

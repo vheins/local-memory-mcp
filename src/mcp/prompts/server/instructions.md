@@ -85,7 +85,7 @@ Reads that support globals use `((owner = ? AND repo = ?) OR is_global = 1)` whe
 
 The codebase index (`codebase_files` / `codebase_symbols` / `codebase_references` plus `codebase_symbols_fts`) is partitioned by `repo` string only; no `owner` column and no per-owner isolation is planned. See ADR-008.
 
-> Full rationale and consequences: `.agents/documents/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`.
+> Full rationale and consequences: `.agents/documents/design/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`.
 
 ## Core Workflows
 

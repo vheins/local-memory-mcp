@@ -4,18 +4,18 @@
 
 ## 1. Overview
 
-`@vheins/local-memory-mcp` v0.44.1 — local-first MCP server giving AI agents long-term memory, task orchestration, and codebase awareness. Dogfoods itself: the repo's own memory lives in `~/.config/local-memory-mcp/memory.db` (fallback `./storage/memory.db`, WAL, gitignored). No data leaves the machine; embeddings run locally via ONNX.
+`@vheins/local-memory-mcp` v0.46.0 — local-first MCP server giving AI agents long-term memory, task orchestration, and codebase awareness. Dogfoods itself: the repo's own memory lives in `~/.config/local-memory-mcp/memory.db` (platform config dir, created by default; `./storage/memory.db` is used when it already exists; WAL, gitignored). No data leaves the machine; embeddings run locally via ONNX.
 
 ## 2. Architecture
 
-Two processes sharing one SQLite DB (`proper-lockfile` writes):
+Two processes sharing one primary SQLite DB (`memory.db`, `proper-lockfile` writes; archived memories offload to `cold-archive.db`, enabled by default):
 
 - **MCP server** `src/mcp/server.ts` → `dist/mcp/server.js` (stdio, JSON-RPC) — 20 tools, 32 prompts, hybrid search (FTS5 + vectors 40/30/15/15), knowledge graph, embedding outbox worker.
 - **Dashboard** `src/dashboard/server.ts` → port 3456 (Express 5 + Svelte 5 via Vite → `dist/dashboard/public/`) — Kanban, Activity, KG viz, Reference catalog, Standards, Handoffs; optional `DASHBOARD_TOKEN`.
 - **Codebase index** inside same DB (`codebase_*` tables) — tree-sitter WASM grammars (`dist/grammars/*.wasm`), `codebase-read` modes SEARCH/TRACE/FILE/CONTENT/ARCHITECTURE.
 - **Runtime profiles** `MCP_RUNTIME_PROFILE` minimal/balanced/full (default full).
 
-See [Architecture](design/architecture/architecture.md) · [DB schema](design/database/schema.md) · Tool contract `src/mcp/prompts/server/instructions.md`.
+See [Architecture](../design/architecture/architecture.md) · [DB schema](../design/database/schema.md) · Tool contract `src/mcp/prompts/server/instructions.md`.
 
 ## 3. Key Features
 

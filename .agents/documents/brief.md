@@ -4,7 +4,8 @@
 
 `@vheins/local-memory-mcp` is a local-first MCP server that gives AI agents
 long-term memory, task orchestration, and codebase awareness. All data stays on
-machine in a single SQLite DB (`memory.db`). A Svelte dashboard provides a
+machine in local SQLite (`memory.db`; archived memories offload to `cold-archive.db`,
+enabled by default). A Svelte dashboard provides a
 human inspector for tasks, memories, and knowledge.
 
 ## Architecture
@@ -16,8 +17,8 @@ Two processes share `memory.db` (WAL mode, `proper-lockfile` writes):
 - **Dashboard** (`src/dashboard/server.ts` → port 3456, Express + Svelte 5) —
   Kanban, Activity, KG viz, Reference catalog, Standards, Handoffs.
 
-See [Architecture Overview](design/architecture/architecture.md), [DB ERD](design/database/database-erd.md),
-[Design decisions](design/decisions/) and [Canonical ADRs](decisions/).
+See [Architecture Overview](design/architecture/architecture.md), [DB schema](design/database/schema.md),
+[Design decisions](design/decisions/) and [Canonical ADRs](design/decisions/README.md).
 
 ## Key Features
 

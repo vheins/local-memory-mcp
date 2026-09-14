@@ -5,7 +5,6 @@
 - **Status:** Draft
 - **Date:** 2026-07-22
 
->
 > **IMPLEMENTED (verified 2026-08-10, TASK-323 / RS-1):** the `codebase://` resource URIs from "Resource URIs (Phase 1.2)" are now **shipped** as MCP resources — the 2026-08-08 NEXT-PHASE note is superseded. Registered SDK templates (`src/mcp/resources/sdk-index.ts:183-279`): `codebase://{repo}/symbols` (+ `{?search,kind,limit}` and single-param `{?search}`/`{?kind}`/`{?limit}`/`{?offset}`), `codebase://{repo}/symbols/{name}`, `codebase://{repo}/files/{+file_path}` — listing/completion in `src/mcp/resources/codebase.ts:173-261`, dispatch in `src/mcp/resources/index.ts:397-401`. Shapes: symbols list = `searchSymbols` records (name/kind/file_path/lines/signature/exported), symbol detail = `traceSymbol` payload (definition + merged references + export chain + parent/children; ambiguous → disambiguation; missing → `-32002`), file = FILE-mode landmark with `content: null`. **Honest limits:** reads are DB-flat — **symbols and spans only, raw content is never stored/served** (disk-only via `codebase-read` CODE mode); a not-indexed repo fails with `RecoverableError` ("Repo … not indexed. Run codebase-index on repo.").
 
 ---
@@ -605,12 +604,12 @@ Bump `SCHEMA_VERSION` from **2** to **3** in `src/mcp/storage/migrations/index.t
 
 ### Test Levels
 
-| Level              | Focus                                                                   | Tools                  | Location                                                     |
-| :----------------- | :---------------------------------------------------------------------- | :--------------------- | :----------------------------------------------------------- |
-| **Unit**           | Individual service logic (discovery, entity queries, schema validation) | Vitest                 | `src/mcp/tests/codebase-index/*.test.ts`                     |
-| **Integration**    | End-to-end index pipeline with real SQLite backend                      | Vitest + temp SQLite   | `src/mcp/tests/codebase-index/mcp-tools.integration.test.ts` |
-| **Parser Fixture** | tree-sitter AST extraction against known source files                   | Vitest + fixture files | `src/mcp/tests/fixtures/codebase-index/`                     |
-| **MCP Tool**       | Tool handler input/output contract verification                         | Vitest + mock DB       | `src/mcp/tests/codebase-index/mcp-tools.integration.test.ts` |
+| Level              | Focus                                                                   | Tools                  | Location                                                       |
+| :----------------- | :---------------------------------------------------------------------- | :--------------------- | :------------------------------------------------------------- |
+| **Unit**           | Individual service logic (discovery, entity queries, schema validation) | Vitest                 | `src/mcp/tests/codebase-index/*.test.ts`                       |
+| **Integration**    | End-to-end index pipeline with real SQLite backend                      | Vitest + temp SQLite   | `src/mcp/tests/codebase-index/mcp-tools.integration.*.test.ts` |
+| **Parser Fixture** | tree-sitter AST extraction against known source files                   | Vitest + fixture files | `src/mcp/tests/fixtures/codebase-index/`                       |
+| **MCP Tool**       | Tool handler input/output contract verification                         | Vitest + mock DB       | `src/mcp/tests/codebase-index/mcp-tools.integration.*.test.ts` |
 
 ### Test Files
 
@@ -618,7 +617,7 @@ Bump `SCHEMA_VERSION` from **2** to **3** in `src/mcp/storage/migrations/index.t
 | :-------------------------- | :----------------------------------------------------------------------------------------------------------------- | :-------------- |
 | `codebase-*.entity.test.ts` | CRUD for files, symbols, relations; bulk insert; search queries; cascade deletes                                   | 90%+            |
 | `file-discovery.test.ts`    | Directory walking, `.gitignore` parsing, binary detection, symlink handling, size limits                           | 95%+            |
-| `parser.test.ts`            | tree-sitter initialization, symbol extraction per kind, doc comment extraction, signature building, error recovery | 90%+            |
+| `parser.*.test.ts`          | tree-sitter initialization, symbol extraction per kind, doc comment extraction, signature building, error recovery | 90%+            |
 | `tools.test.ts`             | Tool handler validity, input validation, error cases, response formatting                                          | 90%+            |
 
 ### Fixture Files
@@ -711,14 +710,14 @@ tree-sitter grammar WASM files must be loadable at runtime. Two approaches:
 
 ## Related Documents
 
-| Document                         | Location                                           |
-| :------------------------------- | :------------------------------------------------- |
-| Business Requirements            | `brd.md`                                           |
-| Product Requirements             | `prd.md`                                           |
-| Functional Specification         | `fsd.md`                                           |
-| Architecture Design              | `./design-architecture.md`      |
-| API Contracts                    | `../../api/codebase-index/api-codebase.md`                      |
-| Domain Model                     | `./design-domain.md`            |
-| Database Schema                  | `./design-schema.md`            |
+| Document                         | Location                                                 |
+| :------------------------------- | :------------------------------------------------------- |
+| Business Requirements            | `brd.md`                                                 |
+| Product Requirements             | `prd.md`                                                 |
+| Functional Specification         | `fsd.md`                                                 |
+| Architecture Design              | `./design-architecture.md`                               |
+| API Contracts                    | `../../api/codebase-index/api-codebase.md`               |
+| Domain Model                     | `./design-domain.md`                                     |
+| Database Schema                  | `./design-schema.md`                                     |
 | ADR-002 (Architecture Decisions) | `../../../../design/decisions/adr-002-codebase-index.md` |
-| Overall Architecture             | `../../design/architecture/architecture.md`        |
+| Overall Architecture             | `../../design/architecture/architecture.md`              |

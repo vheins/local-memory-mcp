@@ -5,6 +5,12 @@
 - **Author**: orchestrator (file-based fallback — MCP task tools unavailable)
 - **Related tasks**: see `../_tasks/testing-standardization.md`
 
+> **Historical snapshot (2026-08-08).** Findings **F-5** and **F-6** (documentation drift in
+> `CONTRIBUTING.md` and `codebase-index/specs/tdd.md`) have since been repaired, and the
+> legacy test layout was consolidated — the paths quoted below are retained as the original
+> audit record only. See [.agents/documents/testing.md](../../../testing.md) for the current
+> testing standard.
+
 ---
 
 ## 1. Executive Summary

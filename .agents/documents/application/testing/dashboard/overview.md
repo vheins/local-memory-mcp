@@ -4,7 +4,7 @@
 
 ## Strategy
 
-Dashboard has two runtimes sharing one SQLite DB (WAL):
+Dashboard has two runtimes sharing the primary SQLite DB `memory.db` (WAL), alongside the optional `cold-archive.db` cold tier (enabled by default via `COLD_ARCHIVE_ENABLED`; `src/mcp/utils/constants.ts:547`):
 
 - **Express API** (`src/dashboard/server.ts`, REST `/api/*` on `PORT=3456`, bind `DASHBOARD_HOST=127.0.0.1`, JSON limit `DASHBOARD_JSON_LIMIT=50mb` via `src/mcp/utils/constants.ts`).
 - **Svelte 5 UI** (`src/dashboard/ui/`, workspace with own `node_modules`, Vite build to `dist/dashboard/public/` via `npm run build` or `npm run dashboard:build`).
@@ -78,7 +78,7 @@ Live UI work: `npm run dashboard:dev` (`:5173`, proxies `/api` → `:3456`) alon
 ## Links
 
 - Standard: [../../../testing.md](../../../testing.md) §1–9 · Global rules: `~/.agents/rules/test-architecture.md` plus `development-quality.md`
-- API catalog: [../../api/README.md](../../api/README.md) (dashboard REST is separate from MCP `tools/call` transport) · Legacy API detail: `../../api/` → [../../../api/codebase-index.md](../../../api/codebase-index.md)
+- API catalog: [../../api/README.md](../../api/README.md) (dashboard REST is separate from MCP `tools/call` transport) · Legacy API detail: `../../api/` → [api/codebase-index/api-codebase.md](../../api/codebase-index/api-codebase.md)
 - Module: [../../modules/dashboard/overview.md](../../modules/dashboard/overview.md) · Manifest: [../../modules/manifest.md](../../modules/manifest.md)
 - Server: `src/dashboard/server.ts` · Constants: `src/mcp/utils/constants.ts` · Bins: `bin/mcp-memory-dashboard.js`
 - Compliance: `STD-002` (accessibility, focus, and polling baseline) — enforced in UI tests

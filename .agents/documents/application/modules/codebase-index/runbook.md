@@ -5,6 +5,7 @@
 > **API Reference:** [Codebase Index API](../../api/codebase-index/api-codebase.md)
 
 > **Note:** Runbook relocated from `application/modules/codebase-index/runbook.md` → `application/modules/codebase-index/runbook.md` (Opsi A).
+
 ---
 
 ## Overview
@@ -420,13 +421,13 @@ For production deployments, ensure at least 1 GB free to accommodate growth and 
 
 ### Database Location
 
-All codebase tables (`codebase_files`, `codebase_symbols`, `codebase_references`, `codebase_symbols_fts`) are stored in the same `memory.db` database as memories, tasks, standards, and other application data. The database location follows this resolution order:
+All codebase tables (`codebase_files`, `codebase_symbols`, `codebase_references`, `codebase_symbols_fts`) are stored in the same `memory.db` database as memories, tasks, standards, and other application data. The database location follows this resolution order (`src/mcp/storage/sqlite.ts:29-49`):
 
 1. `MEMORY_DB_PATH` environment variable (explicit override)
-2. `~/.config/local-memory-mcp/memory.db` (Linux)
-3. `~/Library/Application Support/local-memory-mcp/memory.db` (macOS)
-4. `%USERPROFILE%\.local-memory-mcp\memory.db` (Windows)
-5. `./storage/memory.db` (current working directory, legacy fallback)
+2. Platform config dir **if the file already exists** — `~/.config/local-memory-mcp/memory.db` (Linux), `~/Library/Application Support/local-memory-mcp/memory.db` (macOS), `%USERPROFILE%\.local-memory-mcp\memory.db` (Windows)
+3. Legacy `~/.config/local-memory-mcp/memory.db` **if it already exists**
+4. `./storage/memory.db` (current working directory) **if it already exists**
+5. Platform config dir (created if absent) — the final fallback when none of the above exists
 
 ### Automatic Backup — NOT IMPLEMENTED
 

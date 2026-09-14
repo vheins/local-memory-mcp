@@ -1,8 +1,8 @@
 # Tasks — Index (Blueprint Phase 1)
 
-> **Bridge note:** This `tasks/` directory is the **canonical** Phase 1 tasks surface per the blueprint (`tasks/{backlog,roadmap,sprints}/`). It does not duplicate execution detail — it indexes and links to the source of truth. Legacy file-based tracking lives in [`../_tasks/`](../_tasks/) and is bridged via [`../_tasks/BRIDGE.md`](../_tasks/BRIDGE.md) (kept for compatibility; do not author new tasks there). For the live task system use the MCP tools (`task-read` / `task-write` / `claim-manage`); this directory is the **docs index**, not the runtime store.
+> **Bridge note:** This `tasks/` directory is the **canonical** Phase 1 tasks surface per the blueprint (`tasks/{backlog,roadmap,sprints}/`). It does not duplicate execution detail — it indexes and links to the source of truth. Legacy file-based tracking historically lived in `../_tasks/` and was bridged via `../_tasks/BRIDGE.md` (legacy fallback removed after the P-03 cutover; do not author new tasks there). For the live task system use the MCP tools (`task-read` / `task-write` / `claim-manage`); this directory is the **docs index**, not the runtime store.
 
-Canonical docs live elsewhere — this index points to them, per the Documentation Map in [`AGENTS.md`](../../AGENTS.md) and [`../brief.md`](../brief.md).
+Canonical docs live elsewhere — this index points to them, per the Documentation Map in [`AGENTS.md`](../../../AGENTS.md) and [`../brief.md`](../brief.md).
 
 ## Structure
 
@@ -23,7 +23,7 @@ Canonical docs live elsewhere — this index points to them, per the Documentati
 | `../_tasks/`        | Legacy file-based fallback (MCP unavailable)                 | Frozen — one file: `testing-standardization.md` (REFACTOR-TST-000..014) | No — use MCP `task-write`; `_tasks/` is compat only via `BRIDGE.md` |
 | MCP runtime         | Live task store (SQLite `tasks` table)                       | Authoritative for execution                                             | Yes — via `task-write` (phase+title+description)                    |
 
-Legacy detail stays in [`../_tasks/testing-standardization.md`](../_tasks/testing-standardization.md) (13-task standardization initiative, source of backlog context). This `tasks/` surface summarizes and links — it does not re-author that file.
+Legacy detail historically stayed in `../_tasks/testing-standardization.md` (13-task standardization initiative, source of backlog context; legacy fallback removed after the P-03 cutover). This `tasks/` surface summarizes and links — it does not re-author that file.
 
 ## Links
 

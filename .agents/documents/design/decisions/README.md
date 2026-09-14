@@ -44,5 +44,5 @@ Canonical (adopted, previously `_archive/decisions/`):
 ## Links
 
 - Canonical ADRs: `.` (this folder; `ADR-*`/`SPEC-*`)
-- Codebase index architecture: [`../codebase-index/architecture.md`](../codebase-index/architecture.md)
+- Codebase index architecture: [`../../application/modules/codebase-index/specs/design-architecture.md`](../../application/modules/codebase-index/specs/design-architecture.md)
 - Operations runbook: [`../../application/modules/codebase-index/runbook.md`](../../application/modules/codebase-index/runbook.md)

@@ -6,9 +6,9 @@
 
 | Phase     | Scope                                                                                               | Status             | Canonical                                                                                                                                                |
 | :-------- | :-------------------------------------------------------------------------------------------------- | :----------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **P0**    | Bootstrap — repo, SQLite `memory.db`, MCP stdio scaffold                                            | **DONE**           | [`AGENTS.md`](../../AGENTS.md) · `src/mcp/server.ts`                                                                                                     |
+| **P0**    | Bootstrap — repo, SQLite `memory.db`, MCP stdio scaffold                                            | **DONE**           | [`AGENTS.md`](../../../AGENTS.md) · `src/mcp/server.ts`                                                                                                  |
 | **P1–P6** | Memory / Tasks / Standards / Handoffs / Codebase Index / Dashboard (20 tools, 32 prompts, Svelte 5) | **Partial**        | [`../brief.md`](../brief.md) · [`../application/modules/manifest.md`](../application/modules/manifest.md) · [`../design/README.md`](../design/README.md) |
-| **P7–P8** | Hardening — perf, coverage, CI gate                                                                 | **Missing**        | [`../_tasks/testing-standardization.md`](../_tasks/testing-standardization.md) (REFACTOR-TST-003..014)                                                   |
+| **P7–P8** | Hardening — perf, coverage, CI gate                                                                 | **Missing**        | `../_tasks/testing-standardization.md` (REFACTOR-TST-003..014; legacy fallback removed post-cutover)                                                     |
 | **P8A**   | Presentation cut — `application/` + `design/flows/` bridges (11 files)                              | **DONE** `ce708d1` | [`../application/README.md`](../application/README.md) · [`../design/flows/`](../design/flows/README.md)                                                 |
 
 ## Sprints

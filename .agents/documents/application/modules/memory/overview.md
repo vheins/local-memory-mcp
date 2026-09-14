@@ -6,7 +6,7 @@
 
 SQLite `memory.db` (WAL) — `memories` table + FTS5 (`memories_fts`) + 384-dim vectors (`all-MiniLM-L6-v2` via `@xenova/transformers`) + KG tables (`knowledge_entities`, `knowledge_relations`, `knowledge_observations`). Hybrid scoring 40/30/15/15 (FTS/vector/recency/importance).
 
-Details: [brief.md](../../../brief.md), [database ERD](../../design/database/database-erd.md), [architecture.md](../../design/architecture/architecture.md).
+Details: [brief.md](../../../brief.md), [database schema](../../../design/database/schema.md), [architecture.md](../../../design/architecture/architecture.md).
 
 ## Tools (4)
 

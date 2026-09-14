@@ -2,7 +2,7 @@
 
 > Bridge to existing canonical docs — does not duplicate content.
 
-Application surface of `local-memory-mcp`: 20 MCP tools, Svelte dashboard, and shared SQLite DB. See [Brief](../brief.md) for architecture overview and [AGENTS.md](../../AGENTS.md) Documentation Map for audience routing.
+Application surface of `local-memory-mcp`: 20 MCP tools, Svelte dashboard, and shared SQLite DB. See [Brief](../brief.md) for architecture overview and [AGENTS.md](../../../AGENTS.md) Documentation Map for audience routing.
 
 ## Structure
 

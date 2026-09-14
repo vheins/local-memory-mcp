@@ -16,7 +16,6 @@ We will use `better-sqlite3` as our core datastore, taking advantage of its sync
 
 **Adopted** — This decision has been implemented and is the foundation of the data layer.
 
-
 ## Consequences
 
 - **Pros:** Zero-configuration deployment for users; 100% privacy; fast read/write speeds (< 50ms queries); single-file portability; WAL mode for concurrent dashboard + MCP server access; FTS5 for full-text search.
@@ -24,7 +23,7 @@ We will use `better-sqlite3` as our core datastore, taking advantage of its sync
 
 ## Implementation Notes
 
-- Database schema versioning via `_schema_version` table (current: v2).
+- Database schema versioning via `_schema_version` table (current: v37; see `SCHEMA_VERSION` in `src/mcp/storage/migrations/index.ts`).
 - Cross-process write locking via `proper-lockfile` (`WriteLock.withLock()`).
-- Default path: `./storage/memory.db` (configurable via `MEMORY_DB_PATH` env var).
+- Default path: platform config dir (e.g. `~/.config/local-memory-mcp/memory.db` on Linux), created if absent; `MEMORY_DB_PATH` overrides and `./storage/memory.db` is used only when it already exists (corrected 2026-09-14 against `src/mcp/storage/sqlite.ts:29-49`).
 - Migrations managed by `src/mcp/storage/migrations/` (versioned index — `index.ts` + `vNN-*.ts`).
