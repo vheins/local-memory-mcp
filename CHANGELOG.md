@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Database shrink infrastructure**: incremental auto-vacuum plumbing and a guarded vacuum service (`src/mcp/services/vacuum.ts`), higher relation-prune throughput (cap 50k → 500k, with a tail-only remaining count), and `task_archive` retention (180-day TTL) plus batch aggregation.
 - **`agent-context` ranking controls**: `budget.min_relevance` threshold, conditional decision criticality, rebalanced relevance/importance blend, code-graph BFS kind allowlist, legacy-memory dedup, and source-aware token estimation.
+- **Cold-tier memory archive**: archived memories older than 30 days by default are copied without vectors to a separate `cold-archive.db`, verified, then deleted from the hot database. The bounded, never-throw hook runs in the `full` profile's startup maintenance sweep; conditional deletes require both `status = 'archived'` and an unchanged `updated_at`, preserving concurrently modified rows. Storage-level lookup and lexical search provide on-demand reads of cold memories (`TASK-036`).
+- **Opt-in startup vacuum**: `VACUUM_ON_STARTUP=true` exposes the guarded conversion to incremental auto-vacuum before MCP requests are accepted in all runtime profiles; default off, idempotent, and never-throw. Operator guides cover one-off CLI usage, Claude Desktop/Cursor configuration, disk headroom, and removing the flag after maintenance (`TASK-047`, `TASK-048`).
+- **Utility regression coverage**: direct unit tests for `isMemoryAcknowledged` and `encodeVector`/`decodeVector`, including float32 BLOB and legacy JSON compatibility, unaligned buffers, and invalid-input fallbacks (`TASK-050`).
 
 ### Changed
 
@@ -18,17 +21,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - v35 — drop the never-populated `codebase_symbol_vectors` table.
   - v36 — drop redundant `relations` indexes (`idx_relations_repo`, `idx_relations_to`); reclaims ~400 MB.
   - v37 — store embeddings as float32 BLOB instead of JSON TEXT; reclaims ~127 MB with no recall impact.
+- **Derived-data database split**: the `codebase_*` index family (including symbol FTS) and all memory/task/standard vector tables move to a separate `codebase.db`, attached as schema `derived`. A one-time, idempotent copy → verify → drop migration verifies copied primary keys before removing the main-schema tables; derived data remains rebuildable, while authoritative records stay in `memory.db` (`TASK-037`).
+- **Documentation synchronization**: repaired stale paths, relative links, canonical tool counts, and database-path descriptions across contributor, architecture, module, testing, and planning documentation (`TASK-051`).
 
 ### Fixed
 
-- KG relation prune no longer freezes the event loop (~28s) on the first maintenance run after the cap increase — the loop now yields between chunks.
-- Bulk `tasks[]` status transitions: `comment`, `force`, `commit_id`, `changed_files`, and `model` were silently stripped by the item schema, breaking all bulk status changes.
-- Maintenance log now prints the exact `VACUUM` command an operator can run.
+- **KG relation pruning**: no longer freezes the event loop (~28s) on the first maintenance run after the cap increase — the loop now yields between chunks.
+- **Bulk `tasks[]` status transitions**: `comment`, `force`, `commit_id`, `changed_files`, and `model` were silently stripped by the item schema, breaking all bulk status changes.
+- **Maintenance guidance**: the log prints the exact `VACUUM` command an operator can run and now also points to the opt-in `VACUUM_ON_STARTUP=true` path (`TASK-047`).
+- **Dashboard — live feedback and labels**: polite `aria-live` regions announce claim release, handoff expiry, and successful task creation; search inputs and the repository filter receive accessible labels (`TASK-052`).
+- **Dashboard — tap targets and contrast**: small-screen table row actions and KG graph zoom controls have minimum tap targets of at least 32px, and the sidebar repository-count badge uses a higher-contrast color (`TASK-054`).
+- **Dashboard — filter tab semantics**: time-stat period selectors and event-log filters expose ARIA tablists with tab roles, selected state, and roving `tabindex`, backed by DOM regression tests (`TASK-057`).
+- **Migration test fixture**: replaced the false `npm run migrate` instruction in the end-to-end fixture with the actual automatic migration behavior in the `SQLiteStore` constructor (`TASK-058`).
 
 ### Notes
 
 - **Downgrade warning**: after v37, embeddings are stored as float32 BLOB. Rolling back to a pre-0.46.0 binary makes vector search return 0 results (falling back to FTS/keyword) because older code `JSON.parse`s the BLOB. Re-upgrading restores it.
-- **File size does not shrink automatically**: v36 + v37 free ~590 MB into the freelist, but with `auto_vacuum=0` the database file keeps its size until a manual `VACUUM`.
+- **File size does not shrink automatically**: v36 + v37 free ~590 MB into the freelist, but with `auto_vacuum=0` the database file keeps its size until a manual `VACUUM` or the opt-in `VACUUM_ON_STARTUP` conversion. The startup flag defaults off and does not repeat a full vacuum once incremental mode is enabled.
+- **Coverage-gate scope**: Sprint 03's planned blocking CI coverage gate was canceled by operator decision; this release does not ship that gate or claim that coverage floors passed.
+- **Sprint 04 closure**: residual performance follow-ups were verified against existing implementations and documentation quality checks were completed, including a duplicate-H1 correction. No new performance measurements were claimed; the serial write-loop optimization remains deferred, and the coverage-green requirement was marked moot after Sprint 03's cancellation (`TASK-059`).
 
 ## [0.45.9] — 2026-09-11
 
@@ -248,11 +259,11 @@ developer/contributor docs tree is indexed so it is searchable like source code.
 ### Added
 
 - **`.agents/**`dot-directory indexing** (TASK-459) — the codebase indexer now
-  discovers files under`.agents` (dev/contributor/AI documentation) via an
-  explicit allowlist second stream; every other dot-directory (`.git`, `.github`,
-  `.opencode`, `.cache`, …) stays excluded. Covers all entry points (MCP tool,
-  dashboard, CLI, startup auto-index, file watcher) since they all funnel through
-  `discoverFiles`.
+discovers files under`.agents` (dev/contributor/AI documentation) via an
+explicit allowlist second stream; every other dot-directory (`.git`, `.github`,
+`.opencode`, `.cache`, …) stays excluded. Covers all entry points (MCP tool,
+dashboard, CLI, startup auto-index, file watcher) since they all funnel through
+`discoverFiles`.
 - **`doc_comment` surfaced in all 5 `codebase-read` text formatters** (TASK-460) —
   TRACE (new `Doc:` line), FILE, SEARCH, ARCHITECTURE (new `Top Exports` doc
   block, ~120 chars), and CODE/content modes (enclosing-symbol doc hint via
