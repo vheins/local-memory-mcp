@@ -36,7 +36,11 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		const memories = [
 			{ title: "Primary Database", content: "We use SQLite for local persistence to ensure local-first capability." },
 			{ title: "Cache Layer", content: "Redis is used for session management and fast lookups." },
-			{ title: "Database Migration", content: "Run 'npm run migrate' to update the SQLite schema safely." },
+			{
+				title: "Database Migration",
+				content:
+					"The SQLite schema is updated automatically on startup: migrations run inside the SQLiteStore constructor, no manual step required."
+			},
 			{ title: "Backup Policy", content: "Hourly snapshots of the .db file are stored in the backups folder." },
 			{ title: "External API Integration", content: "The system connects to Postgres only for reporting services." }
 		];
