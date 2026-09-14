@@ -13,12 +13,12 @@
 
 ## Sprints
 
-| Sprint  | Scope                                                     | Status                  | Detail                                                                                        |
-| :------ | :-------------------------------------------------------- | :---------------------- | :-------------------------------------------------------------------------------------------- |
-| **S01** | Docs Retrofit 2026-09-07 — close `tasks/` gap + G3 gate   | **DONE 2026-09-07**     | [`sprints/sprint-01.md`](sprints/sprint-01.md)                                                |
-| **S02** | Doc-sync & API surface hardening — Part A/B + link repair | **DONE 2026-09-08**     | [`sprints/sprint-02.md`](sprints/sprint-02.md) · [`sprints/manifest.md`](sprints/manifest.md) |
-| **S03** | CI gate — `ci.yml` + coverage blocking (TST-013)          | **CANCELED 2026-09-14** | [`sprints/sprint-03.md`](sprints/sprint-03.md) · [`sprints/manifest.md`](sprints/manifest.md) |
-| **S04** | Coverage & polish — utils/routes/services/lib/prompts     | **PLANNED**             | [`sprints/sprint-04.md`](sprints/sprint-04.md) · [`sprints/manifest.md`](sprints/manifest.md) |
+| Sprint  | Scope                                                     | Status                                   | Detail                                                                                        |
+| :------ | :-------------------------------------------------------- | :--------------------------------------- | :-------------------------------------------------------------------------------------------- |
+| **S01** | Docs Retrofit 2026-09-07 — close `tasks/` gap + G3 gate   | **DONE 2026-09-07**                      | [`sprints/sprint-01.md`](sprints/sprint-01.md)                                                |
+| **S02** | Doc-sync & API surface hardening — Part A/B + link repair | **DONE 2026-09-08**                      | [`sprints/sprint-02.md`](sprints/sprint-02.md) · [`sprints/manifest.md`](sprints/manifest.md) |
+| **S03** | CI gate — `ci.yml` + coverage blocking (TST-013)          | **CANCELED 2026-09-14**                  | [`sprints/sprint-03.md`](sprints/sprint-03.md) · [`sprints/manifest.md`](sprints/manifest.md) |
+| **S04** | Coverage & polish — utils/routes/services/lib/prompts     | **DONE 2026-09-14** (coverage gate moot) | [`sprints/sprint-04.md`](sprints/sprint-04.md) · [`sprints/manifest.md`](sprints/manifest.md) |
 
 ## Reading order
 

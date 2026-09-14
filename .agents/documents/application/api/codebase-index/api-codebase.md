@@ -323,7 +323,7 @@ components:
 
 > Merged from `application/api/codebase-index/api-codebase.md` (445ℓ). Existing §§1–8 above remain canonical summary; this section preserves full reference detail.
 
-# Codebase Index API Reference
+## Codebase Index API Reference
 
 > **Architecture decision context:** See [ADR-002: Codebase Index Architecture](../../../design/decisions/adr-002-codebase-index.md) for design rationale, including the choice of `web-tree-sitter` WASM bindings, SQLite storage strategy, incremental indexing with SHA-256 checksums, and single-pass parsing for Phase 1.0.
 >
