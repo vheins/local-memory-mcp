@@ -129,7 +129,8 @@ export function getFreeDiskBytes(dirPath: string): number {
  * effect after a full `VACUUM`, so this runs `PRAGMA auto_vacuum = INCREMENTAL`
  * then `VACUUM`. That is a whole-DB rewrite: it needs a full write lock and
  * ~2x the DB size in free disk, so it is guarded by a free-disk check and is
- * NEVER called automatically at startup (it is a deliberate/operator path).
+ * NEVER called implicitly — only when an operator explicitly opts in via the
+ * `VACUUM_ON_STARTUP` env gate (`runStartupVacuum`, TASK-047).
  *
  * Never throws: any failure is logged and returned as `{ skipped: true }` so a
  * caller (e.g. a maintenance/operator job) is never taken down by a failed
@@ -172,6 +173,24 @@ export function ensureIncrementalAutoVacuum(store: SQLiteStore): EnsureAutoVacuu
 		logger.warn("[Vacuum] auto_vacuum conversion failed", { error: String(err) });
 		return { changed: false, skipped: true, reason: "error" };
 	}
+}
+
+/**
+ * Run the startup space-reclamation pass when the operator opted in.
+ *
+ * Thin gate over `ensureIncrementalAutoVacuum` so the `VACUUM_ON_STARTUP`
+ * decision is a single testable seam: the flag is passed in rather than read
+ * from `process.env` here, keeping this function deterministic. Returns `null`
+ * when disabled so a caller can distinguish "did not run" from a skip result.
+ * Never throws (delegates to the never-throw `ensureIncrementalAutoVacuum`).
+ *
+ * @param store - The SQLiteStore whose space should be reclaimed.
+ * @param enabled - The resolved `VACUUM_ON_STARTUP` flag.
+ * @returns The conversion result, or `null` when the gate is disabled.
+ */
+export function runStartupVacuum(store: SQLiteStore, enabled: boolean): EnsureAutoVacuumResult | null {
+	if (!enabled) return null;
+	return ensureIncrementalAutoVacuum(store);
 }
 
 /**

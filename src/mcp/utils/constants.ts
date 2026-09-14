@@ -496,6 +496,17 @@ export const CODEBASE_SEMANTIC_PHPSTAN_ENABLED = envBool("CODEBASE_SEMANTIC_PHPS
 // These constants bound the operator-triggered conversion and the bounded
 // per-maintenance-run incremental reclaim. See services/vacuum.ts.
 
+// Opt-in operator gate for a startup space-reclamation pass (TASK-047). When
+// "true" the MCP server runs `ensureIncrementalAutoVacuum` once at startup: it
+// converts the store to `auto_vacuum = INCREMENTAL` (a full VACUUM rewrite,
+// disk-guarded at 2x DB size + 16MiB) and reclaims the freelist, so an
+// installed user finally has a SHIPPED path to shrink a bloated database
+// (previously only a manual `sqlite3 "<db>" 'VACUUM;'` was possible — there was
+// no CLI subcommand, npm script, env var, or endpoint). DEFAULT OFF: a full
+// VACUUM needs a full write lock and ~2x free disk, so it is never implicit.
+// Idempotent (no-op once auto_vacuum=2) and never throws. See services/vacuum.ts.
+export const VACUUM_ON_STARTUP = envBool("VACUUM_ON_STARTUP", false);
+
 // Freelist-ratio trigger for the operator recommendation log. When
 // freelist_count / page_count reaches this ratio the maintenance sweep logs a
 // one-line recommendation to run the deliberate vacuum path (a full VACUUM is

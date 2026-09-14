@@ -191,10 +191,11 @@ export async function runStartupMaintenance(
 	// Discoverability without action: a full VACUUM is never automatic (it needs
 	// ~2x free disk and a full write lock), so when the freelist is large enough
 	// to be worth reclaiming we log a recommendation for an operator to reclaim
-	// it. A plain SQLite `VACUUM` reclaims the freelist, and that is the only
-	// mechanism an installed user can actually run today (there is no CLI
-	// subcommand, npm script, or env var that triggers the vacuum helpers). Pure
-	// read; never triggers a rewrite. TASK-034.
+	// it. Installed users now have a shipped path: set `VACUUM_ON_STARTUP=true`
+	// and restart the MCP server, which runs the guarded conversion
+	// (ensureIncrementalAutoVacuum) once at startup (TASK-047); a manual
+	// `sqlite3 "<db>" 'VACUUM;'` with the server stopped remains equivalent.
+	// Pure read; never triggers a rewrite. TASK-034.
 	try {
 		const vacuumState = getVacuumState(db);
 		if (shouldVacuum(vacuumState, { freelistRatioThreshold: VACUUM_FREELIST_RATIO_THRESHOLD })) {
@@ -203,7 +204,7 @@ export async function runStartupMaintenance(
 				pageCount: vacuumState.pageCount,
 				freelistBytes: vacuumState.freelistBytes,
 				autoVacuum: vacuumState.autoVacuum,
-				hint: `Reclaim freed pages by running a full VACUUM on the database file with the server stopped: sqlite3 "${db.getDbPath()}" 'VACUUM;'`
+				hint: `Reclaim freed pages by restarting the server with VACUUM_ON_STARTUP=true, or run a full VACUUM with the server stopped: sqlite3 "${db.getDbPath()}" 'VACUUM;'`
 			});
 		}
 	} catch (err) {

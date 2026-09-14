@@ -11,7 +11,7 @@
  * incremental reclaim is a no-op — both are asserted directly.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import os from "os";
 import { createTestStore } from "../storage/sqlite";
 import {
@@ -19,6 +19,7 @@ import {
 	getFreeDiskBytes,
 	getVacuumState,
 	incrementalVacuum,
+	runStartupVacuum,
 	shouldVacuum
 } from "../services/vacuum";
 
@@ -129,5 +130,76 @@ describe("getFreeDiskBytes", () => {
 		const free = getFreeDiskBytes("/nonexistent/definitely-not-a-real-path-xyz");
 
 		expect(free).toBe(Number.MAX_SAFE_INTEGER);
+	});
+});
+
+describe("runStartupVacuum (TASK-047 startup gate)", () => {
+	it("is a no-op (returns null) when the gate is disabled", async () => {
+		const store = await createTestStore();
+		try {
+			expect(runStartupVacuum(store, false)).toBeNull();
+		} finally {
+			store.close();
+		}
+	});
+
+	it("invokes ensureIncrementalAutoVacuum when the gate is enabled", async () => {
+		const store = await createTestStore();
+		try {
+			// An in-memory store is skipped by the underlying conversion, so the
+			// exact result `ensureIncrementalAutoVacuum` returns proves the helper
+			// delegated to it (a non-null result can only come from that call).
+			expect(runStartupVacuum(store, true)).toEqual({
+				changed: false,
+				skipped: true,
+				reason: "in_memory"
+			});
+		} finally {
+			store.close();
+		}
+	});
+
+	it("never throws when enabled (delegates the never-throw guarantee)", async () => {
+		const store = await createTestStore();
+		try {
+			expect(() => runStartupVacuum(store, true)).not.toThrow();
+		} finally {
+			store.close();
+		}
+	});
+});
+
+describe("VACUUM_ON_STARTUP env gate (TASK-047)", () => {
+	const ORIGINAL = process.env.VACUUM_ON_STARTUP;
+
+	afterEach(() => {
+		if (ORIGINAL === undefined) delete process.env.VACUUM_ON_STARTUP;
+		else process.env.VACUUM_ON_STARTUP = ORIGINAL;
+		vi.resetModules();
+	});
+
+	/** Re-import constants with VACUUM_ON_STARTUP set to `value` (or unset). */
+	async function loadFlag(value?: string): Promise<boolean> {
+		vi.resetModules();
+		if (value === undefined) delete process.env.VACUUM_ON_STARTUP;
+		else process.env.VACUUM_ON_STARTUP = value;
+		const mod = await import("../utils/constants");
+		return mod.VACUUM_ON_STARTUP;
+	}
+
+	it("defaults to false when unset", async () => {
+		expect(await loadFlag(undefined)).toBe(false);
+	});
+
+	it("defaults to false for an empty string", async () => {
+		expect(await loadFlag("")).toBe(false);
+	});
+
+	it.each(["true", "1", "yes", "TRUE"])("parses %s as true", async (value) => {
+		expect(await loadFlag(value)).toBe(true);
+	});
+
+	it.each(["false", "0", "no", "off"])("parses %s as false", async (value) => {
+		expect(await loadFlag(value)).toBe(false);
 	});
 });

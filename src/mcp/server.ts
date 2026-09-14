@@ -14,6 +14,8 @@ import { CAPABILITIES } from "./capabilities";
 import { addLogSink, createFileSink, logger } from "./utils/logger";
 import { reuseTelemetry } from "./utils/reuse-telemetry";
 import { runStartupMaintenance } from "./services/maintenance-job";
+import { runStartupVacuum } from "./services/vacuum";
+import { VACUUM_ON_STARTUP } from "./utils/constants";
 import { runCliIndex } from "./codebase-index/cli";
 import { autoIndexIfStale } from "./codebase-index/services/indexing-service";
 import { getCodebaseParserPool } from "./codebase-index/parser/singleton";
@@ -113,6 +115,21 @@ const vectors = new CapabilityAwareVectorStore(realVectors, runtimeCapabilities)
 // a multi-process "database is locked" burst is logged — a sink registered
 // after start() would lose those first failure logs.
 addLogSink(createFileSink(path.dirname(db.getDbPath())));
+
+// Optional operator-triggered space reclamation (TASK-047). A full VACUUM is
+// too heavy to run implicitly (full write lock + ~2x free disk), so it is
+// gated behind VACUUM_ON_STARTUP (default off). When enabled, this converts the
+// store to auto_vacuum=INCREMENTAL and reclaims the freelist once, BEFORE the
+// server accepts requests — the shipped path for shrinking a bloated DB.
+// Disk-guarded, idempotent, and never throws (see services/vacuum.ts).
+const startupVacuum = runStartupVacuum(db, VACUUM_ON_STARTUP);
+if (startupVacuum) {
+	logger.info("[Server] VACUUM_ON_STARTUP ran", {
+		changed: startupVacuum.changed,
+		skipped: startupVacuum.skipped,
+		reason: startupVacuum.reason
+	});
+}
 
 // Start the embedding/KG outbox worker (TASK-013): drains queue_jobs with
 // batched ONNX inference + KG extraction OUTSIDE the write lock. Startup
