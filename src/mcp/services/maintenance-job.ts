@@ -9,10 +9,12 @@ import {
 	type DecayResult
 } from "./soul-maintenance";
 import { getVacuumState, incrementalVacuum, shouldVacuum } from "./vacuum";
+import { runColdArchiveOffload } from "./cold-archive";
 import {
 	TABLE_MEMORY_SUMMARY,
 	TTL_MS_PER_DAY,
 	ACTION_LOG_MAX_ROWS,
+	COLD_ARCHIVE_ENABLED,
 	VACUUM_INCREMENTAL_MAX_PAGES,
 	VACUUM_FREELIST_RATIO_THRESHOLD
 } from "../utils/constants";
@@ -39,6 +41,8 @@ export interface MaintenanceResult {
 	prunableRelationsRemaining: number;
 	/** Freelist pages reclaimed by the bounded incremental vacuum this run (TASK-033). */
 	incrementalVacuumPages: number;
+	/** Long-archived rows offloaded to the cold tier this run (TASK-036). */
+	coldArchivedOffloaded: number;
 	totalArchived: number;
 }
 
@@ -112,6 +116,7 @@ export async function runStartupMaintenance(
 			prunedOrphanEntityRows: 0,
 			prunableRelationsRemaining: 0,
 			incrementalVacuumPages: 0,
+			coldArchivedOffloaded: 0,
 			totalArchived: 0
 		};
 	}
@@ -133,6 +138,12 @@ export async function runStartupMaintenance(
 
 		// 3. Archive low-score memories (force=true)
 		const lowScoreArchived = db.memoryArchives.archiveLowScoreMemories(true);
+
+		// 3.5 Offload long-archived memories to the cold tier (TASK-036).
+		//    Copies rows to a separate SQLite DB (no vectors), verifies the
+		//    copy, then deletes them from the hot store. Bounded per run and
+		//    never throws — a bad cold store must not take down startup.
+		const coldOffload = runColdArchiveOffload(db, COLD_ARCHIVE_ENABLED);
 
 		// 4. Prune stale action log entries (30-day retention + row-count cap
 		//    keeping the newest ACTION_LOG_MAX_ROWS — OPT-PERF-05)
@@ -169,6 +180,7 @@ export async function runStartupMaintenance(
 			prunedOrphanEntityRows: prunedRelationsResult.orphanEntitiesDeleted,
 			prunableRelationsRemaining: prunedRelationsResult.remaining,
 			incrementalVacuumPages: incrementalVacuumResult.reclaimedPages,
+			coldArchivedOffloaded: coldOffload?.deleted ?? 0,
 			totalArchived
 		};
 	});
@@ -185,7 +197,8 @@ export async function runStartupMaintenance(
 		prunedRelationRows: result.prunedRelationRows,
 		prunedOrphanEntityRows: result.prunedOrphanEntityRows,
 		prunableRelationsRemaining: result.prunableRelationsRemaining,
-		incrementalVacuumPages: result.incrementalVacuumPages
+		incrementalVacuumPages: result.incrementalVacuumPages,
+		coldArchivedOffloaded: result.coldArchivedOffloaded
 	});
 
 	// Discoverability without action: a full VACUUM is never automatic (it needs

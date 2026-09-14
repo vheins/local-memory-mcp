@@ -158,7 +158,8 @@ runtimeCapabilities.register("maintenance", async () => {
 	if (!result.skipped) {
 		logger.info("[Server] Startup maintenance complete", {
 			decayed: result.decay.decayed,
-			archived: result.expiredArchived + result.lowScoreArchived + result.decay.archived
+			archived: result.expiredArchived + result.lowScoreArchived + result.decay.archived,
+			coldArchivedOffloaded: result.coldArchivedOffloaded
 		});
 	}
 });

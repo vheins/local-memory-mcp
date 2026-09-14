@@ -21,6 +21,8 @@ import { KnowledgeGraphEntity } from "../entities/knowledge-graph";
 import { ExplorationObservationEntity } from "../entities/exploration-observation";
 import { ReuseTelemetryEntity } from "../entities/reuse-telemetry";
 import { WriteLock } from "./write-lock";
+import { ColdArchiveStore, resolveColdArchivePath } from "./cold-archive";
+import type { ColdArchiveEntry, ColdArchiveSearchOptions } from "./cold-archive";
 import { logger } from "../utils/logger";
 import { WAL_CHECKPOINT_INTERVAL_MS } from "../utils/constants";
 
@@ -69,6 +71,12 @@ export class SQLiteStore {
 	public reuseTelemetry: ReuseTelemetryEntity;
 	public lock: WriteLock;
 	private dbPathInstance: string;
+	/**
+	 * Lazily-opened cold-tier archive (TASK-036). Opened on first access only,
+	 * so profiles that never offload or read the cold tier pay no second-DB
+	 * cost. See {@link coldArchive}.
+	 */
+	private coldArchiveStore?: ColdArchiveStore;
 	/** Last wall-clock time a WAL checkpoint ran (throttles refresh()). */
 	private lastCheckpointAt = 0;
 
@@ -208,7 +216,38 @@ export class SQLiteStore {
 		return this.dbPathInstance;
 	}
 
+	/**
+	 * Lazily-open cold-tier archive store (TASK-036).
+	 *
+	 * The cold DB path is derived from the hot DB path (`cold-archive.db`
+	 * alongside `memory.db`; `:memory:` stays in memory for tests), so both
+	 * stores stay co-located. Constructed once and cached for the store's
+	 * lifetime.
+	 */
+	get coldArchive(): ColdArchiveStore {
+		this.coldArchiveStore ??= new ColdArchiveStore(resolveColdArchivePath(this.dbPathInstance));
+		return this.coldArchiveStore;
+	}
+
+	/**
+	 * Search cold-tier archived memories on demand (TASK-036 read path).
+	 * Delegates to {@link ColdArchiveStore.searchColdMemories}.
+	 */
+	searchColdMemories(options?: ColdArchiveSearchOptions): ColdArchiveEntry[] {
+		return this.coldArchive.searchColdMemories(options);
+	}
+
+	/**
+	 * Fetch a single cold-tier archived memory by id (TASK-036 read path).
+	 * Delegates to {@link ColdArchiveStore.getColdMemoryById}.
+	 */
+	getColdMemoryById(id: string): ColdArchiveEntry | null {
+		return this.coldArchive.getColdMemoryById(id);
+	}
+
 	close(): void {
+		this.coldArchiveStore?.close();
+		this.coldArchiveStore = undefined;
 		if (this.db && this.db.open) {
 			try {
 				this.db.pragma("wal_checkpoint(PASSIVE)");

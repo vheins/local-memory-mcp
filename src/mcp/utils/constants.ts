@@ -49,6 +49,9 @@ export const TABLE_HANDOFFS = "handoffs";
 export const TABLE_CLAIMS = "claims";
 export const TABLE_ACTION_LOG = "action_log";
 export const TABLE_MEMORY_SUMMARY = "memory_summary";
+// Cold-tier archive table (TASK-036) — lives in the SEPARATE cold-archive.db,
+// not the hot memory.db, so it is listed here only to avoid inline literals.
+export const TABLE_COLD_MEMORIES = "cold_memories";
 
 // ── Time (ms) — TTL building blocks (single source) ─────────────────────
 // Declared before RECENCY_HALF_LIFE_MS so derived constants can reference
@@ -527,3 +530,29 @@ export const VACUUM_INCREMENTAL_MAX_PAGES = envInt("VACUUM_INCREMENTAL_MAX_PAGES
 // final copy + WAL). `ensureIncrementalAutoVacuum` skips with reason
 // "insufficient_disk" when available < multiplier * dbBytes. Env-overridable.
 export const VACUUM_DISK_HEADROOM_MULTIPLIER = envInt("VACUUM_DISK_HEADROOM_MULTIPLIER", 2);
+
+// ── Cold-tier archive (TASK-036 / DB-shrink L3) ───────────────────────────
+// Archived memories (status='archived') were retained in the hot database
+// forever — archiving only flips `status`, so the rows (and their FTS/tag
+// shadow data) kept consuming disk while no read path ever surfaced them.
+// The cold tier offloads long-archived rows to a SEPARATE SQLite database
+// (`cold-archive.db`, alongside memory.db) WITHOUT vectors, then deletes them
+// from the hot store — bounding the hot file while keeping the content
+// recoverable on demand. Retention is age-gated (updated_at older than
+// COLD_ARCHIVE_RETENTION_DAYS) so recently-archived rows stay queryable in the
+// hot store, and each maintenance run offloads at most
+// COLD_ARCHIVE_OFFLOAD_MAX_ROWS rows in COLD_ARCHIVE_BATCH_SIZE-row
+// transactions so a large backlog converges without starving writers
+// (STD-005). The offload is copy → verify → delete and never throws.
+export const COLD_ARCHIVE_DB_FILENAME = "cold-archive.db";
+// Operator kill switch. Default ON: the offload is lossless (the copy is
+// verified before the hot rows are deleted) and is the intended automatic
+// shrink path; "false" disables it entirely.
+export const COLD_ARCHIVE_ENABLED = envBool("COLD_ARCHIVE_ENABLED", true);
+// Age guard (days): only rows archived for at least this long are offloaded.
+export const COLD_ARCHIVE_RETENTION_DAYS = envInt("COLD_ARCHIVE_RETENTION_DAYS", 30);
+// Per-run row cap (bounded sweep; a large backlog converges across the daily
+// maintenance cycles instead of blocking one startup).
+export const COLD_ARCHIVE_OFFLOAD_MAX_ROWS = envInt("COLD_ARCHIVE_OFFLOAD_MAX_ROWS", 5_000);
+// Rows per BEGIN IMMEDIATE transaction — bounds the write-lock hold time.
+export const COLD_ARCHIVE_BATCH_SIZE = envInt("COLD_ARCHIVE_BATCH_SIZE", 500);
