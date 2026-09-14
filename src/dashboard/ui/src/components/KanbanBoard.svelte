@@ -60,6 +60,7 @@
 				style="padding-left:32px;font-size:0.8rem;"
 				type="text"
 				placeholder="Search tasks…"
+				aria-label="Search tasks"
 				bind:value={$taskSearch}
 			/>
 		</div>

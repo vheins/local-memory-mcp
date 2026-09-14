@@ -23,6 +23,7 @@
 	// Detail drawer
 	let selectedHandoff: Handoff | null = null;
 	let handoffDrawerOpen = false;
+	let liveRegionText = "";
 
 	$: if (repo) {
 		void refreshCoordination();
@@ -95,6 +96,7 @@
 		error = "";
 		try {
 			await api.releaseClaim({ repo, task_id: claim.task_id, agent: claim.agent });
+			liveRegionText = `Claim released for ${claim.task_id}`;
 			await loadClaims();
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -107,6 +109,7 @@
 		if (!(await confirmDelete(`Expire handoff "${handoff.summary}"?`))) return;
 		try {
 			await api.updateHandoffStatus({ id: handoff.id, status: "expired" });
+			liveRegionText = `Handoff "${handoff.summary}" expired`;
 			void refreshCoordination();
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -126,6 +129,8 @@
 		</button>
 	{/snippet}
 </PageHeader>
+
+<div class="sr-only" aria-live="polite" aria-atomic="true">{liveRegionText}</div>
 
 <div class="feature-shell">
 	<Surface label="Coordination summary">

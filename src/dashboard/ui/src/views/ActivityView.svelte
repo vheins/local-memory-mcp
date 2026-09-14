@@ -32,6 +32,8 @@
 	let isSending = $state(false);
 	let submitError = $state("");
 
+	let liveRegionText = $state("");
+
 	async function submitTask() {
 		const message = chatMessage.trim();
 		if (!message || isSending) return;
@@ -43,6 +45,7 @@
 		try {
 			await createChatTask(message, repo);
 			chatMessage = "";
+			liveRegionText = "Task created successfully";
 			await onRefresh();
 		} catch (e) {
 			// The raw error goes to the console for engineers; the user gets a
@@ -60,6 +63,8 @@
 		<span class="event-count">{$recentActionsTotalItems} events</span>
 	{/snippet}
 </PageHeader>
+
+<div class="sr-only" aria-live="polite" aria-atomic="true">{liveRegionText}</div>
 
 <div class="activity-stack">
 	<Surface padding="none" label="Audit timeline">

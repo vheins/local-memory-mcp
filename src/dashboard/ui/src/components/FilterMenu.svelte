@@ -35,6 +35,7 @@
 			type="text"
 			class="search-input"
 			placeholder="Search agents, tasks…"
+			aria-label="Search agents and tasks"
 			value={currentFilter.search}
 			on:input={onSearchInput}
 		/>
@@ -52,6 +53,7 @@
 		<span class="filter-label">Repo</span>
 		<select
 			class="repo-select"
+			aria-label="Filter by repository"
 			value={currentFilter.repository ?? ""}
 			on:change={(e) => onToggleRepo((e.target as HTMLSelectElement).value || null)}
 		>
