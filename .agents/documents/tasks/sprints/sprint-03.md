@@ -1,6 +1,8 @@
 # Sprint 03 — CI Gate (TST-013) + Quality Gates
 
-> **PLANNED — not yet executed.** Closes backlog hardening item `backlog.md` P-05 follow-up. Unblocks coverage (S04). Bridge style — link, don't duplicate.
+> **CANCELED (2026-09-14).** Operator decision: the blocking CI gate (`ci.yml` + coverage floors) is **not being shipped**. Do not execute. Retained as a historical record only. Bridge style — link, don't duplicate.
+>
+> _Original intent (superseded):_ Closes backlog hardening item `backlog.md` P-05 follow-up. Unblocks coverage (S04).
 
 ## Goals
 
