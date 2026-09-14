@@ -415,7 +415,7 @@ export class TaskEntity extends BaseEntity {
 		// Dense embeddings are stored as a float32 BLOB, sparse TF maps as JSON
 		// TEXT — see encodeVector (TASK-038).
 		this.run(
-			`INSERT INTO task_vectors (task_id, vector, updated_at)
+			`INSERT INTO derived.task_vectors (task_id, vector, updated_at)
 			VALUES (?, ?, ?)
 			ON CONFLICT(task_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,
 			[taskId, encodeVector(vector), new Date().toISOString()]
@@ -427,7 +427,7 @@ export class TaskEntity extends BaseEntity {
 		limit = VECTOR_CANDIDATE_CAP
 	): { task_id: string; vector: string | Uint8Array }[] {
 		let sql = `SELECT tv.task_id, tv.vector
-			FROM task_vectors tv
+			FROM derived.task_vectors tv
 			JOIN ${TABLE_TASKS} t ON t.id = tv.task_id`;
 		const params: (string | number)[] = [];
 
@@ -442,7 +442,7 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	removeTaskVector(taskId: string): void {
-		this.run("DELETE FROM task_vectors WHERE task_id = ?", [taskId]);
+		this.run("DELETE FROM derived.task_vectors WHERE task_id = ?", [taskId]);
 	}
 
 	getExistingTaskCodes(owner: string, repo: string, codes: string[]): Set<string> {

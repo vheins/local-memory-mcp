@@ -23,6 +23,7 @@ import { ReuseTelemetryEntity } from "../entities/reuse-telemetry";
 import { WriteLock } from "./write-lock";
 import { ColdArchiveStore, resolveColdArchivePath } from "./cold-archive";
 import type { ColdArchiveEntry, ColdArchiveSearchOptions } from "./cold-archive";
+import { ensureDerivedReady, resolveDerivedDbPath } from "./derived-db";
 import { logger } from "../utils/logger";
 import { WAL_CHECKPOINT_INTERVAL_MS } from "../utils/constants";
 
@@ -71,6 +72,12 @@ export class SQLiteStore {
 	public reuseTelemetry: ReuseTelemetryEntity;
 	public lock: WriteLock;
 	private dbPathInstance: string;
+	/**
+	 * Absolute path (or `:memory:`) of the derived database attached as schema
+	 * `derived` (TASK-037). `null` only when the attach/schema step failed and
+	 * the store is running in a degraded state.
+	 */
+	private derivedPathInstance: string | null = null;
 	/**
 	 * Lazily-opened cold-tier archive (TASK-036). Opened on first access only,
 	 * so profiles that never offload or read the cold tier pay no second-DB
@@ -132,6 +139,13 @@ export class SQLiteStore {
 
 		const migrator = new MigrationManager(this.db);
 		migrator.migrate();
+
+		// Move derived data (the codebase index family + every *_vectors table)
+		// into the separate `codebase.db` attached as schema `derived`
+		// (TASK-037 / DB-shrink L4). Runs BEFORE entity construction so every
+		// entity prepares its `derived.`-qualified SQL against the final schema.
+		ensureDerivedReady(this.db, finalPath);
+		this.derivedPathInstance = resolveDerivedDbPath(finalPath);
 
 		this.memories = new MemoryEntity(this.db);
 		this.memoryVectors = new MemoryVectorEntity(this.db);
@@ -214,6 +228,27 @@ export class SQLiteStore {
 
 	getDbPath(): string {
 		return this.dbPathInstance;
+	}
+
+	/**
+	 * Absolute path (or `:memory:`) of the derived database attached as schema
+	 * `derived`, or `null` when the store could not attach it (TASK-037).
+	 */
+	getDerivedDbPath(): string | null {
+		return this.derivedPathInstance;
+	}
+
+	/**
+	 * Re-ensure the derived database is attached and its schema + FTS triggers
+	 * exist (TASK-037 self-heal). Idempotent; never throws — a failure is logged
+	 * so a periodic maintenance sweep can recover from an interrupted move.
+	 */
+	ensureDerivedDb(): void {
+		try {
+			ensureDerivedReady(this.db, this.dbPathInstance);
+		} catch (err) {
+			logger.warn("[SQLiteStore] Derived DB self-heal failed", { error: String(err) });
+		}
 	}
 
 	/**

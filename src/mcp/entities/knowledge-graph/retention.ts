@@ -61,7 +61,7 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 			                AND EXISTS (SELECT 1 FROM coding_standards s
 			                             WHERE 'Mentioned in standard: ' || s.title = o.observation))
 			           OR (o.observation LIKE 'Mentioned in codebase: %'
-			                AND EXISTS (SELECT 1 FROM codebase_files f
+			                AND EXISTS (SELECT 1 FROM derived.codebase_files f
 			                             WHERE f.repo = o.repo
 			                               AND 'Mentioned in codebase: ' || f.file_path = o.observation))
 			         )

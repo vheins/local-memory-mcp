@@ -4,6 +4,10 @@ import { randomUUID } from "crypto";
 import { chunksOf } from "../utils/chunk";
 import { BULK_UPDATE_CHUNK_SIZE } from "../utils/constants";
 
+/**
+ * Persistence for `derived.codebase_files` rows. The table lives in the derived
+ * database (schema `derived`), so every statement is schema-qualified.
+ */
 export class CodebaseFileEntity extends BaseEntity {
 	upsertFile(file: CodebaseFileInsert): CodebaseFile {
 		const now = new Date().toISOString();
@@ -14,7 +18,7 @@ export class CodebaseFileEntity extends BaseEntity {
 		// preserved on conflict. RETURNING * returns the exact stored row on both
 		// insert (new id) and update (original id preserved).
 		const row = this.get<CodebaseFile>(
-			`INSERT INTO codebase_files (id, repo, file_path, language, checksum, lines, size_bytes, last_indexed_at, created_at, updated_at)
+			`INSERT INTO derived.codebase_files (id, repo, file_path, language, checksum, lines, size_bytes, last_indexed_at, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(repo, file_path) DO UPDATE SET
 				language = excluded.language,
@@ -42,7 +46,10 @@ export class CodebaseFileEntity extends BaseEntity {
 	}
 
 	getFile(repo: string, filePath: string): CodebaseFile | undefined {
-		return this.get<CodebaseFile>("SELECT * FROM codebase_files WHERE repo = ? AND file_path = ?", [repo, filePath]);
+		return this.get<CodebaseFile>("SELECT * FROM derived.codebase_files WHERE repo = ? AND file_path = ?", [
+			repo,
+			filePath
+		]);
 	}
 
 	/**
@@ -59,10 +66,10 @@ export class CodebaseFileEntity extends BaseEntity {
 		for (const chunk of chunksOf(unique, BULK_UPDATE_CHUNK_SIZE)) {
 			const placeholders = chunk.map(() => "?").join(",");
 			rows.push(
-				...this.all<CodebaseFile>(`SELECT * FROM codebase_files WHERE repo = ? AND file_path IN (${placeholders})`, [
-					repo,
-					...chunk
-				])
+				...this.all<CodebaseFile>(
+					`SELECT * FROM derived.codebase_files WHERE repo = ? AND file_path IN (${placeholders})`,
+					[repo, ...chunk]
+				)
 			);
 		}
 		return rows;
@@ -80,28 +87,30 @@ export class CodebaseFileEntity extends BaseEntity {
 	getFilesByRepo(repo: string, opts?: { slim?: boolean }): CodebaseFile[] {
 		if (opts?.slim) {
 			return this.all<CodebaseFile>(
-				"SELECT file_path, checksum, last_indexed_at FROM codebase_files WHERE repo = ? ORDER BY file_path ASC",
+				"SELECT file_path, checksum, last_indexed_at FROM derived.codebase_files WHERE repo = ? ORDER BY file_path ASC",
 				[repo]
 			);
 		}
-		return this.all<CodebaseFile>("SELECT * FROM codebase_files WHERE repo = ? ORDER BY file_path ASC", [repo]);
+		return this.all<CodebaseFile>("SELECT * FROM derived.codebase_files WHERE repo = ? ORDER BY file_path ASC", [repo]);
 	}
 
 	getFileCountByRepo(repo: string): number {
-		const row = this.get<{ count: number }>("SELECT COUNT(*) as count FROM codebase_files WHERE repo = ?", [repo]);
+		const row = this.get<{ count: number }>("SELECT COUNT(*) as count FROM derived.codebase_files WHERE repo = ?", [
+			repo
+		]);
 		return row?.count ?? 0;
 	}
 
 	getFilesByStatus(repo: string, status: string): CodebaseFile[] {
 		if (status === "indexed") {
 			return this.all<CodebaseFile>(
-				"SELECT * FROM codebase_files WHERE repo = ? AND last_indexed_at IS NOT NULL ORDER BY file_path ASC",
+				"SELECT * FROM derived.codebase_files WHERE repo = ? AND last_indexed_at IS NOT NULL ORDER BY file_path ASC",
 				[repo]
 			);
 		}
 		if (status === "pending") {
 			return this.all<CodebaseFile>(
-				"SELECT * FROM codebase_files WHERE repo = ? AND last_indexed_at IS NULL ORDER BY file_path ASC",
+				"SELECT * FROM derived.codebase_files WHERE repo = ? AND last_indexed_at IS NULL ORDER BY file_path ASC",
 				[repo]
 			);
 		}
@@ -109,14 +118,14 @@ export class CodebaseFileEntity extends BaseEntity {
 	}
 
 	deleteFile(repo: string, filePath: string): boolean {
-		const result = this.run("DELETE FROM codebase_files WHERE repo = ? AND file_path = ?", [repo, filePath]);
+		const result = this.run("DELETE FROM derived.codebase_files WHERE repo = ? AND file_path = ?", [repo, filePath]);
 		return result.changes > 0;
 	}
 
 	transferFile(repo: string, oldPath: string, newPath: string): boolean {
 		const now = new Date().toISOString();
 		const result = this.run(
-			`UPDATE codebase_files SET file_path = ?, last_indexed_at = ?, updated_at = ?
+			`UPDATE derived.codebase_files SET file_path = ?, last_indexed_at = ?, updated_at = ?
 			 WHERE repo = ? AND file_path = ?`,
 			[newPath, now, now, repo, oldPath]
 		);
@@ -124,7 +133,7 @@ export class CodebaseFileEntity extends BaseEntity {
 	}
 
 	deleteFilesByRepo(repo: string): number {
-		const result = this.run("DELETE FROM codebase_files WHERE repo = ?", [repo]);
+		const result = this.run("DELETE FROM derived.codebase_files WHERE repo = ?", [repo]);
 		return result.changes;
 	}
 }

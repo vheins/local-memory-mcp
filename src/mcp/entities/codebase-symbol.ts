@@ -16,7 +16,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		return this.transaction(() => {
 			const now = new Date().toISOString();
 			const stmt = this.db.prepare(`
-				INSERT INTO codebase_symbols (
+				INSERT INTO derived.codebase_symbols (
 					id, repo, file_path, name, kind, exported, default_export,
 					start_line, start_col, end_line, end_col, signature, doc_comment,
 					parent_symbol_id, semantic_signature, semantic_source, semantic_updated_at, source_fingerprint,
@@ -77,7 +77,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	): void {
 		this.db
 			.prepare(
-				`UPDATE codebase_symbols
+				`UPDATE derived.codebase_symbols
 				 SET semantic_signature = ?, semantic_source = ?, semantic_updated_at = ?, updated_at = ?
 				 WHERE id = ?`
 			)
@@ -86,7 +86,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 
 	getSymbolsByFile(repo: string, filePath: string): CodebaseSymbol[] {
 		return this.all<CodebaseSymbolRow>(
-			"SELECT * FROM codebase_symbols WHERE repo = ? AND file_path = ? ORDER BY start_line ASC",
+			"SELECT * FROM derived.codebase_symbols WHERE repo = ? AND file_path = ? ORDER BY start_line ASC",
 			[repo, filePath]
 		).map((r) => this.rowToSymbol(r));
 	}
@@ -99,7 +99,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	 */
 	getExportedSymbolsByFile(repo: string, filePath: string): CodebaseSymbol[] {
 		return this.all<CodebaseSymbolRow>(
-			`SELECT * FROM codebase_symbols
+			`SELECT * FROM derived.codebase_symbols
 			 WHERE repo = ? AND file_path = ? AND (exported = 1 OR default_export = 1)
 			 ORDER BY start_line ASC`,
 			[repo, filePath]
@@ -108,7 +108,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 
 	getSymbolByName(repo: string, name: string): CodebaseSymbol[] {
 		return this.all<CodebaseSymbolRow>(
-			"SELECT * FROM codebase_symbols WHERE repo = ? AND name = ? ORDER BY file_path ASC, start_line ASC",
+			"SELECT * FROM derived.codebase_symbols WHERE repo = ? AND name = ? ORDER BY file_path ASC, start_line ASC",
 			[repo, name]
 		).map((r) => this.rowToSymbol(r));
 	}
@@ -158,14 +158,14 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		const whereClause = conditions.join(" AND ");
 
 		const symbols = this.all<CodebaseSymbolRow>(
-			`SELECT cs.* FROM codebase_symbols cs
+			`SELECT cs.* FROM derived.codebase_symbols cs
 			 WHERE cs.repo = ? AND ${whereClause}
 			 ORDER BY LOWER(cs.name) ASC LIMIT ? OFFSET ?`,
 			[query.repo, ...params, limit, offset]
 		).map((r) => this.rowToSymbol(r));
 
 		const countRow = this.get<{ total: number }>(
-			`SELECT COUNT(*) as total FROM codebase_symbols cs WHERE cs.repo = ? AND ${whereClause}`,
+			`SELECT COUNT(*) as total FROM derived.codebase_symbols cs WHERE cs.repo = ? AND ${whereClause}`,
 			[query.repo, ...params]
 		);
 
@@ -178,14 +178,14 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	}
 
 	deleteSymbolsByFile(repo: string, filePath: string): number {
-		const result = this.run("DELETE FROM codebase_symbols WHERE repo = ? AND file_path = ?", [repo, filePath]);
+		const result = this.run("DELETE FROM derived.codebase_symbols WHERE repo = ? AND file_path = ?", [repo, filePath]);
 		return result.changes;
 	}
 
 	transferSymbolsFilePath(repo: string, oldPath: string, newPath: string): number {
 		const now = new Date().toISOString();
 		const result = this.run(
-			`UPDATE codebase_symbols SET file_path = ?, updated_at = ?
+			`UPDATE derived.codebase_symbols SET file_path = ?, updated_at = ?
 			 WHERE repo = ? AND file_path = ?`,
 			[newPath, now, repo, oldPath]
 		);
@@ -193,7 +193,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	}
 
 	getSymbolsByRepo(repo: string, limit?: number): CodebaseSymbol[] {
-		let sql = "SELECT * FROM codebase_symbols WHERE repo = ? ORDER BY file_path ASC, start_line ASC";
+		let sql = "SELECT * FROM derived.codebase_symbols WHERE repo = ? ORDER BY file_path ASC, start_line ASC";
 		const params: (string | number)[] = [repo];
 		if (limit !== undefined) {
 			sql += " LIMIT ?";
@@ -203,7 +203,9 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	}
 
 	getSymbolCountByRepo(repo: string): number {
-		const row = this.get<{ count: number }>("SELECT COUNT(*) as count FROM codebase_symbols WHERE repo = ?", [repo]);
+		const row = this.get<{ count: number }>("SELECT COUNT(*) as count FROM derived.codebase_symbols WHERE repo = ?", [
+			repo
+		]);
 		return row?.count ?? 0;
 	}
 
@@ -216,7 +218,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	getSymbolCountsByRepoGrouped(repo: string): SymbolCountGroupRow[] {
 		return this.all<SymbolCountGroupRow>(
 			`SELECT file_path, kind, COUNT(*) as count
-			 FROM codebase_symbols
+			 FROM derived.codebase_symbols
 			 WHERE repo = ?
 			 GROUP BY file_path, kind
 			 ORDER BY file_path ASC, kind ASC`,
@@ -232,7 +234,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	 */
 	getTopLevelExportsByRepo(repo: string, limit: number): CodebaseSymbol[] {
 		return this.all<CodebaseSymbolRow>(
-			`SELECT * FROM codebase_symbols
+			`SELECT * FROM derived.codebase_symbols
 			 WHERE repo = ? AND exported = 1 AND parent_symbol_id IS NULL
 			 ORDER BY file_path ASC, start_line ASC
 			 LIMIT ?`,
@@ -254,7 +256,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	 */
 	getTopLevelSymbolsByRepo(repo: string, limit: number): CodebaseSymbol[] {
 		return this.all<CodebaseSymbolRow>(
-			`SELECT * FROM codebase_symbols
+			`SELECT * FROM derived.codebase_symbols
 			 WHERE repo = ? AND parent_symbol_id IS NULL
 			 ORDER BY file_path ASC, start_line ASC
 			 LIMIT ?`,
@@ -263,7 +265,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	}
 
 	getAllSymbols(limit?: number): CodebaseSymbol[] {
-		let sql = "SELECT * FROM codebase_symbols ORDER BY repo ASC, file_path ASC, start_line ASC";
+		let sql = "SELECT * FROM derived.codebase_symbols ORDER BY repo ASC, file_path ASC, start_line ASC";
 		const params: (string | number)[] = [];
 		if (limit !== undefined) {
 			sql += " LIMIT ?";
@@ -273,7 +275,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	}
 
 	deleteSymbolsByRepo(repo: string): number {
-		const result = this.run("DELETE FROM codebase_symbols WHERE repo = ?", [repo]);
+		const result = this.run("DELETE FROM derived.codebase_symbols WHERE repo = ?", [repo]);
 		return result.changes;
 	}
 
@@ -287,7 +289,11 @@ export class CodebaseSymbolEntity extends BaseEntity {
 			const safeTerm = sanitizeFtsTerm(query.query);
 			if (!safeTerm) return null;
 
-			const conditions: string[] = ["codebase_symbols_fts MATCH ?"];
+			// FTS5 MATCH cannot be schema-qualified (`derived.x MATCH ?` is read
+			// as schema.table and rejected), so the derived FTS table is invoked
+			// as a table-valued function with the match term as its first bound
+			// parameter — the verified cross-schema form (TASK-037).
+			const conditions: string[] = [];
 			const params: unknown[] = [safeTerm];
 
 			if (query.repos && query.repos.length > 0) {
@@ -324,9 +330,9 @@ export class CodebaseSymbolEntity extends BaseEntity {
 			// COUNT query.
 			const sql = `
 				SELECT cs.*, rank, COUNT(*) OVER () AS total_count
-				FROM codebase_symbols_fts fts
-				JOIN codebase_symbols cs ON cs.rowid = fts.rowid
-				WHERE ${conditions.join(" AND ")}
+				FROM derived.codebase_symbols_fts(?) fts
+				JOIN derived.codebase_symbols cs ON cs.rowid = fts.rowid
+				WHERE ${conditions.length > 0 ? conditions.join(" AND ") : "1 = 1"}
 				ORDER BY rank
 				LIMIT ? OFFSET ?
 			`;
@@ -390,12 +396,12 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		const whereClause = conditions.join(" AND ");
 
 		const symbols = this.all<CodebaseSymbolRow>(
-			`SELECT cs.* FROM codebase_symbols cs WHERE ${whereClause} ORDER BY cs.name ASC LIMIT ? OFFSET ?`,
+			`SELECT cs.* FROM derived.codebase_symbols cs WHERE ${whereClause} ORDER BY cs.name ASC LIMIT ? OFFSET ?`,
 			[...params, limit, offset]
 		).map((r) => this.rowToSymbol(r));
 
 		const countRow = this.get<{ total: number }>(
-			`SELECT COUNT(*) as total FROM codebase_symbols cs WHERE ${whereClause}`,
+			`SELECT COUNT(*) as total FROM derived.codebase_symbols cs WHERE ${whereClause}`,
 			params
 		);
 

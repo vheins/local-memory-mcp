@@ -387,7 +387,11 @@ export class StandardEntity extends BaseEntity {
 	}
 
 	delete(id: string): void {
+		// coding_standards lives in memory.db; its vector lives in the derived
+		// database with NO cross-database FK, so the previously implicit
+		// ON DELETE CASCADE is now an explicit delete (TASK-037).
 		this.run("DELETE FROM coding_standards WHERE id = ?", [id]);
+		this.run("DELETE FROM derived.standard_vectors WHERE standard_id = ?", [id]);
 	}
 
 	incrementHitCounts(ids: string[]): void {
@@ -411,7 +415,7 @@ export class StandardEntity extends BaseEntity {
 		limit = VECTOR_CANDIDATE_CAP
 	): { standard_id: string; vector: string | Uint8Array }[] {
 		let sql = `SELECT sv.standard_id, sv.vector
-			FROM standard_vectors sv
+			FROM derived.standard_vectors sv
 			JOIN coding_standards cs ON cs.id = sv.standard_id`;
 		const params: (string | number)[] = [];
 
@@ -429,7 +433,7 @@ export class StandardEntity extends BaseEntity {
 		// Dense embeddings are stored as a float32 BLOB, sparse TF maps as JSON
 		// TEXT — see encodeVector (TASK-038).
 		this.run(
-			`INSERT INTO standard_vectors (standard_id, vector, updated_at)
+			`INSERT INTO derived.standard_vectors (standard_id, vector, updated_at)
 			VALUES (?, ?, ?)
 			ON CONFLICT(standard_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,
 			[standardId, encodeVector(vector), new Date().toISOString()]

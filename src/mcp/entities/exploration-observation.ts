@@ -83,7 +83,7 @@ export class ExplorationObservationEntity extends BaseEntity {
 
 	private fingerprintEvidence(repo: string, evidence: ExplorationEvidenceInput): EvidenceFingerprint {
 		const file = this.get<{ checksum: string | null; last_indexed_at: string | null }>(
-			"SELECT checksum, last_indexed_at FROM codebase_files WHERE repo = ? AND file_path = ?",
+			"SELECT checksum, last_indexed_at FROM derived.codebase_files WHERE repo = ? AND file_path = ?",
 			[repo, evidence.file_path]
 		);
 		if (!file?.checksum) {
@@ -103,7 +103,7 @@ export class ExplorationObservationEntity extends BaseEntity {
 			};
 		}
 		const symbol = this.get<CodebaseSymbol>(
-			"SELECT * FROM codebase_symbols WHERE id = ? AND repo = ? AND file_path = ?",
+			"SELECT * FROM derived.codebase_symbols WHERE id = ? AND repo = ? AND file_path = ?",
 			[evidence.symbol_id, repo, evidence.file_path]
 		);
 		return {
@@ -304,7 +304,7 @@ export class ExplorationObservationEntity extends BaseEntity {
 		if (observation.superseded_by) return observation;
 		for (const item of evidence) {
 			const file = this.get<{ checksum: string | null; last_indexed_at: string | null }>(
-				"SELECT checksum, last_indexed_at FROM codebase_files WHERE repo = ? AND file_path = ?",
+				"SELECT checksum, last_indexed_at FROM derived.codebase_files WHERE repo = ? AND file_path = ?",
 				[observation.repo, item.file_path]
 			);
 			if (!file?.checksum) {
@@ -320,7 +320,7 @@ export class ExplorationObservationEntity extends BaseEntity {
 				continue;
 			}
 			const symbols = this.all<CodebaseSymbol>(
-				"SELECT * FROM codebase_symbols WHERE repo = ? AND file_path = ? ORDER BY start_line",
+				"SELECT * FROM derived.codebase_symbols WHERE repo = ? AND file_path = ? ORDER BY start_line",
 				[observation.repo, item.file_path]
 			);
 			if (!item.symbol_fingerprint) {

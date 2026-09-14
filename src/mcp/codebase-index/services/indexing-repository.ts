@@ -332,9 +332,9 @@ function getIndexStats(
 	const row = db.db
 		.prepare(
 			`SELECT
-				(SELECT COUNT(*) FROM codebase_files WHERE repo = ?) AS files,
-				(SELECT COUNT(*) FROM codebase_symbols WHERE repo = ?) AS symbols,
-				(SELECT MAX(last_indexed_at) FROM codebase_files WHERE repo = ?) AS last_indexed_at`
+				(SELECT COUNT(*) FROM derived.codebase_files WHERE repo = ?) AS files,
+				(SELECT COUNT(*) FROM derived.codebase_symbols WHERE repo = ?) AS symbols,
+				(SELECT MAX(last_indexed_at) FROM derived.codebase_files WHERE repo = ?) AS last_indexed_at`
 		)
 		.get(repo, repo, repo) as { files: number; symbols: number; last_indexed_at: string | null } | undefined;
 

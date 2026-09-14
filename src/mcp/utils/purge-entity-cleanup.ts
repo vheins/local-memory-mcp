@@ -98,9 +98,10 @@ const KIND_PLURALS: Record<PurgeEntityKind, string> = {
  *    (REFACTOR-KG-006 / TASK-004).
  *
  * Vector removal is part of the contract: task vectors are dropped explicitly
- * (`task_vectors`); memory/standard vectors are covered by SQL CASCADE on hard
- * deletes (and archived memories legitimately keep their rows — they stay
- * searchable with `includeArchived`).
+ * (`derived.task_vectors`); standard vectors are dropped explicitly inside
+ * `StandardEntity.delete` (the derived database has no cross-database FK to
+ * `coding_standards`); archived memories legitimately keep their vector rows —
+ * they stay searchable with `includeArchived`.
  *
  * @returns The number of items purged (=== `items.length`).
  */

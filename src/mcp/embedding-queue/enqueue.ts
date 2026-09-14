@@ -302,7 +302,7 @@ export function backfillMissingVectors(
 		const memories = store.db
 			.prepare(
 				`SELECT m.id, m.repo, m.owner, m.title, m.content, m.updated_at
-             FROM ${TABLE_MEMORIES} m LEFT JOIN memory_vectors mv ON mv.memory_id = m.id
+             FROM ${TABLE_MEMORIES} m LEFT JOIN derived.memory_vectors mv ON mv.memory_id = m.id
              WHERE m.status = '${MEMORY_STATUS_ACTIVE}' AND (mv.memory_id IS NULL OR mv.updated_at < m.updated_at)
              LIMIT ?`
 			)
@@ -337,7 +337,7 @@ export function backfillMissingVectors(
 		const standards = store.db
 			.prepare(
 				`SELECT s.id, s.repo, s.owner, s.title, s.content, s.context, s.stack, s.parent_id, s.updated_at
-             FROM coding_standards s LEFT JOIN standard_vectors sv ON sv.standard_id = s.id
+             FROM coding_standards s LEFT JOIN derived.standard_vectors sv ON sv.standard_id = s.id
              WHERE sv.standard_id IS NULL OR sv.updated_at < s.updated_at
              LIMIT ?`
 			)
@@ -393,7 +393,7 @@ export function backfillMissingVectors(
 		const tasks = store.db
 			.prepare(
 				`SELECT t.id, t.repo, t.owner, t.phase, t.title, t.description, t.parent_id, t.metadata, t.updated_at
-             FROM ${TABLE_TASKS} t LEFT JOIN task_vectors tv ON tv.task_id = t.id
+             FROM ${TABLE_TASKS} t LEFT JOIN derived.task_vectors tv ON tv.task_id = t.id
               WHERE t.status != '${TASK_STATUS_CANCELED}' AND (tv.task_id IS NULL OR tv.updated_at < t.updated_at)
              LIMIT ?`
 			)

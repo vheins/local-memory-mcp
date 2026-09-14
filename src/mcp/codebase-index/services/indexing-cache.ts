@@ -226,7 +226,7 @@ export function clearStalenessCache(repo?: string): void {
  */
 export function getLastIndexedAt(db: SQLiteStore, repo: string): string | null {
 	const row = db.db
-		.prepare("SELECT MAX(last_indexed_at) AS last_indexed_at FROM codebase_files WHERE repo = ?")
+		.prepare("SELECT MAX(last_indexed_at) AS last_indexed_at FROM derived.codebase_files WHERE repo = ?")
 		.get(repo) as { last_indexed_at: string | null } | undefined;
 	return row?.last_indexed_at ?? null;
 }

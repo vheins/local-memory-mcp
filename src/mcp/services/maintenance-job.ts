@@ -130,6 +130,12 @@ export async function runStartupMaintenance(
 	// synchronous SQL work, so lock hold time stays in the ms range; the "ran
 	// recently" check above is a pure read and stays outside the lock.
 	const result = await db.withExclusiveWrite(async (): Promise<MaintenanceResult> => {
+		// 0. Re-ensure the derived database (codebase index + *_vectors) is
+		//    attached and its schema + FTS triggers exist (TASK-037). Idempotent
+		//    and never-throw, so it also recovers from an interrupted one-time
+		//    move without taking down the sweep.
+		db.ensureDerivedDb();
+
 		// 1. Apply biological decay
 		const decay = applyDecay(db.db, decayOptions);
 

@@ -50,7 +50,7 @@ export class MemoryVectorEntity extends BaseEntity {
 		memory_id: string;
 		vector: string | Uint8Array;
 	}[] {
-		let sql = `SELECT mv.memory_id, mv.vector FROM memory_vectors mv JOIN ${TABLE_MEMORIES} m ON mv.memory_id = m.id`;
+		let sql = `SELECT mv.memory_id, mv.vector FROM derived.memory_vectors mv JOIN ${TABLE_MEMORIES} m ON mv.memory_id = m.id`;
 		const params: (string | number)[] = [];
 		const predicates: string[] = [];
 		if (owner) predicates.push("m.owner = ?");
@@ -67,7 +67,7 @@ export class MemoryVectorEntity extends BaseEntity {
 		// Dense embeddings are stored as a float32 BLOB, sparse TF maps as JSON
 		// TEXT — see encodeVector (TASK-038).
 		this.run(
-			`INSERT INTO memory_vectors (memory_id, vector, updated_at) VALUES (?, ?, ?)
+			`INSERT INTO derived.memory_vectors (memory_id, vector, updated_at) VALUES (?, ?, ?)
 			ON CONFLICT(memory_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,
 			[memoryId, encodeVector(vector), new Date().toISOString()]
 		);

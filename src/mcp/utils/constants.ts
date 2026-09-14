@@ -53,6 +53,14 @@ export const TABLE_MEMORY_SUMMARY = "memory_summary";
 // not the hot memory.db, so it is listed here only to avoid inline literals.
 export const TABLE_COLD_MEMORIES = "cold_memories";
 
+// ── Derived database (TASK-037 / DB-shrink L4) ──────────────────────────
+// The codebase index + every `*_vectors` table are DERIVED data (regenerable
+// from source) and live in a SEPARATE SQLite database co-located with
+// memory.db, attached to the same connection under this schema name. See
+// storage/derived-db.ts.
+export const DERIVED_DB_FILENAME = "codebase.db";
+export const DERIVED_SCHEMA = "derived";
+
 // ── Time (ms) — TTL building blocks (single source) ─────────────────────
 // Declared before RECENCY_HALF_LIFE_MS so derived constants can reference
 // them. Replace inline `60*60*1000` / `24*60*60*1000` math with these.

@@ -261,9 +261,9 @@ export const StandardsService = {
 		// Route through the shared purge + cleanup contract (OPT-DRY-03): hard
 		// delete + queue_jobs purge + vector removal + repo-scoped KG cleanup —
 		// identical to the MCP standard-delete tool and the dashboard bulk path.
-		// The explicit vectors.remove is dropped: standard_vectors cascades on
-		// coding_standards hard delete (matching the memory/standard tools,
-		// which rely on the contract's CASCADE coverage; TASK-207).
+		// Vector removal is explicit inside StandardEntity.delete: the derived
+		// database holding standard_vectors has no cross-database FK to
+		// coding_standards, so there is no SQL CASCADE to rely on (TASK-037).
 		await db.withWrite(() => {
 			purgeEntityAndCleanup(db, "standard", [{ id, title: existing.title, repo: existing.repo ?? "" }]);
 			db.actions.logAction("delete", existing.owner, existing.repo || "global", {

@@ -27,7 +27,7 @@ export class CodebaseReferenceEntity extends BaseEntity {
 		return this.transaction(() => {
 			const now = new Date().toISOString();
 			const stmt = this.db.prepare(`
-				INSERT INTO codebase_references (
+				INSERT INTO derived.codebase_references (
 					id, repo, symbol_name, caller_file, caller_line, caller_name, kind,
 					target_file, target_symbol_id, role,
 					local_name, imported_name, module_specifier, import_kind, created_at
@@ -61,7 +61,7 @@ export class CodebaseReferenceEntity extends BaseEntity {
 
 	getReferencesByFile(repo: string, filePath: string): CodebaseReference[] {
 		return this.all<CodebaseReferenceRow>(
-			"SELECT * FROM codebase_references WHERE repo = ? AND caller_file = ? ORDER BY caller_line ASC, symbol_name ASC",
+			"SELECT * FROM derived.codebase_references WHERE repo = ? AND caller_file = ? ORDER BY caller_line ASC, symbol_name ASC",
 			[repo, filePath]
 		).map((r) => this.rowToReference(r));
 	}
@@ -69,7 +69,7 @@ export class CodebaseReferenceEntity extends BaseEntity {
 	/** All call sites for a symbol within a repo (serves traceSymbol). */
 	getReferencesBySymbol(repo: string, symbolName: string): CodebaseReference[] {
 		return this.all<CodebaseReferenceRow>(
-			"SELECT * FROM codebase_references WHERE repo = ? AND symbol_name = ? ORDER BY caller_file ASC, caller_line ASC",
+			"SELECT * FROM derived.codebase_references WHERE repo = ? AND symbol_name = ? ORDER BY caller_file ASC, caller_line ASC",
 			[repo, symbolName]
 		).map((r) => this.rowToReference(r));
 	}
@@ -85,14 +85,14 @@ export class CodebaseReferenceEntity extends BaseEntity {
 	getImportsByTargetFile(repo: string, targetFile: string, callerFile?: string): CodebaseReference[] {
 		if (callerFile) {
 			return this.all<CodebaseReferenceRow>(
-				`SELECT * FROM codebase_references
+				`SELECT * FROM derived.codebase_references
 				 WHERE repo = ? AND caller_file = ? AND kind = 'import' AND target_file = ?
 				 ORDER BY caller_line ASC`,
 				[repo, callerFile, targetFile]
 			).map((r) => this.rowToReference(r));
 		}
 		return this.all<CodebaseReferenceRow>(
-			`SELECT * FROM codebase_references
+			`SELECT * FROM derived.codebase_references
 			 WHERE repo = ? AND kind = 'import' AND target_file = ?
 			 ORDER BY caller_file ASC, caller_line ASC`,
 			[repo, targetFile]
@@ -112,14 +112,14 @@ export class CodebaseReferenceEntity extends BaseEntity {
 		if (kinds && kinds.length > 0) {
 			const placeholders = kinds.map(() => "?").join(", ");
 			return this.all<CodebaseReferenceRow>(
-				`SELECT * FROM codebase_references
+				`SELECT * FROM derived.codebase_references
 				 WHERE repo = ? AND kind IN (${placeholders})
 				 ORDER BY caller_file ASC, caller_line ASC, symbol_name ASC`,
 				[repo, ...kinds]
 			).map((r) => this.rowToReference(r));
 		}
 		return this.all<CodebaseReferenceRow>(
-			"SELECT * FROM codebase_references WHERE repo = ? ORDER BY caller_file ASC, caller_line ASC, symbol_name ASC",
+			"SELECT * FROM derived.codebase_references WHERE repo = ? ORDER BY caller_file ASC, caller_line ASC, symbol_name ASC",
 			[repo]
 		).map((r) => this.rowToReference(r));
 	}
@@ -141,7 +141,7 @@ export class CodebaseReferenceEntity extends BaseEntity {
 			const placeholders = chunk.map(() => "?").join(", ");
 			const rows = this.all<{ symbol_name: string; kind: string; count: number }>(
 				`SELECT symbol_name, kind, COUNT(*) as count
-				 FROM codebase_references
+				 FROM derived.codebase_references
 				 WHERE repo = ? AND symbol_name IN (${placeholders})
 				 GROUP BY symbol_name, kind
 				 ORDER BY symbol_name ASC, kind ASC`,
@@ -169,7 +169,7 @@ export class CodebaseReferenceEntity extends BaseEntity {
 	getTopReferencedSymbols(repo: string, limit: number): TopReferencedSymbolRow[] {
 		const rows = this.all<{ symbol_name: string; kind: string; count: number }>(
 			`SELECT symbol_name, kind, COUNT(*) as count
-			 FROM codebase_references
+			 FROM derived.codebase_references
 			 WHERE repo = ?
 			 GROUP BY symbol_name, kind`,
 			[repo]
@@ -196,14 +196,17 @@ export class CodebaseReferenceEntity extends BaseEntity {
 	 * index, so candidate claims would be garbage).
 	 */
 	countReferencesByRepo(repo: string): number {
-		const row = this.get<{ count: number }>("SELECT COUNT(*) as count FROM codebase_references WHERE repo = ?", [repo]);
+		const row = this.get<{ count: number }>(
+			"SELECT COUNT(*) as count FROM derived.codebase_references WHERE repo = ?",
+			[repo]
+		);
 		return row?.count ?? 0;
 	}
 
 	/**
 	 * Languages that OBSERVED reference emission in this repo's index
 	 * (TASK-319 language honesty). Joins reference caller files back to
-	 * codebase_files: a language appears here only when at least one of its
+	 * derived.codebase_files: a language appears here only when at least one of its
 	 * indexed files produced reference rows — proof the emitter ran for that
 	 * language in the CURRENT index (vs an index that predates reference
 	 * emission, where zero refs would lie).
@@ -211,8 +214,8 @@ export class CodebaseReferenceEntity extends BaseEntity {
 	getReferenceLanguagesByRepo(repo: string): string[] {
 		return this.all<{ language: string }>(
 			`SELECT DISTINCT f.language
-			 FROM codebase_references r
-			 JOIN codebase_files f ON f.repo = r.repo AND f.file_path = r.caller_file
+			 FROM derived.codebase_references r
+			 JOIN derived.codebase_files f ON f.repo = r.repo AND f.file_path = r.caller_file
 			 WHERE r.repo = ? AND f.language IS NOT NULL
 			 ORDER BY f.language ASC`,
 			[repo]
@@ -220,13 +223,16 @@ export class CodebaseReferenceEntity extends BaseEntity {
 	}
 
 	deleteReferencesByFile(repo: string, filePath: string): number {
-		const result = this.run("DELETE FROM codebase_references WHERE repo = ? AND caller_file = ?", [repo, filePath]);
+		const result = this.run("DELETE FROM derived.codebase_references WHERE repo = ? AND caller_file = ?", [
+			repo,
+			filePath
+		]);
 		return result.changes;
 	}
 
 	transferReferencesFilePath(repo: string, oldPath: string, newPath: string): number {
 		const result = this.run(
-			`UPDATE codebase_references SET caller_file = ?
+			`UPDATE derived.codebase_references SET caller_file = ?
 			 WHERE repo = ? AND caller_file = ?`,
 			[newPath, repo, oldPath]
 		);
@@ -234,7 +240,7 @@ export class CodebaseReferenceEntity extends BaseEntity {
 	}
 
 	deleteReferencesByRepo(repo: string): number {
-		const result = this.run("DELETE FROM codebase_references WHERE repo = ?", [repo]);
+		const result = this.run("DELETE FROM derived.codebase_references WHERE repo = ?", [repo]);
 		return result.changes;
 	}
 
