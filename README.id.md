@@ -70,6 +70,55 @@ Metode ini memastikan waktu startup tercepat dan keandalan maksimal untuk penggu
 - **Penggunaan npx**: Saat Anda menggunakan `npx`, ia sering melakukan permintaan jaringan untuk memeriksa versi terbaru atau mengunduh ulang paket jika tidak ada di cache. Karena klien MCP sering memulai dan menghentikan alat, ini dapat menyebabkan ratusan unduhan yang tidak perlu.
 - **Biner terinstal**: Dengan menginstal paket, Anda menyimpan salinan permanen di disk. Agen menggunakan ulang versi lokal ini secara instan, memberikan pengalaman yang jauh lebih mulus.
 
+### Database Maintenance: Reclaim Disk Space
+
+After pruning or large data cleanups, SQLite can retain freed pages in its **freelist** for reuse instead of shrinking the database file. `VACUUM_ON_STARTUP` (default: `false`) opts into a one-time conversion to `auto_vacuum=INCREMENTAL`, followed by a full `VACUUM` that reclaims those pages before the MCP server accepts requests.
+
+#### One-off CLI startup
+
+Close other MCP clients and dashboard processes using the same database first: a full `VACUUM` needs a write lock and can delay startup. Use the same `MEMORY_DB_PATH` setting as your normal server if you have overridden the database location.
+
+Run **one** of these commands in a POSIX shell (macOS/Linux):
+
+```bash
+# With the globally installed package
+VACUUM_ON_STARTUP=true local-memory-mcp
+
+# Alternatively, without a global install
+VACUUM_ON_STARTUP=true npx @vheins/local-memory-mcp
+```
+
+The variable applies only to that invocation. This is **not a maintenance-and-exit command**: after the pass, the normal stdio MCP server continues running. Check the `[Server] VACUUM_ON_STARTUP ran` log and its `changed`, `skipped`, and `reason` fields; stop the standalone server with Ctrl+C after the pass finishes, then restart your normal client.
+
+#### Claude Desktop / Cursor configuration
+
+For Claude Desktop, open **Settings → Developer → Edit Config** (`claude_desktop_config.json`). Merge this entry into your existing `mcpServers` object; preserve other servers and any existing `env` values such as `MEMORY_DB_PATH`:
+
+```json
+{
+	"mcpServers": {
+		"local-memory": {
+			"command": "npx",
+			"args": ["-y", "@vheins/local-memory-mcp"],
+			"env": {
+				"VACUUM_ON_STARTUP": "true"
+			}
+		}
+	}
+}
+```
+
+For Cursor, use the same configuration in `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global), adding `"type": "stdio"` inside the `local-memory` entry. For a global package install in either client, use `"command": "local-memory-mcp"` and remove `args`.
+
+Restart the client to apply the setting. **Enable it for one planned reclamation startup, then remove/unset `VACUUM_ON_STARTUP` (or set it to `"false"`)** so ordinary startups stay fast and do not retry an expensive conversion or encounter unnecessary write-lock contention.
+
+#### Safety and limitations
+
+- **Disk headroom:** with the default guard, available space on the database filesystem must be at least **2 × database size + 16 MiB**. Database size is `page_count × page_size`; the temporary rewrite and WAL need extra room. Insufficient space produces `skipped: true`, `reason: "insufficient_disk"`. If the filesystem free-space probe is unavailable, the implementation proceeds rather than blocking, so verify headroom yourself.
+- **Idempotent:** an already-INCREMENTAL database returns `changed: false`, `reason: "already_incremental"`; it does **not** run another full `VACUUM` or reclaim newly freed pages through this flag. Subsequent bounded incremental reclamation is part of the startup maintenance sweep in the `full` runtime profile.
+- **Never-throw startup pass:** conversion errors are logged and returned as `skipped: true`, `reason: "error"`, rather than aborting startup. In-memory databases are skipped with `reason: "in_memory"`. This is not a guarantee that unrelated server startup operations cannot fail.
+- **Scope:** the flag applies to normal MCP server startup in every runtime profile, not the standalone dashboard. It does not impose a maintenance timeout or remove the cost of a full database rewrite.
+
 ## 📊 Dasbor Kaca (Glassy Dashboard)
 
 Visualisasikan dan kelola memori Agent Anda melalui antarmuka web modern.
@@ -126,7 +175,7 @@ Dasbor bisa otomatis menyala saat Anda membuka project di VS Code, Cursor, Winds
 - [Logika Pencarian Hibrida](https://github.com/vheins/local-memory-mcp/wiki/id/Hybrid-Search) — Cara kerja skoring pencarian
 - [Panduan Dasbor](https://github.com/vheins/local-memory-mcp/wiki/id/Dashboard-Guide) — UI web untuk manajemen memori & tugas
 - [Codebase Index — Ikhtisar Fitur](https://github.com/vheins/local-memory-mcp/wiki/features/Codebase-Index) — Mengindeks, mencari, dan menelusuri simbol kode sumber
-- [Codebase Index — Referensi API](.agents/documents/api/codebase-index.md) — Dokumentasi lengkap alat MCP untuk 2 alat Codebase Index terpadu (`codebase-index` + `codebase-read`)
+- [Codebase Index — Referensi API](.agents/documents/application/api/codebase-index/api-codebase.md) — Dokumentasi lengkap alat MCP untuk 2 alat Codebase Index terpadu (`codebase-index` + `codebase-read`)
 - [Referensi Protokol MCP](https://github.com/vheins/local-memory-mcp/wiki/id/MCP-Concepts) — Detail teknis protokol
 - [Integrasi dengan Claude Code](https://github.com/vheins/local-memory-mcp/wiki/id/Claude-Code-Integration) — Panduan setup untuk Claude Code CLI
 - [Integrasi dengan Codex (OpenAI)](https://github.com/vheins/local-memory-mcp/wiki/id/Codex-Integration) — Panduan setup untuk Codex CLI

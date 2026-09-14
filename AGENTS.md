@@ -151,6 +151,50 @@ codebase.service.ts`). The MCP server ignores it and indexes only its CWD.
 - **Memory search uses FTS5** (migration v10) with the `unicode61` tokenizer and `*`
   prefix matching — mid-word substring matches are **not** guaranteed (trigram deferred).
 
+### Database space reclamation (`VACUUM_ON_STARTUP`)
+
+Pruning/data cleanups free SQLite pages into the freelist; with `auto_vacuum=NONE`,
+the file retains those pages for reuse rather than returning disk space. Use the
+opt-in startup conversion only during a planned maintenance window. Stop other
+MCP/dashboard processes using that database and preserve the normal `MEMORY_DB_PATH`
+override, if configured.
+
+```bash
+# One POSIX-shell invocation with the global install
+VACUUM_ON_STARTUP=true local-memory-mcp
+# Alternative without a global install
+VACUUM_ON_STARTUP=true npx @vheins/local-memory-mcp
+```
+
+These commands continue into the stdio server; they do not exit after maintenance.
+Wait for `[Server] VACUUM_ON_STARTUP ran`, inspect `changed`/`skipped`/`reason`, then
+stop the standalone process with Ctrl+C. For Claude Desktop/Cursor JSON setup,
+see [the README maintenance guide](README.md#database-maintenance-reclaim-disk-space).
+Remove/unset the flag after the planned run (or set it to `"false"`) to keep normal
+startups fast and avoid conversion retries/write-lock contention.
+
+Implementation contract (`src/mcp/services/vacuum.ts`, wired in `src/mcp/server.ts`):
+
+- Default off; when enabled, runs before accepting requests in **all** runtime
+  profiles. This is an MCP startup option, not a standalone dashboard option.
+- Converts to `auto_vacuum=INCREMENTAL` with a **one-time full `VACUUM`**. Requires
+  a full write lock; no dedicated timeout bounds this synchronous startup pass.
+- Disk guard defaults to **2 × (`page_count` × `page_size`) + 16 MiB** of available
+  space on the DB filesystem. The multiplier is `VACUUM_DISK_HEADROOM_MULTIPLIER`
+  (default 2); the 16 MiB margin is fixed. Insufficient space returns
+  `skipped: true`, `reason: "insufficient_disk"`. A failed `statfs` probe degrades
+  **open** (proceeds); verify actual headroom rather than relying on the guard alone.
+- **Idempotent:** `auto_vacuum=2` returns `changed: false`, `skipped: false`,
+  `reason: "already_incremental"` without another full vacuum. This flag does not
+  reclaim future freelist growth once converted; bounded `incrementalVacuum`
+  runs after pruning in the `full` profile's startup maintenance sweep.
+- **Never-throw conversion:** failures are logged and returned with `skipped: true`,
+  `reason: "error"`; `:memory:` returns `reason: "in_memory"`. Disabled
+  `runStartupVacuum` returns `null`. This contract does not cover unrelated startup
+  failures or all other vacuum helpers.
+- Verify behavior with `npx vitest run src/mcp/tests/vacuum.test.ts`; never run the
+  documented maintenance commands against the real memory DB as a documentation test.
+
 ## Environment Variables
 
 No `.env.example` exists. All variables are read from `process.env` (or via the
