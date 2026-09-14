@@ -57,7 +57,9 @@
 
 	.repo-count {
 		background: rgba(148, 163, 184, 0.12);
-		color: var(--color-text-muted);
+		/* WCAG AA (STD-002 / TASK-054): ensure >= 4.5:1 text contrast across themes.
+		   Light theme uses --stat-sky (#0369a1 ~5.6:1), dark theme uses --stat-sky (#38bdf8 >= 4.5:1). */
+		color: var(--stat-sky, #0369a1);
 		font-size: 0.65rem;
 		padding: 1px 6px;
 		border-radius: 999px;

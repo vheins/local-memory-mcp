@@ -142,6 +142,14 @@ html.dark .mem-row.selected {
 	color: var(--color-text-muted);
 }
 
+@media (max-width: 640px) {
+	/* Ensure tap targets >= 32px (and 44px on touch) without layout shifts */
+	.row-action-btn {
+		min-width: 32px;
+		min-height: 32px;
+	}
+}
+
 .row-action-btn.has-label {
 	width: auto;
 	padding: 5px 9px;

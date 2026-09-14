@@ -112,7 +112,7 @@
 	}
 
 	.kg-zoom-btn {
-		/* Zoom controls are primary canvas actions — full 40px target (44px coarse). */
+		/* Zoom controls are primary canvas actions — full 40px target (44px coarse, >=32px at 390px). */
 		padding: 6px 10px !important;
 		min-width: 40px;
 		min-height: 40px;
@@ -125,10 +125,25 @@
 		border-right-color: rgba(148, 163, 184, 0.15);
 	}
 
+	@media (max-width: 390px) {
+		.kg-zoom-btn {
+			min-width: 34px;
+			min-height: 34px;
+			padding: 4px 8px !important;
+		}
+
+		.kg-zoom-label {
+			min-width: 40px;
+			min-height: 34px;
+			padding: 2px 6px !important;
+		}
+	}
+
 	@media (pointer: coarse) {
 		.kg-zoom-btn,
 		.kg-zoom-label {
 			min-height: 44px;
+			min-width: 44px;
 		}
 	}
 
