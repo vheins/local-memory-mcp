@@ -2,7 +2,7 @@
  * Route index (routes/index.ts) — mount registry integration tests.
  *
  * Scope (REFACTOR-TST-008): verifies the composite router WIRING — each of
- * the 9 sub-routers is mounted at the production prefix, in the production
+ * the 10 sub-routers is mounted at the production prefix, in the production
  * order, and every prefix resolves over HTTP. Also verifies global 404
  * handling (unknown paths + method mismatches at the /api boundary).
  * Deep controller behavior is owned by the per-group integration tests and
@@ -104,7 +104,7 @@ describe("Route index (mount registry)", () => {
 	});
 
 	describe("mount registration", () => {
-		it("mounts all 9 sub-routers in order (no direct routes on the index router)", async () => {
+		it("mounts all 10 sub-routers in order (no direct routes on the index router)", async () => {
 			const { default: router } = await import("../../routes/index");
 			const { default: systemRoutes } = await import("../../routes/system.routes");
 			const { default: memoryRoutes } = await import("../../routes/memory.routes");
@@ -115,9 +115,10 @@ describe("Route index (mount registry)", () => {
 			const { default: codebaseRoutes } = await import("../../routes/codebase.routes");
 			const { default: unifiedGraphRoutes } = await import("../../routes/unified-graph.routes");
 			const { default: queueRoutes } = await import("../../routes/queue.routes");
+			const { default: bugReportRoutes } = await import("../../routes/bug-report.routes");
 
-			// All 9 layers are sub-router mounts (no layer carries a route).
-			expect(router.stack).toHaveLength(9);
+			// All 10 layers are sub-router mounts (no layer carries a route).
+			expect(router.stack).toHaveLength(10);
 			expect(router.stack.every((layer) => !layer.route)).toBe(true);
 
 			// The mount handle is the exact sub-router instance, in the
@@ -132,7 +133,8 @@ describe("Route index (mount registry)", () => {
 				kgRoutes,
 				codebaseRoutes,
 				unifiedGraphRoutes,
-				queueRoutes
+				queueRoutes,
+				bugReportRoutes
 			]);
 		});
 	});
@@ -182,6 +184,11 @@ describe("Route index (mount registry)", () => {
 
 		it("GET /api/queue/status resolves (queue mounted at /queue)", async () => {
 			const res = await fetch(`${baseUrl}/api/queue/status`);
+			expect(res.status).toBe(200);
+		});
+
+		it("GET /api/bugs/stats resolves (bugs mounted at /bugs)", async () => {
+			const res = await fetch(`${baseUrl}/api/bugs/stats`);
 			expect(res.status).toBe(200);
 		});
 

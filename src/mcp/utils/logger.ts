@@ -4,13 +4,13 @@ type LogLevel = "debug" | "info" | "notice" | "warning" | "error" | "critical" |
 
 type LogMethodLevel = LogLevel | "warn";
 
-type LogSinkPayload = {
+export type LogSinkPayload = {
 	level: LogLevel;
 	logger?: string;
 	data: Record<string, unknown>;
 };
 
-type LogSink = (payload: LogSinkPayload) => void;
+export type LogSink = (payload: LogSinkPayload) => void;
 
 /**
  * Returns ISO 8601 timestamp in the system's local timezone.

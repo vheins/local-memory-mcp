@@ -152,7 +152,7 @@ describe("migration v37 vector blob format (TASK-038)", () => {
 		).map((r) => r.version);
 		expect(applied.at(-1)).toBe(SCHEMA_VERSION);
 		expect(applied).toEqual(Array.from({ length: SCHEMA_VERSION }, (_, i) => i + 1));
-		expect(SCHEMA_VERSION).toBe(37);
+		expect(SCHEMA_VERSION).toBe(38);
 		db.close();
 	});
 

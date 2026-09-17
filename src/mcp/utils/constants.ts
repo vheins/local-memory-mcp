@@ -564,3 +564,12 @@ export const COLD_ARCHIVE_RETENTION_DAYS = envInt("COLD_ARCHIVE_RETENTION_DAYS",
 export const COLD_ARCHIVE_OFFLOAD_MAX_ROWS = envInt("COLD_ARCHIVE_OFFLOAD_MAX_ROWS", 5_000);
 // Rows per BEGIN IMMEDIATE transaction — bounds the write-lock hold time.
 export const COLD_ARCHIVE_BATCH_SIZE = envInt("COLD_ARCHIVE_BATCH_SIZE", 500);
+
+// ── Local bug telemetry ───────────────────────────────────────────────────
+// Automatic capture of runtime errors (uncaught/unhandled, error-level logs,
+// tool failures, dashboard 5xx) into the local `bug_reports` table. Local-only
+// by default — no network. A remote sink (e.g. Sentry) can be attached at
+// runtime via bugCapture.addSink() without changing the capture pipeline.
+export const BUG_TELEMETRY_ENABLED = envBool("BUG_TELEMETRY_ENABLED", true);
+export const BUG_TELEMETRY_RETENTION_DAYS = envInt("BUG_TELEMETRY_RETENTION_DAYS", 30);
+export const BUG_TELEMETRY_MAX_ROWS = envInt("BUG_TELEMETRY_MAX_ROWS", 5000);

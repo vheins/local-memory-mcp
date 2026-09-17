@@ -12,6 +12,7 @@ import { EmbeddingWorker } from "./embedding-queue";
 import { RuntimeCapabilityRegistry, setRuntimeCapabilities } from "./runtime-capabilities";
 import { CAPABILITIES } from "./capabilities";
 import { addLogSink, createFileSink, logger } from "./utils/logger";
+import { bugCapture } from "./utils/bug-capture";
 import { reuseTelemetry } from "./utils/reuse-telemetry";
 import { runStartupMaintenance } from "./services/maintenance-job";
 import { runStartupVacuum } from "./services/vacuum";
@@ -77,11 +78,23 @@ process.on("unhandledRejection", (reason: unknown) => {
 			pid: process.pid,
 			error: reason instanceof Error ? `${reason.message}\n${reason.stack ?? ""}` : String(reason)
 		});
+		bugCapture.capture({
+			source: "unhandled_rejection",
+			message: reason instanceof Error ? reason.message : String(reason),
+			stack: reason instanceof Error ? (reason.stack ?? null) : null,
+			context: { pid: process.pid, startup: !serverStarted }
+		});
 		process.exit(1);
 	}
 	logger.error("[Server] Unhandled promise rejection", {
 		pid: process.pid,
 		error: reason instanceof Error ? `${reason.message}\n${reason.stack ?? ""}` : String(reason)
+	});
+	bugCapture.capture({
+		source: "unhandled_rejection",
+		message: reason instanceof Error ? reason.message : String(reason),
+		stack: reason instanceof Error ? (reason.stack ?? null) : null,
+		context: { pid: process.pid, startup: !serverStarted }
 	});
 });
 
@@ -92,12 +105,24 @@ process.on("uncaughtException", (err: Error) => {
 			error: err.message,
 			stack: err.stack ?? ""
 		});
+		bugCapture.capture({
+			source: "uncaught",
+			message: err.message,
+			stack: err.stack ?? null,
+			context: { pid: process.pid, startup: !serverStarted }
+		});
 		process.exit(1);
 	}
 	logger.error("[Server] Uncaught exception", {
 		pid: process.pid,
 		error: err.message,
 		stack: err.stack ?? ""
+	});
+	bugCapture.capture({
+		source: "uncaught",
+		message: err.message,
+		stack: err.stack ?? null,
+		context: { pid: process.pid, startup: !serverStarted }
 	});
 });
 
@@ -115,6 +140,12 @@ const vectors = new CapabilityAwareVectorStore(realVectors, runtimeCapabilities)
 // a multi-process "database is locked" burst is logged — a sink registered
 // after start() would lose those first failure logs.
 addLogSink(createFileSink(path.dirname(db.getDbPath())));
+
+// Bug telemetry: bind the local SQLite sink and start capturing error-level
+// log entries (uncaught/unhandled handlers, tool failures, …) into
+// bug_reports. Local-only; see utils/bug-capture.ts.
+bugCapture.bind(db);
+addLogSink(bugCapture.logSink);
 
 // Optional operator-triggered space reclamation (TASK-047). A full VACUUM is
 // too heavy to run implicitly (full write lock + ~2x free disk), so it is

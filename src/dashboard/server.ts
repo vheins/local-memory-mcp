@@ -5,6 +5,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { db, mcpClient, logger, embeddingWorker } from "./lib/context";
 import { addLogSink, createFileSink } from "../mcp/utils/logger";
+import { bugCapture } from "../mcp/utils/bug-capture";
 import { reuseTelemetry } from "../mcp/utils/reuse-telemetry";
 import routes from "./routes";
 
@@ -12,6 +13,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Register file log sink (same dir as DB)
 addLogSink(createFileSink(path.dirname(db.getDbPath())));
+
+// Bug telemetry: capture dashboard 5xx + error-level logs into bug_reports.
+bugCapture.bind(db);
+addLogSink(bugCapture.logSink);
 const pkg = { version: "0.0.0" };
 try {
 	const pkgPath = path.join(__dirname, "../../package.json");
@@ -146,6 +151,12 @@ app.use(
 	(err: Error & { status?: number }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
 		if ((err as { status?: number }).status === 404) return res.status(404).end();
 		logger.error("Unhandled error", { error: err.message });
+		bugCapture.capture({
+			source: "dashboard",
+			message: err.message,
+			stack: err.stack ?? null,
+			context: { path: req.path, method: req.method, status: err.status ?? 500 }
+		});
 		res.status(500).end();
 	}
 );

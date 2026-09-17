@@ -20,6 +20,7 @@ import { CodebaseReferenceEntity } from "../entities/codebase-reference";
 import { KnowledgeGraphEntity } from "../entities/knowledge-graph";
 import { ExplorationObservationEntity } from "../entities/exploration-observation";
 import { ReuseTelemetryEntity } from "../entities/reuse-telemetry";
+import { BugReportEntity } from "../entities/bug-report";
 import { WriteLock } from "./write-lock";
 import { ColdArchiveStore, resolveColdArchivePath } from "./cold-archive";
 import type { ColdArchiveEntry, ColdArchiveSearchOptions } from "./cold-archive";
@@ -70,6 +71,7 @@ export class SQLiteStore {
 	public knowledgeGraph: KnowledgeGraphEntity;
 	public explorationObservations: ExplorationObservationEntity;
 	public reuseTelemetry: ReuseTelemetryEntity;
+	public bugReports: BugReportEntity;
 	public lock: WriteLock;
 	private dbPathInstance: string;
 	/**
@@ -164,6 +166,7 @@ export class SQLiteStore {
 		this.knowledgeGraph = new KnowledgeGraphEntity(this.db);
 		this.explorationObservations = new ExplorationObservationEntity(this.db);
 		this.reuseTelemetry = new ReuseTelemetryEntity(this.db);
+		this.bugReports = new BugReportEntity(this.db);
 		this.lock = new WriteLock(finalPath);
 	}
 
