@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.46.1] — 2026-09-17
+
+### Fixed
+
+- **`task-write` — comment required on any status change**: `force: true` no longer bypasses the status-transition gate. A non-empty `comment` is now required on every status change, enforced at all three call sites (`coreUpdate`, `handleBulkUpdateByIds`, and the bulk executor) via `validateStatusTransition` (`TASK-061`).
+- **`task-write` — directive error messages**: validation and transition errors now return actionable retry guidance with the exact call shape — the comment-required and invalid-transition messages keep their stable leading substring (so existing consumers/tests match) and append a `task-write(code: "<CODE>", status: "...", comment: "...")` retry hint; create/bulk-create and invalid-id errors were hardened with the same retry shapes (`TASK-061`).
+
 ## [0.46.0] — 2026-09-13
 
 ### Added
