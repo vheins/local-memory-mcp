@@ -129,9 +129,9 @@ const TaskWriteFieldDefs = {
  * The previous hand-rolled copy omitted `commit_id`, `changed_files`, and `model`
  * (silently stripped by zod, so bulk updates lost those fields) and used a lax
  * `phase: z.string()` that let an empty phase through. Reusing `TaskWriteFieldDefs`
- * restores all fields — including `comment`/`force` (read by validateStatusTransition
- * to drive bulk status transitions), `model` (the status-comment author), and
- * `phase: z.string().min(1)`.
+ * restores all fields — including `comment`/`force` (TASK-061: `force` is retained
+ * for API back-compat but is INERT — a comment is required on any status change),
+ * `model` (the status-comment author), and `phase: z.string().min(1)`.
  */
 export const TaskWriteItemSchema = z
 	.object({

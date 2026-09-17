@@ -16,7 +16,9 @@ function coreCreate(params: TaskWriteParams, storage: SQLiteStore): { task: Task
 	const { owner, repo } = params;
 
 	if (!params.phase || !params.title || !params.description) {
-		throw new Error("Missing required fields for single task creation (phase, title, description)");
+		throw new Error(
+			'Missing required fields for single task creation (phase, title, description) — retry with task-write(phase: "...", title: "...", description: "...")'
+		);
 	}
 
 	const resolvedCode = resolveEntityCode(params.code ?? null, owner ?? "", repo, "task", storage);

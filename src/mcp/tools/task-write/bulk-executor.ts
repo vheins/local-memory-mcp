@@ -115,7 +115,8 @@ export async function executeBulkOperation(
 						itemUpdates.status as TaskStatus,
 						raw.comment as string | undefined,
 						raw.force as boolean | undefined,
-						itemUpdates.est_tokens as number | undefined
+						itemUpdates.est_tokens as number | undefined,
+						existing.task_code
 					);
 					if (err) throw new Error(err);
 
@@ -250,7 +251,9 @@ export async function executeBulkOperation(
 				const description = raw.description as string;
 
 				if (!phase || !title || !description) {
-					throw new Error("Missing required fields for create (phase, title, description)");
+					throw new Error(
+						"Missing required fields for create (phase, title, description) — every tasks[] create item needs phase, title, and description; retry with tasks: [{ phase: \"...\", title: \"...\", description: \"...\" }]"
+					);
 				}
 
 				let normalizedStatus = (raw.status as TaskStatus) || "backlog";

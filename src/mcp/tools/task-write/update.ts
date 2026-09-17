@@ -49,7 +49,9 @@ async function coreUpdate(
 		if (UUID_REGEX.test(id)) {
 			resolvedId = id;
 		} else {
-			throw new Error(`Invalid id format: '${id}'. Use a UUID or use 'code' for code-based lookup.`);
+			throw new Error(
+				`Invalid id format: '${id}'. Use a UUID or use 'code' for code-based lookup — retry with task-write(code: "<CODE>", ...) or pass a UUID id`
+			);
 		}
 	}
 	if (!resolvedId && params.code) {
@@ -84,14 +86,16 @@ async function coreUpdate(
 
 				const isStatusChanging = isStatusChangingGlobal && updates.status !== existingTask.status;
 
-				// Status transition validation
-				if (isStatusChanging && !force) {
+				// Status transition validation — ALWAYS run (TASK-061): a comment is
+				// required on any status change and `force` no longer bypasses it.
+				if (isStatusChanging) {
 					const validationError = validateStatusTransition(
 						existingTask.status,
 						updates.status as TaskStatus,
 						comment,
 						force,
-						updates.est_tokens as number | undefined
+						updates.est_tokens as number | undefined,
+						existingTask.task_code
 					);
 					if (validationError) {
 						throw new Error(validationError);
@@ -303,14 +307,16 @@ export async function handleBulkUpdateByIds(
 				const existingTask = taskMap.get(targetId)!;
 				const isStatusChanging = isStatusChangingGlobal && updates.status !== existingTask.status;
 
-				// Status transition validation
-				if (isStatusChanging && !force) {
+				// Status transition validation — ALWAYS run (TASK-061): a comment is
+				// required on any status change and `force` no longer bypasses it.
+				if (isStatusChanging) {
 					const validationError = validateStatusTransition(
 						existingTask.status,
 						updates.status as TaskStatus,
 						comment,
 						force,
-						updates.est_tokens as number | undefined
+						updates.est_tokens as number | undefined,
+						existingTask.task_code
 					);
 					if (validationError) {
 						throw new Error(validationError);

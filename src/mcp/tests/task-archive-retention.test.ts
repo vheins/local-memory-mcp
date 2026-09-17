@@ -127,8 +127,7 @@ describe("TASK-039 task_archive write-time growth bound", () => {
 				ids: tasks.map((t) => t.id),
 				status: "completed",
 				comment: "batch complete",
-				est_tokens: 100,
-				force: true
+				est_tokens: 100
 			},
 			db,
 			vectors
@@ -187,8 +186,7 @@ describe("TASK-039 task_archive write-time growth bound", () => {
 				ids: [huge.id, small.id],
 				status: "completed",
 				comment: "batch complete",
-				est_tokens: 100,
-				force: true
+				est_tokens: 100
 			},
 			db,
 			vectors

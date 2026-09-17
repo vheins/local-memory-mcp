@@ -159,6 +159,21 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 		const tasks = db.tasks.getTasksByRepo("test", REPO);
 		const ids = tasks.map((t) => t.id);
 
+		// TASK-061: pending → completed is not a valid direct transition and
+		// `force` no longer bypasses the state machine — move the batch to
+		// in_progress first (with a comment), then complete it.
+		const startRes = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				ids: ids,
+				status: "in_progress",
+				comment: "starting batch"
+			}
+		});
+		expect(startRes.isError).toBe(false);
+
 		// Bulk update to completed
 		const upRes = await router("tools/call", {
 			name: "task-write",
@@ -168,8 +183,7 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 				ids: ids,
 				status: "completed",
 				comment: "Bulk completion test",
-				est_tokens: 500,
-				force: true
+				est_tokens: 500
 			}
 		});
 
@@ -198,11 +212,13 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 		// TASK-039: aggregated archives carry a retention TTL.
 		expect(aggregated.expires_at).not.toBeNull();
 
-		// Verify comments created
+		// Verify comments created — one per transition (in_progress, then completed).
 		const comments = db.taskComments.getTaskCommentsByTaskId(ids[0]);
-		expect(comments.length).toBe(1);
+		expect(comments.length).toBe(2);
 		expect(comments[0].comment).toBe("Bulk completion test");
 		expect(comments[0].next_status).toBe("completed");
+		expect(comments[1].comment).toBe("starting batch");
+		expect(comments[1].next_status).toBe("in_progress");
 	});
 
 	it("TASK-044: aggregates a tasks[] bulk completion of N tasks into ONE task_archive memory", async () => {
@@ -498,7 +514,7 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 	// tests pin the fields that the old hand-rolled copy silently stripped
 	// (comment/force/model/commit_id/changed_files) plus the tightened phase min.
 
-	it("schema-drift: a bulk tasks[] status update with force:true and NO comment succeeds", async () => {
+	it("schema-drift: a bulk tasks[] status update requires a comment; force:true no longer bypasses the gate", async () => {
 		await router("tools/call", {
 			name: "task-write",
 			arguments: {
@@ -521,14 +537,28 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 		});
 		expect(startRes.isError).toBe(false);
 
-		// force:true bypasses the "comment is required" gate — the item schema
-		// MUST carry `force` or zod strips it and this transition fails.
-		const doneRes = await router("tools/call", {
+		// TASK-061: force:true NO LONGER bypasses the "comment is required" gate —
+		// the status transition is rejected and the task is NOT mutated.
+		const forcedRes = await router("tools/call", {
 			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
 				tasks: [{ id: task.id, status: "completed", force: true }]
+			}
+		});
+		expect(forcedRes.isError).toBe(true);
+		expect(getTextContent(forcedRes)).toContain("comment is required when changing task status");
+		expect(db.tasks.getTaskById(task.id)?.status).toBe("in_progress");
+
+		// With a comment the transition succeeds — the item schema still carries
+		// `comment`, so a bulk tasks[] status update can proceed.
+		const doneRes = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				tasks: [{ id: task.id, status: "completed", comment: "done" }]
 			}
 		});
 		expect(doneRes.isError).toBe(false);
