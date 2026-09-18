@@ -91,7 +91,7 @@ function resolvePkgVersion(): { version: string } {
  */
 function getStaticRoot(): string {
 	const possibleRoots = [
-		path.join(__dirname, "public"), // Production bundled path
+		path.join(__dirname, "dashboard", "public"), // Production bundled path
 		path.join(process.cwd(), "dist", "dashboard", "public"), // Root-relative dist path
 		path.join(process.cwd(), "src", "dashboard", "public") // Source path (unbuilt)
 	];
