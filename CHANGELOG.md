@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.2] — 2026-09-18
+
+### Fixed
+
+- **Dashboard — "Assets Not Found" in published package**: `getStaticRoot()` in `src/dashboard/app.ts` used `path.join(__dirname, "public")` which resolved to `dist/public` after tsup hoisted the shared module into `dist/chunk-*.js` (FEAT-DAEMON-001). Changed to `path.join(__dirname, "dashboard", "public")` to match the actual vite build output location.
+
 ## [0.47.1] — 2026-09-18
 
 ### Fixed
