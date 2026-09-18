@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.1] — 2026-09-18
+
+### Fixed
+
+- **Dashboard — version displayed as `v0.0.0`**: `resolvePkgVersion()` in `src/dashboard/app.ts` used a hardcoded `../../package.json` path relative to `__dirname` that resolves correctly in dev but points outside the package root when tsup bundles the file into `dist/`. Replaced with the same walk-up loop used in `system.service.ts` so the correct version is found in both dev and published environments.
+
 ## [0.47.0] — 2026-09-18
 
 ### Added
