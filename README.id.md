@@ -65,6 +65,75 @@ Metode ini memastikan waktu startup tercepat dan keandalan maksimal untuk penggu
 - **Tanpa unduhan berulang**: Menghemat bandwidth dan menghindari ketergantungan pada registry NPM.
 - **Lebih baik untuk otomatisasi**: Lebih stabil untuk alur kerja Agent yang berat.
 
+### 🌐 Mode HTTP Daemon (Transport Bersama)
+
+Secara default, setiap jendela editor membuka proses `local-memory-mcp` tersendiri. Jika kamu membuka banyak jendela atau menjalankan beberapa agen sekaligus, akan ada N × M proses yang berebut akses ke database SQLite yang sama — menyebabkan CPU tinggi dan error `SQLITE_BUSY`.
+
+**Mode HTTP daemon** menyelesaikan ini: jalankan **satu** server yang terus hidup, lalu arahkan semua klien ke sana via HTTP.
+
+#### 1. Jalankan daemon (sekali, biarkan terus berjalan)
+
+```bash
+# Pilih token rahasia — jaga kerahasiaannya
+MCP_TRANSPORT=http \
+MCP_HTTP_TOKEN=token-rahasiamu \
+MCP_HTTP_PORT=3457 \
+local-memory-mcp
+```
+
+Kamu akan melihat:
+
+```
+[MCP HTTP] listening {"host":"127.0.0.1","port":3457,"path":"/mcp","auth":"bearer"}
+```
+
+#### 2. Arahkan klien MCP ke daemon
+
+Ganti entri `stdio` di konfigurasi klienmu dengan entri HTTP:
+
+**OpenCode (`~/.config/opencode/opencode.json`)**
+
+```json
+"local-memory": {
+  "url": "http://127.0.0.1:3457/mcp",
+  "headers": { "Authorization": "Bearer token-rahasiamu" },
+  "type": "http"
+}
+```
+
+**Claude Desktop (`claude_desktop_config.json`)**
+
+```json
+{
+	"mcpServers": {
+		"local-memory": {
+			"url": "http://127.0.0.1:3457/mcp",
+			"headers": { "Authorization": "Bearer token-rahasiamu" }
+		}
+	}
+}
+```
+
+> Klien yang belum mendukung HTTP MCP (versi lama) bisa tetap menggunakan entri `stdio` bersamaan dengan daemon — keduanya berbagi database SQLite yang sama.
+
+#### Environment variables
+
+| Variabel                    | Default       | Keterangan                                                                                              |
+| :-------------------------- | :------------ | :------------------------------------------------------------------------------------------------------ |
+| `MCP_TRANSPORT`             | `stdio`       | Set ke `http` untuk mengaktifkan HTTP daemon                                                            |
+| `MCP_HTTP_PORT`             | `3457`        | Port yang digunakan (`0` = port acak)                                                                   |
+| `MCP_HTTP_HOST`             | `127.0.0.1`   | Alamat bind — loopback saja secara default                                                              |
+| `MCP_HTTP_PATH`             | `/mcp`        | Path URL untuk endpoint MCP                                                                             |
+| `MCP_HTTP_TOKEN`            | _(tidak ada)_ | Token bearer yang wajib diisi — server tidak akan jalan tanpanya kecuali `MCP_HTTP_ALLOW_INSECURE=true` |
+| `MCP_HTTP_ALLOW_INSECURE`   | `false`       | Lewati persyaratan token (hanya untuk dev/loopback)                                                     |
+| `MEMORY_DB_BUSY_TIMEOUT_MS` | `30000`       | Timeout busy SQLite dalam ms — naikkan jika muncul error lock saat beban berat                          |
+
+#### Catatan
+
+- Daemon terikat ke `127.0.0.1` (loopback) secara default — tidak bisa diakses dari mesin lain.
+- Semua sesi berbagi satu database SQLite; penulisan concurrent menggunakan retry jittered terbatas sehingga beban multi-klien tidak lagi memunculkan error `SQLITE_BUSY`.
+- Untuk menjalankan daemon sebagai layanan latar belakang, gunakan process manager (systemd, launchd, PM2, dll.) atau tambahkan ke skrip startup shell-mu.
+
 ### 🧠 Cara Kerjanya (Wawasan Penting)
 
 - **Penggunaan npx**: Saat Anda menggunakan `npx`, ia sering melakukan permintaan jaringan untuk memeriksa versi terbaru atau mengunduh ulang paket jika tidak ada di cache. Karena klien MCP sering memulai dan menghentikan alat, ini dapat menyebabkan ratusan unduhan yang tidak perlu.

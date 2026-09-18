@@ -65,6 +65,75 @@ This method ensures the fastest startup times and maximum reliability for daily 
 - **No repeated downloads**: Saves bandwidth and avoids NPM registry dependency.
 - **Better for automation**: More stable for heavy-duty Agent workflows.
 
+### 🌐 HTTP Daemon Mode (Shared Transport)
+
+By default, every MCP client window spawns its own `local-memory-mcp` process. If you open many editor windows or run several agents at once, you end up with N × M processes all competing for the same SQLite database.
+
+**HTTP daemon mode** solves this: run **one** long-lived server and point all your clients at it over HTTP.
+
+#### 1. Start the daemon (run once, keep it running)
+
+```bash
+# Pick a secret token — keep it safe
+MCP_TRANSPORT=http \
+MCP_HTTP_TOKEN=your-secret-token \
+MCP_HTTP_PORT=3457 \
+local-memory-mcp
+```
+
+You should see:
+
+```
+[MCP HTTP] listening {"host":"127.0.0.1","port":3457,"path":"/mcp","auth":"bearer"}
+```
+
+#### 2. Point your MCP clients at the daemon
+
+Replace the `stdio` entry in your client config with an HTTP entry:
+
+**OpenCode (`~/.config/opencode/opencode.json`)**
+
+```json
+"local-memory": {
+  "url": "http://127.0.0.1:3457/mcp",
+  "headers": { "Authorization": "Bearer your-secret-token" },
+  "type": "http"
+}
+```
+
+**Claude Desktop (`claude_desktop_config.json`)**
+
+```json
+{
+	"mcpServers": {
+		"local-memory": {
+			"url": "http://127.0.0.1:3457/mcp",
+			"headers": { "Authorization": "Bearer your-secret-token" }
+		}
+	}
+}
+```
+
+> Clients that don't support HTTP MCP (older versions) can keep using the `stdio` entry alongside the daemon — both modes share the same SQLite database.
+
+#### Environment variables
+
+| Variable                    | Default     | Description                                                                                      |
+| :-------------------------- | :---------- | :----------------------------------------------------------------------------------------------- |
+| `MCP_TRANSPORT`             | `stdio`     | Set to `http` to enable the HTTP daemon                                                          |
+| `MCP_HTTP_PORT`             | `3457`      | Port to listen on (`0` = ephemeral)                                                              |
+| `MCP_HTTP_HOST`             | `127.0.0.1` | Bind address — loopback only by default                                                          |
+| `MCP_HTTP_PATH`             | `/mcp`      | URL path for the MCP endpoint                                                                    |
+| `MCP_HTTP_TOKEN`            | _(none)_    | Required bearer token — server refuses to start without it unless `MCP_HTTP_ALLOW_INSECURE=true` |
+| `MCP_HTTP_ALLOW_INSECURE`   | `false`     | Skip token requirement (dev/loopback only)                                                       |
+| `MEMORY_DB_BUSY_TIMEOUT_MS` | `30000`     | SQLite busy timeout in ms — increase if you see lock errors under heavy load                     |
+
+#### Notes
+
+- The daemon binds to `127.0.0.1` (loopback) by default — it is not accessible from other machines.
+- All sessions share one SQLite database; concurrent writes use a bounded jittered retry so heavy multi-client load no longer surfaces `SQLITE_BUSY` errors.
+- To run the daemon as a background service, use a process manager (systemd, launchd, PM2, etc.) or add it to your shell's startup script.
+
 ### 🧠 How It Works (Important Insight)
 
 - **npx usage**: When you use `npx`, it often performs a network request to check for the latest version or re-downloads the package if it's not in the cache. Since MCP clients start and stop tools frequently, this can lead to hundreds of unnecessary downloads.
