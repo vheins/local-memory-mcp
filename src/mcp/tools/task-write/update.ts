@@ -4,6 +4,7 @@ import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { UUID_REGEX } from "../../utils/uuid";
 import { resolveEntityRef } from "../../utils/entity-ref";
 import { resolveParentId, resolveDependsOn } from "../task.helpers";
+import { TASK_UPDATE_COLUMNS } from "../../entities/task/serializers";
 import { validateStatusTransition } from "./state-machine";
 import { TaskWriteParams } from "./types";
 import {
@@ -18,6 +19,35 @@ import {
 	handleCoordinationCleanup,
 	archiveCompletedTasks
 } from "./update-status";
+
+// ---------------------------------------------------------------------------
+// updatedFields — report only fields that actually reach the DB
+// ---------------------------------------------------------------------------
+
+/**
+ * Derives the list of `updatedFields` from the keys of `updates` that survive
+ * the writable-column allowlist (`TASK_UPDATE_COLUMNS`, the same allowlist
+ * `updateTask` enforces). `buildUpdatesFromParams` spreads `...restUpdates`, so
+ * request plumbing keys (`task_code`, `json`, `code`, `agent`, `interactive`,
+ * `tasks`, …) leak into `updates` even though they are never persisted — this
+ * keeps the response summary honest about what was written (issue #108).
+ */
+function deriveUpdatedFields(updates: Record<string, unknown>): string[] {
+	return Object.keys(updates).filter((key) => TASK_UPDATE_COLUMNS.has(key));
+}
+
+/**
+ * Builds the optional `(completed with commit …)` summary clause for a
+ * completion transition. Omitted entirely when the task did not transition to
+ * `completed`; the commit segment is omitted when no `commit_id` was provided,
+ * so the summary never renders a literal `undefined` (issue #108).
+ */
+function buildCompletionClause(params: TaskWriteParams): string {
+	if (params.status !== "completed") return "";
+	const fileCount = (params.changed_files || []).length;
+	const commitPart = params.commit_id ? `completed with commit ${params.commit_id}, ` : "completed, ";
+	return ` (${commitPart}${fileCount} ${fileCount === 1 ? "file" : "files"} changed)`;
+}
 
 // ---------------------------------------------------------------------------
 // Single UPDATE — shared core logic
@@ -194,7 +224,7 @@ async function coreUpdate(
 		completedTaskIds,
 		releasedClaims,
 		expiredHandoffs,
-		updatedFields: Object.keys(updates),
+		updatedFields: deriveUpdatedFields(updates),
 		taskTitle: (updates.title as string) || existingTask.title,
 		oldStatus: existingTask.status,
 		newStatus: updates.status as string | undefined
@@ -221,10 +251,7 @@ export async function handleUpdate(
 	const fieldsStr = updatedFields.length > 0 ? updatedFields.join(", ") : "none";
 	let summaryText: string;
 	if (updatedCount === 1 && updatedTasks.length === 1) {
-		const extra =
-			params.status === "completed"
-				? ` (completed with commit ${params.commit_id}, ${(params.changed_files || []).length} files changed)`
-				: "";
+		const extra = buildCompletionClause(params);
 		const transition = oldStatus && newStatus && oldStatus !== newStatus ? ` ${oldStatus} → ${newStatus}` : "";
 		summaryText = `Updated [${updatedTasks[0].code}] "${taskTitle}"${transition} in "${params.repo}" — ${fieldsStr}.${extra}`;
 	} else {
@@ -392,13 +419,11 @@ export async function handleBulkUpdateByIds(
 
 	// Build response
 	const updatedCount = updatedTasks.length;
-	const fieldsStr = Object.keys(updates).length > 0 ? Object.keys(updates).join(", ") : "none";
+	const persistedFields = deriveUpdatedFields(updates);
+	const fieldsStr = persistedFields.length > 0 ? persistedFields.join(", ") : "none";
 	let summaryText: string;
 	if (updatedCount === 1 && updatedTasks.length === 1) {
-		const extra =
-			params.status === "completed"
-				? ` (completed with commit ${params.commit_id}, ${(params.changed_files || []).length} files changed)`
-				: "";
+		const extra = buildCompletionClause(params);
 		summaryText = `Updated [${updatedTasks[0].code}] in repo "${params.repo}": fields ${fieldsStr}.${extra}`;
 	} else {
 		const tasksStr = updatedTasks.map((t) => `[${t.code}]`).join(", ");
@@ -414,7 +439,7 @@ export async function handleBulkUpdateByIds(
 			repo: params.repo,
 			status: params.status,
 			updatedCount,
-			updatedFields: Object.keys(updates),
+			updatedFields: persistedFields,
 			coordinationCleanup: {
 				releasedClaims,
 				expiredHandoffs

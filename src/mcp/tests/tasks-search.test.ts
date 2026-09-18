@@ -238,4 +238,89 @@ describe("Consolidated Task Read — Search and Filtering", () => {
 			// Search mode columns: id, task_code, title, status, priority, updated_at, phase
 		});
 	});
+
+	// issue #108 (secondary #4): the same task must not appear twice. Root cause:
+	// the keyword fetch is OWNER-scoped while the vector store is REPO-scoped, so
+	// a same-code task under a DIFFERENT owner in the same repo leaked in as a
+	// vector-only supplement (keyword 1.0 vs vector-only 0.0 → two rows).
+	describe("search result dedup (issue #108)", () => {
+		it("does not return a same-code task belonging to a different owner as a vector-only supplement", async () => {
+			const DEDUP_REPO = "test-dedup-repo";
+			// Owner "test" row (the in-scope one).
+			await handleTaskWrite(
+				{
+					repo: DEDUP_REPO,
+					owner: "test",
+					task_code: "XL-AI-EXIT-4",
+					phase: "research",
+					title: "XL AI exit probe",
+					description: "probe description",
+					status: "pending",
+					json: true,
+					agent: "test-agent",
+					role: "test-role"
+				},
+				db,
+				mockVectors
+			);
+			// Same code under a DIFFERENT owner in the same repo.
+			await handleTaskWrite(
+				{
+					repo: DEDUP_REPO,
+					owner: "other",
+					task_code: "XL-AI-EXIT-4",
+					phase: "research",
+					title: "XL AI exit probe",
+					description: "probe description",
+					status: "pending",
+					json: true,
+					agent: "other-agent",
+					role: "other-role"
+				},
+				db,
+				mockVectors
+			);
+
+			const inScope = db.tasks.getTaskByCode("test", DEDUP_REPO, "XL-AI-EXIT-4")!;
+			const outOfScope = db.tasks.getTaskByCode("other", DEDUP_REPO, "XL-AI-EXIT-4")!;
+
+			// The vector store is repo-scoped — it surfaces BOTH ids (this is the
+			// leak the fix must contain at the owner boundary).
+			const repoScopedVectors = {
+				upsert: async () => {},
+				remove: async () => {},
+				search: async () => [
+					{ id: inScope.id, score: 0.72, content: "", metadata: {} },
+					{ id: outOfScope.id, score: 0.42, content: "", metadata: {} }
+				]
+			} as unknown as VectorStore;
+
+			const result = await handleTaskRead(
+				{ repo: DEDUP_REPO, owner: "test", query: "XL-AI-EXIT-4", json: true },
+				db,
+				repoScopedVectors
+			);
+
+			const rows = (result.structuredContent as { results: { rows: unknown[][] } }).results.rows;
+			const codes = rows.map((r) => r[1]);
+			expect(codes).toContain("XL-AI-EXIT-4");
+			// The out-of-scope owner's row must NOT be appended.
+			const ids = rows.map((r) => r[0]);
+			expect(ids).toContain(inScope.id);
+			expect(ids).not.toContain(outOfScope.id);
+			// Exactly one row for the single in-scope task.
+			expect(rows).toHaveLength(1);
+		});
+
+		it("never emits duplicate task ids in the result rows", async () => {
+			const result = await handleTaskRead(
+				{ repo: REPO, owner: "test", query: "task", status: "all", json: true },
+				db,
+				mockVectors
+			);
+			const rows = (result.structuredContent as { results: { rows: unknown[][] } }).results.rows;
+			const ids = rows.map((r) => r[0]);
+			expect(new Set(ids).size).toBe(ids.length);
+		});
+	});
 });

@@ -139,16 +139,31 @@ function classifyExpectedError(error: Error): {
 	if (/\bnot found\b/i.test(error.message)) {
 		return { code: "NOT_FOUND", message: error.message, retryable: false };
 	}
+	// Client-capability gaps (issue #108): the caller asked for a feature the
+	// connected client does not advertise (MCP sampling / elicitation). The
+	// request cannot succeed on this transport, but it is not a server crash —
+	// surface the real message under a dedicated code.
+	if (/\bdoes not advertise\b/i.test(error.message)) {
+		return { code: "CAPABILITY_UNAVAILABLE", message: error.message, retryable: false };
+	}
 	if (
-		/^(?:Missing|required|Either|At least|Provide|Invalid|No .* provided|New .* must|CREATE requires|UPDATE requires)/i.test(
+		/^(?:Missing|required|Either|At least|Provide|Invalid|No .* provided|New .* must|CREATE requires|UPDATE requires|Could not infer operation)/i.test(
 			error.message
 		) ||
-		/\bmust be\b|\bis required\b|\brequire(?:s)? type=|\bvalidation\b|\bappears to contain metadata\b|\bcompleted-work summaries\b/i.test(
+		/\bmust be\b|\bmust identify\b|\bis required\b|\brequire(?:s)? type=|\bvalidation\b|\bappears to contain metadata\b|\bcompleted-work summaries\b/i.test(
 			error.message
 		) ||
 		// Task state-machine + children-gate violations (FIX-ERRCLASS) are
 		// caller-actionable: surface the real message instead of masking it.
-		/\bcannot transition\b|\bmust go through\b|\bincomplete child task/i.test(error.message)
+		/\bcannot transition\b|\bmust go through\b|\bincomplete child task/i.test(error.message) ||
+		// Additional caller-actionable request-shape failures that previously
+		// fell through to the generic INTERNAL_ERROR (issue #108): a missing
+		// discriminator ("CLAIM requires agent", "neither 'id' nor 'code'"),
+		// an out-of-place field ("status is not valid for CREATE"), a plural
+		// "are required", or a scope mismatch ("Repository mismatch").
+		/\brequires agent\b|\bneither 'id' nor 'code'|\brepository mismatch\b|\bare required\b|\bnot valid for\b/i.test(
+			error.message
+		)
 	) {
 		return { code: "VALIDATION_ERROR", message: error.message, retryable: false };
 	}
@@ -162,6 +177,12 @@ function classifyExpectedError(error: Error): {
 	// surfaces SQLITE_BUSY / SQLITE_BUSY_SNAPSHOT as "database is locked". The
 	// operation may succeed on retry, so keep the real message and flag it.
 	if (/database is locked|\bSQLITE_BUSY\b/i.test(error.message)) {
+		return { code: "INTERNAL_ERROR", message: error.message, retryable: true };
+	}
+	// Sampling loop returned no usable text (issue #108): a transient
+	// model-side failure that may succeed on retry — keep the real message
+	// rather than masking it behind the generic "Internal tool error".
+	if (/\bsampling did not return\b/i.test(error.message)) {
 		return { code: "INTERNAL_ERROR", message: error.message, retryable: true };
 	}
 	return null;

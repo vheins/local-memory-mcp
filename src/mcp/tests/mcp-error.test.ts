@@ -120,6 +120,76 @@ describe("mcp-error — canonical error envelope (OPT-CODE-01)", () => {
 				error: "Internal tool error"
 			});
 		});
+
+		// issue #108 (bug 5 — similar-pattern audit): request-shape and
+		// capability failures that previously fell through to the opaque
+		// INTERNAL_ERROR now surface their real message under a stable code.
+		it("positive: 'Could not infer operation' maps to VALIDATION_ERROR with the real message", () => {
+			const message = "Could not infer operation. Provide:\n  - `phase` + `title` + `description` for CREATE";
+			const res = toErrorResponse(new Error(message));
+			expect(res.structuredContent).toMatchObject({
+				code: "VALIDATION_ERROR",
+				message,
+				retryable: false
+			});
+		});
+
+		it("positive: 'CLAIM requires agent' maps to VALIDATION_ERROR", () => {
+			const message =
+				"CLAIM requires agent. Combine task_id/task_code with agent for CLAIM, or add release:true for RELEASE";
+			const res = toErrorResponse(new Error(message));
+			expect(res.structuredContent).toMatchObject({ code: "VALIDATION_ERROR", message });
+		});
+
+		it("positive: 'status is not valid for CREATE' maps to VALIDATION_ERROR", () => {
+			const res = toErrorResponse(new Error("status is not valid for CREATE — use id + status for UPDATE"));
+			expect(res.structuredContent).toMatchObject({
+				code: "VALIDATION_ERROR",
+				message: "status is not valid for CREATE — use id + status for UPDATE"
+			});
+		});
+
+		it("positive: 'Repository mismatch' maps to VALIDATION_ERROR", () => {
+			const res = toErrorResponse(new Error('Repository mismatch: provided repo "a" does not match memory repo "b"'));
+			expect(res.structuredContent).toMatchObject({ code: "VALIDATION_ERROR" });
+		});
+
+		it("positive: plural 'owner and repo are required' maps to VALIDATION_ERROR", () => {
+			const res = toErrorResponse(
+				new Error("owner and repo are required for listing — provide them explicitly or configure MCP workspace roots")
+			);
+			expect(res.structuredContent).toMatchObject({ code: "VALIDATION_ERROR" });
+		});
+
+		it("positive: \"neither 'id' nor 'code' resolved\" maps to VALIDATION_ERROR", () => {
+			const res = toErrorResponse(new Error("Cannot update: neither 'id' nor 'code' resolved to an existing task"));
+			expect(res.structuredContent).toMatchObject({ code: "VALIDATION_ERROR" });
+		});
+
+		it("positive: 'Handoffs must identify' maps to VALIDATION_ERROR", () => {
+			const res = toErrorResponse(
+				new Error(
+					"Handoffs must identify a target agent, linked task, next_steps, blockers, or remaining_work. Do not create pending handoffs for completed-work summaries."
+				)
+			);
+			expect(res.structuredContent).toMatchObject({ code: "VALIDATION_ERROR" });
+		});
+
+		it("positive: client capability gap maps to CAPABILITY_UNAVAILABLE with the real message", () => {
+			const message =
+				"Client does not advertise MCP elicitation form support. Provide all required fields directly: phase, title, description.";
+			const res = toErrorResponse(new Error(message));
+			expect(res.structuredContent).toMatchObject({ code: "CAPABILITY_UNAVAILABLE", message, retryable: false });
+		});
+
+		it("positive: sampling non-answer is retryable and keeps the real message", () => {
+			const res = toErrorResponse(new Error("Sampling did not return a final text answer"));
+			expect(res.structuredContent).toMatchObject({
+				code: "INTERNAL_ERROR",
+				retryable: true,
+				message: "Sampling did not return a final text answer"
+			});
+		});
 	});
 
 	it("formats Zod failures with the friendly Missing required fields text for owner/repo", () => {

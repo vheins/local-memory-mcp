@@ -149,6 +149,10 @@ export async function executeBulkOperation(
 					const meta = { ...(existing.metadata ?? {}) };
 					meta.decision_refs = raw.decision_refs;
 					itemUpdates.metadata = meta;
+					// decision_refs is not a task column — it is folded into
+					// metadata above, so drop it from the reported
+					// updatedFields (issue #108: report only written columns).
+					delete itemUpdates.decision_refs;
 				}
 
 				const now = new Date().toISOString();

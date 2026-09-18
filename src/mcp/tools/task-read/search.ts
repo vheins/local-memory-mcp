@@ -127,13 +127,22 @@ export async function handleSearchMode(
 	// failure fetching them (SQLITE_BUSY/corruption) must NOT reject the whole
 	// search — degrade to an empty map: vector scores still apply to keyword
 	// candidates, only the vector-only supplement is dropped.
+	//
+	// issue #108: the vector store search is REPO-scoped (getTaskVectorCandidates
+	// filters on `repo` only) while the keyword fetch is OWNER-scoped. Without an
+	// owner guard a same-code task that lives under a DIFFERENT owner in the same
+	// repo enters as a vector-only supplement, so the search renders the "same"
+	// task twice at different scores (keyword 1.0 vs vector-only 0.0). Keep the
+	// supplement inside the requested owner scope.
 	let vectorEntities: ReadonlyMap<string, Task> = new Map();
 	if (vectorResults) {
 		const keywordIdSet = new Set(keywordTasks.map((t: Task) => t.id));
 		const vectorOnlyIds = vectorResults.filter((vr) => !keywordIdSet.has(vr.id)).map((vr) => vr.id);
 		if (vectorOnlyIds.length > 0) {
 			try {
-				const vectorOnlyTasks = storage.tasks.getTasksByIds(vectorOnlyIds);
+				const vectorOnlyTasks = storage.tasks
+					.getTasksByIds(vectorOnlyIds)
+					.filter((t: Task) => !owner || t.owner === owner);
 				vectorEntities = new Map(vectorOnlyTasks.map((t: Task) => [t.id, t]));
 			} catch (error) {
 				logger.warn("[Tool] task-read/search vector-entity fetch failed, dropping vector-only supplement", {

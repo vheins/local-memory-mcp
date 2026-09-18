@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { handleTaskWrite } from "../tools/task.write";
 import { createTestStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
+import { toErrorResponse } from "../utils/mcp-error";
 
 describe("Consolidated Task Write — Status Transitions", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
@@ -429,5 +430,236 @@ describe("Consolidated Task Write — Status Transitions", () => {
 				mockVectors
 			)
 		).rejects.toThrow(/Cannot transition from 'blocked' directly to 'completed'/);
+	});
+
+	// issue #108 (PRIMARY): a state-machine rejection must surface through the
+	// canonical error envelope as VALIDATION_ERROR with the real message — NOT
+	// the opaque INTERNAL_ERROR / "Internal tool error". This exercises the full
+	// throw-site → toErrorResponse path (the transport catch).
+	describe("error envelope for expected rejections (issue #108)", () => {
+		it("backlog → completed direct transition yields VALIDATION_ERROR with the real message", async () => {
+			await createTask("TASK-001", "backlog");
+			const task = db.tasks.getTasksByRepo("test", REPO)[0];
+
+			let thrown: unknown;
+			try {
+				await handleTaskWrite(
+					{
+						owner: "test",
+						repo: REPO,
+						id: task.id,
+						status: "completed",
+						comment: "finishing",
+						est_tokens: 100,
+						agent: "test-agent",
+						role: "test-role"
+					},
+					db,
+					mockVectors
+				);
+			} catch (err) {
+				thrown = err;
+			}
+
+			expect(thrown).toBeInstanceOf(Error);
+			const res = toErrorResponse(thrown);
+			expect(res.isError).toBe(true);
+			expect(res.structuredContent).toMatchObject({
+				schema: "tool-error",
+				code: "VALIDATION_ERROR",
+				retryable: false
+			});
+			expect((res.structuredContent as { message: string }).message).toMatch(
+				/Cannot transition from 'backlog' directly to 'completed'/
+			);
+			// The real message must survive — not the sanitized generic text.
+			expect(res.content?.[0]).toMatchObject({
+				type: "text",
+				text: expect.stringContaining("Must go through 'in_progress' first") as unknown
+			});
+			expect(JSON.stringify(res)).not.toContain("Internal tool error");
+		});
+
+		it("incomplete-children completion gate yields VALIDATION_ERROR with the real message", async () => {
+			await createTask("PARENT-001", "pending");
+			const parent = db.tasks.getTaskByCode("test", REPO, "PARENT-001")!;
+
+			await handleTaskWrite(
+				{
+					owner: "test",
+					repo: REPO,
+					id: parent.id,
+					status: "in_progress",
+					comment: "starting parent",
+					agent: "test-agent",
+					role: "test-role"
+				},
+				db,
+				mockVectors
+			);
+
+			await handleTaskWrite(
+				{
+					repo: REPO,
+					owner: "test",
+					task_code: "CHILD-001",
+					phase: "test",
+					title: "Child Task 1",
+					description: "Child task 1",
+					status: "pending",
+					parent_id: parent.id,
+					agent: "test-agent",
+					role: "test-role"
+				},
+				db,
+				mockVectors
+			);
+
+			let thrown: unknown;
+			try {
+				await handleTaskWrite(
+					{
+						owner: "test",
+						repo: REPO,
+						id: parent.id,
+						status: "completed",
+						comment: "trying to finish parent",
+						est_tokens: 200,
+						agent: "test-agent",
+						role: "test-role"
+					},
+					db,
+					mockVectors
+				);
+			} catch (err) {
+				thrown = err;
+			}
+
+			const res = toErrorResponse(thrown);
+			expect(res.structuredContent).toMatchObject({
+				schema: "tool-error",
+				code: "VALIDATION_ERROR",
+				retryable: false
+			});
+			expect((res.structuredContent as { message: string }).message).toMatch(/incomplete child task/);
+			expect(JSON.stringify(res)).not.toContain("Internal tool error");
+		});
+	});
+
+	// issue #108 (secondary #2 & #3): the response must report only fields that
+	// were actually persisted, and the completion summary must not render a
+	// literal `undefined` when no commit_id is supplied.
+	describe("update response hygiene (issue #108)", () => {
+		it("updatedFields lists only persisted columns, not request plumbing keys", async () => {
+			await createTask("TASK-001", "pending");
+			const task = db.tasks.getTasksByRepo("test", REPO)[0];
+
+			const res = await handleTaskWrite(
+				{
+					owner: "test",
+					repo: REPO,
+					code: "TASK-001",
+					id: task.id,
+					status: "in_progress",
+					comment: "starting",
+					json: true,
+					agent: "test-agent",
+					role: "test-role"
+				},
+				db,
+				mockVectors
+			);
+
+			const updatedFields = (res.structuredContent as { updatedFields: string[] }).updatedFields;
+			expect(updatedFields).toContain("status");
+			// Plumbing keys must not be reported as written fields.
+			for (const plumbing of ["code", "json", "comment", "id", "interactive", "tasks", "force"]) {
+				expect(updatedFields).not.toContain(plumbing);
+			}
+		});
+
+		it("omits the commit clause (no literal 'undefined') when completing without a commit_id", async () => {
+			await createTask("TASK-001", "pending");
+			const task = db.tasks.getTasksByRepo("test", REPO)[0];
+
+			await handleTaskWrite(
+				{
+					owner: "test",
+					repo: REPO,
+					id: task.id,
+					status: "in_progress",
+					comment: "starting",
+					agent: "test-agent",
+					role: "test-role"
+				},
+				db,
+				mockVectors
+			);
+
+			const res = await handleTaskWrite(
+				{
+					owner: "test",
+					repo: REPO,
+					id: task.id,
+					status: "completed",
+					comment: "done",
+					est_tokens: 100,
+					agent: "test-agent",
+					role: "test-role"
+				},
+				db,
+				mockVectors
+			);
+
+			const text = (res.content ?? [])
+				.filter((c): c is { type: "text"; text: string } => c.type === "text")
+				.map((c) => c.text)
+				.join("\n");
+			expect(text).not.toContain("undefined");
+			expect(text).toContain("completed");
+		});
+
+		it("includes the commit id in the completion summary when supplied", async () => {
+			await createTask("TASK-001", "pending");
+			const task = db.tasks.getTasksByRepo("test", REPO)[0];
+
+			await handleTaskWrite(
+				{
+					owner: "test",
+					repo: REPO,
+					id: task.id,
+					status: "in_progress",
+					comment: "starting",
+					agent: "test-agent",
+					role: "test-role"
+				},
+				db,
+				mockVectors
+			);
+
+			const res = await handleTaskWrite(
+				{
+					owner: "test",
+					repo: REPO,
+					id: task.id,
+					status: "completed",
+					comment: "done",
+					est_tokens: 100,
+					commit_id: "abc1234",
+					changed_files: ["src/a.ts"],
+					agent: "test-agent",
+					role: "test-role"
+				},
+				db,
+				mockVectors
+			);
+
+			const text = (res.content ?? [])
+				.filter((c): c is { type: "text"; text: string } => c.type === "text")
+				.map((c) => c.text)
+				.join("\n");
+			expect(text).toContain("completed with commit abc1234");
+			expect(text).not.toContain("undefined");
+		});
 	});
 });

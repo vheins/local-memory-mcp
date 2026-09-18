@@ -205,6 +205,22 @@ export class HybridSearchEngine {
 		// Per-entity post-filter (e.g. time-tunnel window, phase/priority filters).
 		if (postFilter) eligible = postFilter(eligible, { allScored: scored });
 
+		// Dedup by entity id before pagination/grouping (issue #108): a candidate
+		// and a vector-only supplement can resolve to the same entity id when the
+		// keyword fetch and the vector store disagree on scope, which would render
+		// the same entity twice (once keyword-scored, once vector-scored) at two
+		// different scores. The pool is sorted desc, so keeping the first
+		// occurrence keeps the higher score.
+		{
+			const seenIds = new Set<string>();
+			eligible = eligible.filter((s) => {
+				const id = scorer.idOf(s.entity);
+				if (seenIds.has(id)) return false;
+				seenIds.add(id);
+				return true;
+			});
+		}
+
 		return {
 			items: eligible.slice(offset, offset + limit),
 			eligible,
