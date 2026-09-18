@@ -65,38 +65,60 @@ This method ensures the fastest startup times and maximum reliability for daily 
 - **No repeated downloads**: Saves bandwidth and avoids NPM registry dependency.
 - **Better for automation**: More stable for heavy-duty Agent workflows.
 
-### 🌐 HTTP Daemon Mode (Shared Transport)
+### 🌐 Daemon Mode (Shared Transport — Recommended)
 
-By default, every MCP client window spawns its own `local-memory-mcp` process. If you open many editor windows or run several agents at once, you end up with N × M processes all competing for the same SQLite database.
+By default, every MCP client window spawns its own `local-memory-mcp` process. If you open many editor windows or run several agents at once, you end up with N × M processes all competing for the same SQLite database — causing CPU spikes and `SQLITE_BUSY` errors.
 
-**HTTP daemon mode** solves this: run **one** long-lived server and point all your clients at it over HTTP.
+**Daemon mode** solves this: run **one** background process that serves both the MCP HTTP endpoint and the dashboard on a single port, then point all clients at it.
 
-#### 1. Start the daemon (run once, keep it running)
+#### Quick start
 
 ```bash
-# Pick a secret token — keep it safe
-MCP_TRANSPORT=http \
-MCP_HTTP_TOKEN=your-secret-token \
-MCP_HTTP_PORT=3457 \
-local-memory-mcp
+# Install globally first (recommended)
+npm install -g @vheins/local-memory-mcp
+
+# Start the daemon in the background
+local-memory-mcp daemon
+
+# Check it is running
+local-memory-mcp daemon status
+# → Daemon is running (pid 12345) on http://127.0.0.1:3456
+
+# Stop it
+local-memory-mcp daemon stop
 ```
 
-You should see:
+Or without a global install:
 
+```bash
+npx -y @vheins/local-memory-mcp@latest daemon
 ```
-[MCP HTTP] listening {"host":"127.0.0.1","port":3457,"path":"/mcp","auth":"bearer"}
+
+#### Auto-start on system boot
+
+```bash
+# Install as a system service (picks the right mechanism per platform)
+local-memory-mcp daemon install
+
+# Remove the service
+local-memory-mcp daemon uninstall
 ```
 
-#### 2. Point your MCP clients at the daemon
+| Platform | Mechanism                | Service file location                                            |
+| :------- | :----------------------- | :--------------------------------------------------------------- |
+| Linux    | systemd user service     | `~/.config/systemd/user/local-memory-mcp.service`                |
+| macOS    | launchd LaunchAgent      | `~/Library/LaunchAgents/io.github.vheins.local-memory-mcp.plist` |
+| Windows  | Task Scheduler (ONLOGON) | Task name: `local-memory-mcp-daemon`                             |
 
-Replace the `stdio` entry in your client config with an HTTP entry:
+#### Point your MCP clients at the daemon
+
+Replace the `stdio` entry in your client config with an HTTP entry (no token needed — loopback only):
 
 **OpenCode (`~/.config/opencode/opencode.json`)**
 
 ```json
 "local-memory": {
-  "url": "http://127.0.0.1:3457/mcp",
-  "headers": { "Authorization": "Bearer your-secret-token" },
+  "url": "http://127.0.0.1:3456/mcp",
   "type": "http"
 }
 ```
@@ -107,32 +129,38 @@ Replace the `stdio` entry in your client config with an HTTP entry:
 {
 	"mcpServers": {
 		"local-memory": {
-			"url": "http://127.0.0.1:3457/mcp",
-			"headers": { "Authorization": "Bearer your-secret-token" }
+			"url": "http://127.0.0.1:3456/mcp"
 		}
 	}
 }
 ```
 
+The dashboard is available at `http://127.0.0.1:3456` — same port, no extra process.
+
 > Clients that don't support HTTP MCP (older versions) can keep using the `stdio` entry alongside the daemon — both modes share the same SQLite database.
+
+#### Daemon subcommands
+
+| Command            | Description                                           |
+| :----------------- | :---------------------------------------------------- |
+| `daemon`           | Start the daemon (fork to background, write PID file) |
+| `daemon stop`      | Stop the running daemon                               |
+| `daemon status`    | Show whether the daemon is running and on which port  |
+| `daemon install`   | Register as a system service for auto-start on boot   |
+| `daemon uninstall` | Remove the system service                             |
 
 #### Environment variables
 
-| Variable                    | Default     | Description                                                                                      |
-| :-------------------------- | :---------- | :----------------------------------------------------------------------------------------------- |
-| `MCP_TRANSPORT`             | `stdio`     | Set to `http` to enable the HTTP daemon                                                          |
-| `MCP_HTTP_PORT`             | `3457`      | Port to listen on (`0` = ephemeral)                                                              |
-| `MCP_HTTP_HOST`             | `127.0.0.1` | Bind address — loopback only by default                                                          |
-| `MCP_HTTP_PATH`             | `/mcp`      | URL path for the MCP endpoint                                                                    |
-| `MCP_HTTP_TOKEN`            | _(none)_    | Required bearer token — server refuses to start without it unless `MCP_HTTP_ALLOW_INSECURE=true` |
-| `MCP_HTTP_ALLOW_INSECURE`   | `false`     | Skip token requirement (dev/loopback only)                                                       |
-| `MEMORY_DB_BUSY_TIMEOUT_MS` | `30000`     | SQLite busy timeout in ms — increase if you see lock errors under heavy load                     |
+| Variable                    | Default | Description                                    |
+| :-------------------------- | :------ | :--------------------------------------------- |
+| `PORT`                      | `3456`  | Port for the combined daemon (MCP + dashboard) |
+| `MEMORY_DB_BUSY_TIMEOUT_MS` | `30000` | SQLite busy timeout in ms                      |
 
 #### Notes
 
-- The daemon binds to `127.0.0.1` (loopback) by default — it is not accessible from other machines.
-- All sessions share one SQLite database; concurrent writes use a bounded jittered retry so heavy multi-client load no longer surfaces `SQLITE_BUSY` errors.
-- To run the daemon as a background service, use a process manager (systemd, launchd, PM2, etc.) or add it to your shell's startup script.
+- The daemon binds to `127.0.0.1` (loopback) only — not accessible from other machines.
+- All sessions share one SQLite database; concurrent writes use bounded jittered retry so `SQLITE_BUSY` errors no longer surface under multi-client load.
+- Logs are written to `~/.config/local-memory-mcp/daemon.log`.
 
 ### 🧠 How It Works (Important Insight)
 

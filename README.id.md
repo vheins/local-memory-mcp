@@ -65,38 +65,60 @@ Metode ini memastikan waktu startup tercepat dan keandalan maksimal untuk penggu
 - **Tanpa unduhan berulang**: Menghemat bandwidth dan menghindari ketergantungan pada registry NPM.
 - **Lebih baik untuk otomatisasi**: Lebih stabil untuk alur kerja Agent yang berat.
 
-### 🌐 Mode HTTP Daemon (Transport Bersama)
+### 🌐 Mode Daemon (Transport Bersama — Direkomendasikan)
 
 Secara default, setiap jendela editor membuka proses `local-memory-mcp` tersendiri. Jika kamu membuka banyak jendela atau menjalankan beberapa agen sekaligus, akan ada N × M proses yang berebut akses ke database SQLite yang sama — menyebabkan CPU tinggi dan error `SQLITE_BUSY`.
 
-**Mode HTTP daemon** menyelesaikan ini: jalankan **satu** server yang terus hidup, lalu arahkan semua klien ke sana via HTTP.
+**Mode daemon** menyelesaikan ini: jalankan **satu** proses latar belakang yang melayani endpoint MCP HTTP dan dashboard di satu port, lalu arahkan semua klien ke sana.
 
-#### 1. Jalankan daemon (sekali, biarkan terus berjalan)
+#### Quick start
 
 ```bash
-# Pilih token rahasia — jaga kerahasiaannya
-MCP_TRANSPORT=http \
-MCP_HTTP_TOKEN=token-rahasiamu \
-MCP_HTTP_PORT=3457 \
-local-memory-mcp
+# Install global dulu (direkomendasikan)
+npm install -g @vheins/local-memory-mcp
+
+# Jalankan daemon di background
+local-memory-mcp daemon
+
+# Cek status
+local-memory-mcp daemon status
+# → Daemon is running (pid 12345) on http://127.0.0.1:3456
+
+# Hentikan
+local-memory-mcp daemon stop
 ```
 
-Kamu akan melihat:
+Atau tanpa install global:
 
+```bash
+npx -y @vheins/local-memory-mcp@latest daemon
 ```
-[MCP HTTP] listening {"host":"127.0.0.1","port":3457,"path":"/mcp","auth":"bearer"}
+
+#### Auto-start saat sistem restart
+
+```bash
+# Daftarkan sebagai service sistem (otomatis pilih mekanisme yang sesuai)
+local-memory-mcp daemon install
+
+# Hapus service
+local-memory-mcp daemon uninstall
 ```
 
-#### 2. Arahkan klien MCP ke daemon
+| Platform | Mekanisme                | Lokasi file service                                              |
+| :------- | :----------------------- | :--------------------------------------------------------------- |
+| Linux    | systemd user service     | `~/.config/systemd/user/local-memory-mcp.service`                |
+| macOS    | launchd LaunchAgent      | `~/Library/LaunchAgents/io.github.vheins.local-memory-mcp.plist` |
+| Windows  | Task Scheduler (ONLOGON) | Nama task: `local-memory-mcp-daemon`                             |
 
-Ganti entri `stdio` di konfigurasi klienmu dengan entri HTTP:
+#### Arahkan klien MCP ke daemon
+
+Ganti entri `stdio` di konfigurasi klienmu dengan entri HTTP (tidak perlu token — loopback only):
 
 **OpenCode (`~/.config/opencode/opencode.json`)**
 
 ```json
 "local-memory": {
-  "url": "http://127.0.0.1:3457/mcp",
-  "headers": { "Authorization": "Bearer token-rahasiamu" },
+  "url": "http://127.0.0.1:3456/mcp",
   "type": "http"
 }
 ```
@@ -107,32 +129,38 @@ Ganti entri `stdio` di konfigurasi klienmu dengan entri HTTP:
 {
 	"mcpServers": {
 		"local-memory": {
-			"url": "http://127.0.0.1:3457/mcp",
-			"headers": { "Authorization": "Bearer token-rahasiamu" }
+			"url": "http://127.0.0.1:3456/mcp"
 		}
 	}
 }
 ```
 
+Dashboard tersedia di `http://127.0.0.1:3456` — port yang sama, tidak perlu proses terpisah.
+
 > Klien yang belum mendukung HTTP MCP (versi lama) bisa tetap menggunakan entri `stdio` bersamaan dengan daemon — keduanya berbagi database SQLite yang sama.
+
+#### Subcommand daemon
+
+| Perintah           | Keterangan                                                  |
+| :----------------- | :---------------------------------------------------------- |
+| `daemon`           | Jalankan daemon (fork ke background, tulis PID file)        |
+| `daemon stop`      | Hentikan daemon yang sedang berjalan                        |
+| `daemon status`    | Tampilkan apakah daemon berjalan dan di port berapa         |
+| `daemon install`   | Daftarkan sebagai service sistem untuk auto-start saat boot |
+| `daemon uninstall` | Hapus service sistem                                        |
 
 #### Environment variables
 
-| Variabel                    | Default       | Keterangan                                                                                              |
-| :-------------------------- | :------------ | :------------------------------------------------------------------------------------------------------ |
-| `MCP_TRANSPORT`             | `stdio`       | Set ke `http` untuk mengaktifkan HTTP daemon                                                            |
-| `MCP_HTTP_PORT`             | `3457`        | Port yang digunakan (`0` = port acak)                                                                   |
-| `MCP_HTTP_HOST`             | `127.0.0.1`   | Alamat bind — loopback saja secara default                                                              |
-| `MCP_HTTP_PATH`             | `/mcp`        | Path URL untuk endpoint MCP                                                                             |
-| `MCP_HTTP_TOKEN`            | _(tidak ada)_ | Token bearer yang wajib diisi — server tidak akan jalan tanpanya kecuali `MCP_HTTP_ALLOW_INSECURE=true` |
-| `MCP_HTTP_ALLOW_INSECURE`   | `false`       | Lewati persyaratan token (hanya untuk dev/loopback)                                                     |
-| `MEMORY_DB_BUSY_TIMEOUT_MS` | `30000`       | Timeout busy SQLite dalam ms — naikkan jika muncul error lock saat beban berat                          |
+| Variabel                    | Default | Keterangan                                   |
+| :-------------------------- | :------ | :------------------------------------------- |
+| `PORT`                      | `3456`  | Port untuk daemon gabungan (MCP + dashboard) |
+| `MEMORY_DB_BUSY_TIMEOUT_MS` | `30000` | Timeout busy SQLite dalam ms                 |
 
 #### Catatan
 
-- Daemon terikat ke `127.0.0.1` (loopback) secara default — tidak bisa diakses dari mesin lain.
-- Semua sesi berbagi satu database SQLite; penulisan concurrent menggunakan retry jittered terbatas sehingga beban multi-klien tidak lagi memunculkan error `SQLITE_BUSY`.
-- Untuk menjalankan daemon sebagai layanan latar belakang, gunakan process manager (systemd, launchd, PM2, dll.) atau tambahkan ke skrip startup shell-mu.
+- Daemon terikat ke `127.0.0.1` (loopback) — tidak bisa diakses dari mesin lain.
+- Semua sesi berbagi satu database SQLite; penulisan concurrent menggunakan retry jittered terbatas sehingga error `SQLITE_BUSY` tidak lagi muncul di bawah beban multi-klien.
+- Log ditulis ke `~/.config/local-memory-mcp/daemon.log`.
 
 ### 🧠 Cara Kerjanya (Wawasan Penting)
 
