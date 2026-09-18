@@ -7,14 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.0] — 2026-09-18
+
 ### Added
 
+- **Daemon mode:** `local-memory-mcp daemon` forks a combined MCP HTTP + dashboard server to the background on port `3456` (loopback only, no token required). `daemon stop`/`daemon status` manage the running process via a PID file.
+- **Cross-platform auto-start:** `daemon install` registers a system service for auto-start on login/boot — systemd user service on Linux, launchd LaunchAgent on macOS, Task Scheduler (ONLOGON) on Windows. `daemon uninstall` removes it.
 - **Opt-in Streamable HTTP transport:** `MCP_TRANSPORT=http` starts one daemon that serves many MCP clients through `/mcp`, while stdio remains the default. The HTTP listener defaults to loopback on port `3457` and requires `MCP_HTTP_TOKEN` bearer authentication unless `MCP_HTTP_ALLOW_INSECURE=true` is explicitly set for local development.
 
 ### Changed
 
 - **SQLite write contention hardening:** configurable busy-timeout handling and bounded retries for transient SQLite write-lock failures improve the shared-daemon and multi-process local deployment paths.
 - **Storage policy clarification:** SQLite remains the zero-configuration, local-first default; optional PostgreSQL/MariaDB/MySQL adapters are explicitly scoped as a future, opt-in capability behind a storage-port refactor, documented in ADR-009. The Streamable HTTP transport decision is recorded separately in ADR-010.
+
+### Fixed
+
+- **`task-write` error classification audit:** 9 additional throw sites across the tool layer reclassified from `INTERNAL_ERROR` to `VALIDATION_ERROR` or `CAPABILITY_UNAVAILABLE`; `updatedFields` in responses now reflects only columns actually written to the database; completion summaries no longer include a literal `undefined` commit clause when `commit_id` is absent.
+- **`task-read` duplicate rows:** vector supplement was repo-scoped while keyword results were owner-scoped, letting the same task under a different owner appear twice. Fixed by owner-filtering the supplement and adding id-dedup in the hybrid search engine.
+- **Security:** patched 7 npm audit advisories — vitest 4.1.7→4.1.11 (GHSA-82fw-gwwq-j7x9), devalue 5.8.1→5.9.2 (GHSA-9rgm-9g3h-6x36), js-yaml 3.15.1→3.15.2 (GHSA-2883-xcg3-v3hh), sharp 0.35.3→0.35.4 (GHSA-rgj7-g3m4-5g8c). `npm audit` reports 0 remaining vulnerabilities.
 
 ## [0.46.1] — 2026-09-17
 
