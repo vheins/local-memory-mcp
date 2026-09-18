@@ -4,7 +4,7 @@ This folder is the **single source of truth for ADRs** — it holds both draft-s
 
 ## Ownership model (single-folder since Opsi A)
 
-Canonical ADRs previously lived in `_archive/decisions/` (now merged here) and the top-level `decisions/` folder. All 9 canonical docs (`ADR-001`–`ADR-008` + `SPEC-001`) now live alongside the 2 design drafts in this folder.
+Canonical ADRs previously lived in `_archive/decisions/` (now merged here) and the top-level `decisions/` folder. All 11 canonical docs (`ADR-001`–`ADR-010` + `SPEC-001`) now live alongside the 2 design drafts in this folder.
 
 | Subset                     | Purpose                                                                                                  | Lifecycle                       | Numbering                                     |
 | :------------------------- | :------------------------------------------------------------------------------------------------------- | :------------------------------ | :-------------------------------------------- |
@@ -39,6 +39,8 @@ Canonical (adopted, previously `_archive/decisions/`):
 - `ADR-006-knowledge-graph-infrastructure.md` — Knowledge graph infrastructure
 - `ADR-007-agent-context-simplification.md` — Agent context simplification
 - `ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md` — Global vs scoped ownership & dashboard repo view
+- `ADR-009-optional-multi-database-support.md` — SQLite default with optional future multi-database adapters
+- `ADR-010-streamable-http-transport.md` — Opt-in Streamable HTTP transport for one daemon and many clients
 - `SPEC-001-unified-nl-query.md` — Unified NL query (`key:value` inline tags)
 
 ## Links

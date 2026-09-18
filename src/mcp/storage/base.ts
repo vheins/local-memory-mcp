@@ -16,6 +16,80 @@ import {
 	MEMORY_STATUS_ACTIVE,
 	TASK_STATUS_BACKLOG
 } from "../types";
+import { SQLITE_WRITE_RETRY_ATTEMPTS, SQLITE_WRITE_RETRY_BASE_MS, SQLITE_WRITE_RETRY_MAX_MS } from "../utils/constants";
+
+/**
+ * SQLite result codes that represent TRANSIENT lock contention — a sibling
+ * writer (another process or connection) holds the write lock and the busy
+ * handler could not resolve it within `busy_timeout`. Retrying these is safe
+ * because the transaction body was fully rolled back. Constraint / validation
+ * errors (SQLITE_CONSTRAINT*, SQLITE_MISUSE, …) are deliberately NOT matched:
+ * they are deterministic and must propagate so callers never observe a
+ * duplicated non-idempotent side effect.
+ */
+const TRANSIENT_SQLITE_CODES = new Set([
+	"SQLITE_BUSY",
+	"SQLITE_BUSY_SNAPSHOT",
+	"SQLITE_LOCKED",
+	"SQLITE_LOCKED_SHAREDCACHE"
+]);
+
+/**
+ * Whether `error` is a transient SQLite busy/locked error safe to retry.
+ * Matches better-sqlite3's `error.code` first, then falls back to the message
+ * text for wrapped/rethrown errors that lost their code.
+ */
+export function isTransientSqliteError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	const code = (error as { code?: unknown }).code;
+	if (typeof code === "string" && TRANSIENT_SQLITE_CODES.has(code)) return true;
+	return /database is (locked|busy)|database table is locked/i.test(error.message);
+}
+
+/**
+ * Compute the jittered backoff before retry `attempt` (1-based: the just-failed
+ * try). Exponential base growth capped at SQLITE_WRITE_RETRY_MAX_MS, plus
+ * half-range jitter so two contending writers do not re-collide in lockstep.
+ */
+function computeRetryBackoffMs(attempt: number): number {
+	const ceiling = Math.min(SQLITE_WRITE_RETRY_BASE_MS * 2 ** (attempt - 1), SQLITE_WRITE_RETRY_MAX_MS);
+	// Random in [ceiling/2, ceiling] — a guaranteed minimum wait, still jittered.
+	return Math.floor(ceiling / 2 + Math.random() * (ceiling / 2));
+}
+
+/**
+ * Block the (synchronous) thread for `ms` milliseconds. better-sqlite3 is
+ * synchronous, so a blocking sleep is the only way to back off between retries
+ * without yielding the transaction; the wait is bounded and only runs on an
+ * otherwise-fatal error path. `Atomics.wait` on a throwaway SharedArrayBuffer
+ * is the canonical synchronous sleep in Node.
+ */
+function sleepSync(ms: number): void {
+	if (ms <= 0) return;
+	const buffer = new Int32Array(new SharedArrayBuffer(4));
+	Atomics.wait(buffer, 0, 0, ms);
+}
+
+/**
+ * Run a synchronous write transaction, retrying TRANSIENT SQLite busy/locked
+ * errors a bounded number of times with jittered backoff. Non-transient errors
+ * propagate immediately; exhaustion surfaces the last transient error verbatim
+ * (deterministic — the caller sees the same error it would have without retry).
+ */
+export function runWithSqliteWriteRetry<T>(run: () => T): T {
+	let attempt = 0;
+	for (;;) {
+		try {
+			return run();
+		} catch (error) {
+			attempt += 1;
+			if (attempt >= SQLITE_WRITE_RETRY_ATTEMPTS || !isTransientSqliteError(error)) {
+				throw error;
+			}
+			sleepSync(computeRetryBackoffMs(attempt));
+		}
+	}
+}
 
 export abstract class BaseEntity {
 	constructor(protected db: Database.Database) {}
@@ -54,7 +128,15 @@ export abstract class BaseEntity {
 		// read-then-write body can never hit SQLITE_BUSY_SNAPSHOT (immediate,
 		// busy_timeout-immune) when another process commits mid-transaction
 		// (TASK-064 / MEM-475). Better-sqlite3 v12 API: transaction(fn).immediate().
-		return this.db.transaction(fn).immediate();
+		//
+		// Phase-2 hardening: the immediate transaction is additionally wrapped in
+		// a bounded, jittered retry (runWithSqliteWriteRetry) so a transient
+		// SQLITE_BUSY / "database is locked" that escapes busy_timeout is retried
+		// instead of failing the write. Non-transient errors propagate unchanged.
+		// Reentrancy is preserved: better-sqlite3 itself turns a nested call into
+		// a SAVEPOINT, and the retry wrapper simply re-invokes the same closure.
+		const immediate = this.db.transaction(fn).immediate;
+		return runWithSqliteWriteRetry(() => immediate());
 	}
 
 	protected run(sql: string, params: unknown[] = []): { changes: number } {

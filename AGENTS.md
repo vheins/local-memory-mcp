@@ -127,7 +127,7 @@ codebase.service.ts`). The MCP server ignores it and indexes only its CWD.
 
 ## Persistence, search & env
 
-- **SQLite only** (project rule). DB path resolves: `MEMORY_DB_PATH` → platform config
+- **SQLite by default** (project rule); optional multi-DB is a scoped future option — see ADR-009. DB path resolves: `MEMORY_DB_PATH` → platform config
   dir → legacy → `./storage/memory.db` → config dir (created, WAL mode). Migrations
   run **automatically** in the `SQLiteStore` constructor — there is **no `migrate`
   script** (ignore any stale `npm run migrate` mention in comments). The codebase
@@ -305,8 +305,8 @@ worker starts inline at startup).
   footer when closing a GitHub issue.
 - Branch `feat/feature-name` or `fix/bug-description`; PR → `main`.
 - Strict quality rules: **Local-First** (no cloud/external APIs without discussion),
-  **SQLite only** for persistence, **never lower the semantic-search similarity
-  thresholds** (anti-hallucination guard).
+  **SQLite by default** for persistence; optional multi-DB is a scoped future option — see ADR-009;
+  **never lower the semantic-search similarity thresholds** (anti-hallucination guard).
 
 ## Where to look
 

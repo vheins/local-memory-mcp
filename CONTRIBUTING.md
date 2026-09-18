@@ -52,7 +52,7 @@ This repository follows [Conventional Commits](https://www.conventionalcommits.o
 ## Quality Standards (Strict Rules)
 
 - **Local-First:** Do not add cloud dependencies or external APIs without deep discussion.
-- **SQLite Only:** All data persistence must use SQLite.
+- **SQLite by default:** All data persistence uses SQLite by default (zero-config, local-first). Optional multi-DB adapters (PostgreSQL/MariaDB/MySQL) are permitted only as an explicit, opt-in capability — see ADR-009.
 - **Strict Anti-Hallucination:** Do not lower the semantic search thresholds below the project's security standards.
 
 ## ⚠️ No Warranty & Liability

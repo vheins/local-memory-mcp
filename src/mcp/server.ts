@@ -3,8 +3,8 @@
 process.env.MCP_SERVER = "true";
 
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
-import { createMcpServer } from "./mcp-server";
-import { updateSessionFromInitialize } from "./session";
+import { createServerFactory } from "./transport/factory";
+import { resolveTransportMode, resolveHttpTransportConfig, startHttpTransport } from "./transport/http";
 import { SQLiteStore } from "./storage/sqlite";
 import { RealVectorStore } from "./storage/vectors";
 import { CapabilityAwareVectorStore } from "./storage/lazy-vectors";
@@ -125,6 +125,11 @@ process.on("uncaughtException", (err: Error) => {
 		context: { pid: process.pid, startup: !serverStarted }
 	});
 });
+
+// Resolve the transport mode FIRST (fail fast): an invalid MCP_TRANSPORT must
+// abort startup with a clear error before any store/worker work begins. The
+// crash-containment handlers above see `serverStarted === false` and exit(1).
+const transportMode = resolveTransportMode();
 
 // Create the core store first. Optional engines are registered below and
 // initialized through one single-flight capability registry.
@@ -280,33 +285,28 @@ process.on(
 		})
 );
 
-// Start the MCP stdio server using the SDK — startup is now complete, so a
-// runtime failure may log+continue instead of exiting (TASK-051).
+// Start the MCP server using the SDK — startup is now complete, so a runtime
+// failure may log+continue instead of exiting (TASK-051).
+//
+// Transport selection (opt-in): MCP_TRANSPORT=stdio (DEFAULT, unchanged) keeps
+// the historical single-client stdio server; MCP_TRANSPORT=http starts the
+// Streamable HTTP daemon so MANY clients share ONE store/worker set. The store
+// and workers above are initialized EXACTLY ONCE for both transports; each
+// session gets its own McpServer/SessionContext via createServerFactory.
 serverStarted = true;
-const handle = serveStdio(() => {
-	const { server, ctx } = createMcpServer(db, vectors);
-
-	// Wire oninitialized to capture client info from the initialize handshake
-	server.server.oninitialized = () => {
-		try {
-			const clientVer = server.server.getClientVersion();
-			if (clientVer) {
-				ctx.clientName = clientVer.name;
-				ctx.clientVersion = clientVer.version;
-				ctx.lastSeenAgent = clientVer.name;
-			}
-			ctx.lastSeenModel ??= process.env.MCP_MODEL;
-			ctx.lastSeenAgent ??= process.env.MCP_CLIENT_NAME;
-
-			updateSessionFromInitialize(ctx, {
-				clientInfo: clientVer,
-				capabilities: server.server.getClientCapabilities()
-			} as Record<string, unknown>);
-		} catch (error) {
-			// Non-fatal — just logging
-			logger.warn("[session] Failed to capture client info", { error: String(error) });
-		}
-	};
-
-	return server;
-});
+let handle: { close(): Promise<void> } | undefined;
+if (transportMode === "http") {
+	try {
+		handle = await startHttpTransport({
+			...resolveHttpTransportConfig(),
+			factory: createServerFactory(db, vectors)
+		});
+	} catch (error) {
+		// A listen/bind failure (e.g. EADDRINUSE) or a missing bearer token must
+		// terminate cleanly — never leave the process running with no listener.
+		logger.error("[Server] Failed to start MCP HTTP transport — exiting", { error: String(error) });
+		process.exit(1);
+	}
+} else {
+	handle = serveStdio(createServerFactory(db, vectors));
+}

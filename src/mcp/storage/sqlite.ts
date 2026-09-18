@@ -26,7 +26,7 @@ import { ColdArchiveStore, resolveColdArchivePath } from "./cold-archive";
 import type { ColdArchiveEntry, ColdArchiveSearchOptions } from "./cold-archive";
 import { ensureDerivedReady, resolveDerivedDbPath } from "./derived-db";
 import { logger } from "../utils/logger";
-import { WAL_CHECKPOINT_INTERVAL_MS } from "../utils/constants";
+import { MEMORY_DB_BUSY_TIMEOUT_MS, WAL_CHECKPOINT_INTERVAL_MS } from "../utils/constants";
 
 function resolveDbPath(): string {
 	if (process.env.MEMORY_DB_PATH) return process.env.MEMORY_DB_PATH;
@@ -110,12 +110,16 @@ export class SQLiteStore {
 		// under WAL doubles write fsyncs for no integrity gain. See
 		// https://sqlite.org/wal.html#synchronous.
 		this.db.pragma("synchronous = NORMAL");
-		// busy_timeout = 5000 (was 30000): fail fast instead of blocking the
-		// event loop for 30s per contention. Correctness under multi-process
-		// writes comes from BEGIN IMMEDIATE transactions (base.ts) + the
-		// WriteLock mutex (write-lock.ts), NOT from a long busy wait
-		// (TASK-064 / MEM-475).
-		this.db.pragma("busy_timeout = 5000");
+		// busy_timeout (Phase-2 hardening): SQLite blocks and retries internally
+		// for this long before surfacing SQLITE_BUSY, so a transient hold by a
+		// sibling writer (indexer, maintenance sweep, dashboard) resolves
+		// invisibly instead of bubbling up. The default was lowered to 5000 in
+		// TASK-064 to fail fast; Phase 2 raises it to 30s (MEMORY_DB_BUSY_TIMEOUT_MS)
+		// now that the HTTP daemon can concentrate many clients on ONE writer —
+		// correctness still comes from BEGIN IMMEDIATE transactions (base.ts) +
+		// the bounded retry wrapper, so this is a latency/robustness knob, not a
+		// lock-discipline substitute.
+		this.db.pragma(`busy_timeout = ${MEMORY_DB_BUSY_TIMEOUT_MS}`);
 		this.db.pragma("foreign_keys = ON");
 		// wal_autocheckpoint = 1000 (was 100): checkpoint every ~4MB instead of
 		// every ~400KB — frequent sync checkpoints on the writing connection

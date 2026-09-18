@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Opt-in Streamable HTTP transport:** `MCP_TRANSPORT=http` starts one daemon that serves many MCP clients through `/mcp`, while stdio remains the default. The HTTP listener defaults to loopback on port `3457` and requires `MCP_HTTP_TOKEN` bearer authentication unless `MCP_HTTP_ALLOW_INSECURE=true` is explicitly set for local development.
+
+### Changed
+
+- **SQLite write contention hardening:** configurable busy-timeout handling and bounded retries for transient SQLite write-lock failures improve the shared-daemon and multi-process local deployment paths.
+- **Storage policy clarification:** SQLite remains the zero-configuration, local-first default; optional PostgreSQL/MariaDB/MySQL adapters are explicitly scoped as a future, opt-in capability behind a storage-port refactor, documented in ADR-009. The Streamable HTTP transport decision is recorded separately in ADR-010.
+
 ## [0.46.1] — 2026-09-17
 
 ### Fixed

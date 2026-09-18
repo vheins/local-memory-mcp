@@ -565,6 +565,50 @@ export const COLD_ARCHIVE_OFFLOAD_MAX_ROWS = envInt("COLD_ARCHIVE_OFFLOAD_MAX_RO
 // Rows per BEGIN IMMEDIATE transaction — bounds the write-lock hold time.
 export const COLD_ARCHIVE_BATCH_SIZE = envInt("COLD_ARCHIVE_BATCH_SIZE", 500);
 
+// ── SQLite write-contention hardening (Phase 2) ──────────────────────────
+// The store is opened with `journal_mode=WAL`, `busy_timeout`, and writes go
+// through `BEGIN IMMEDIATE` (base.ts). Under heavy multi-process traffic a
+// writer can still observe SQLITE_BUSY / "database is locked" when the busy
+// handler itself cannot resolve the contention within the timeout window.
+//
+// busy_timeout is the FIRST line of defence: SQLite blocks and retries
+// internally for this long before surfacing SQLITE_BUSY. The default was
+// lowered to 5000 in TASK-064 to fail fast; the Phase-2 default raises it
+// again (30s) so transient contention from a sibling writer (indexer,
+// maintenance sweep, dashboard) resolves invisibly instead of bubbling up.
+// Env-overridable so operators can dial it to their disk/latency profile.
+export const MEMORY_DB_BUSY_TIMEOUT_MS = envInt("MEMORY_DB_BUSY_TIMEOUT_MS", 30_000);
+
+// Bounded, jittered retry wrapper around write transactions (base.ts
+// `transaction`). This is the SECOND line of defence: if SQLite still
+// surfaces a TRANSIENT busy/locked error after busy_timeout, the transaction
+// body is retried a bounded number of times with jittered backoff. Only
+// transient errors (SQLITE_BUSY / "database is locked") are retried —
+// constraint/validation errors propagate immediately so callers never see a
+// duplicated non-idempotent side effect. better-sqlite3 is synchronous, so
+// the backoff is a short blocking `Atomics.wait` sleep; the loop is bounded
+// (attempts × base × jitter) and only runs on an otherwise-fatal error path.
+export const SQLITE_WRITE_RETRY_ATTEMPTS = envInt("SQLITE_WRITE_RETRY_ATTEMPTS", 3);
+// Base backoff between retry attempts, in milliseconds. Attempt N waits a
+// jittered `base * 2^(N-1)` (capped) so two contending writers do not
+// re-collide in lockstep (thundering-herd avoidance). Env-overridable.
+export const SQLITE_WRITE_RETRY_BASE_MS = envInt("SQLITE_WRITE_RETRY_BASE_MS", 25);
+// Ceiling for a single retry backoff, bounding worst-case blocking time.
+export const SQLITE_WRITE_RETRY_MAX_MS = 1_000;
+
+// ── MCP Streamable HTTP transport (opt-in) ────────────────────────────────
+// A single long-lived daemon can serve MANY MCP clients over Streamable HTTP
+// instead of each client spawning its own stdio server process, removing
+// duplicated embedding/maintenance/indexing workers and cross-process SQLite
+// write contention. Selected via `MCP_TRANSPORT=http`; stdio stays the
+// default. HTTP config (host/path/token are strings and read inline at the
+// call site per the repo convention):
+export const MCP_HTTP_PORT = envInt("MCP_HTTP_PORT", 3457);
+// A bearer token (MCP_HTTP_TOKEN) is REQUIRED when serving HTTP unless this
+// escape hatch is explicitly set true for local dev. Default false: the
+// server refuses to start an unauthenticated HTTP listener.
+export const MCP_HTTP_ALLOW_INSECURE = envBool("MCP_HTTP_ALLOW_INSECURE", false);
+
 // ── Local bug telemetry ───────────────────────────────────────────────────
 // Automatic capture of runtime errors (uncaught/unhandled, error-level logs,
 // tool failures, dashboard 5xx) into the local `bug_reports` table. Local-only
