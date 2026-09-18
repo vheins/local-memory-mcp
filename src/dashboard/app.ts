@@ -55,14 +55,28 @@ export interface DashboardApp {
 	pkg: { version: string };
 }
 
-/** Resolve the served dashboard version from package.json (best effort). */
+/**
+ * Resolve the served dashboard version from package.json (best effort).
+ *
+ * Walks up from `__dirname` instead of using a hardcoded relative path: tsup
+ * bundles this file into `dist/chunk-*.js` where `__dirname = dist/`, so a
+ * fixed `../../package.json` would point outside the package root in the
+ * published build. The walk-up loop finds the nearest `package.json` in both
+ * dev (`src/dashboard/`) and prod (`dist/`), matching
+ * `src/dashboard/services/system.service.ts`.
+ */
 function resolvePkgVersion(): { version: string } {
 	const pkg = { version: "0.0.0" };
 	try {
-		const pkgPath = path.join(__dirname, "../../package.json");
-		if (fs.existsSync(pkgPath)) {
-			const data = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-			if (data.version) pkg.version = data.version;
+		let currentDir = __dirname;
+		while (currentDir !== path.parse(currentDir).root) {
+			const checkPath = path.join(currentDir, "package.json");
+			if (fs.existsSync(checkPath)) {
+				const data = JSON.parse(fs.readFileSync(checkPath, "utf8")) as { version?: string };
+				if (data.version) pkg.version = data.version;
+				break;
+			}
+			currentDir = path.dirname(currentDir);
 		}
 	} catch {
 		// Intentionally empty: version stays at the fallback.
