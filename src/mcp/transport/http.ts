@@ -210,8 +210,11 @@ export async function startHttpTransport(options: HttpTransportOptions): Promise
 /**
  * Build the allowlist for Host/Origin validation: the standard localhost trio
  * plus the configured bind host (so a non-loopback bind is still accepted).
+ *
+ * Exported for reuse by the combined daemon server (FEAT-DAEMON-001), which
+ * mounts the same handler inside Express and must apply identical validation.
  */
-function buildAllowedHostnames(host: string): string[] {
+export function buildAllowedHostnames(host: string): string[] {
 	const allowed = new Set(localhostAllowedHostnames());
 	if (host) allowed.add(host);
 	return [...allowed];
@@ -220,8 +223,11 @@ function buildAllowedHostnames(host: string): string[] {
 /**
  * Reconstruct the request URL from the Node request. Prefers the `Host`
  * header (which carries the real port) and falls back to the bound host/port.
+ *
+ * Exported for the combined daemon server (FEAT-DAEMON-001) so both transports
+ * reconstruct the request URL identically.
  */
-function buildRequestUrl(nodeReq: IncomingMessage, host: string, port: number): string {
+export function buildRequestUrl(nodeReq: IncomingMessage, host: string, port: number): string {
 	const hostHeader = nodeReq.headers.host ?? `${host}:${port}`;
 	return `http://${hostHeader}${nodeReq.url ?? "/"}`;
 }
@@ -249,8 +255,11 @@ type NodeRequestInit = RequestInit & { duplex?: "half" };
  * Convert a Node `IncomingMessage` into a Web `Request`. Bodies (POST) are
  * streamed via `Readable.toWeb` with `duplex: "half"`; body-less methods omit
  * the body so the request stays a simple non-streaming request.
+ *
+ * Exported for the combined daemon server (FEAT-DAEMON-001): Express's
+ * `Request` extends `IncomingMessage`, so the same bridge applies unchanged.
  */
-function toWebRequest(nodeReq: IncomingMessage, url: string): Request {
+export function toWebRequest(nodeReq: IncomingMessage, url: string): Request {
 	const method = nodeReq.method ?? "GET";
 	const hasBody = method !== "GET" && method !== "HEAD";
 	const init: NodeRequestInit = {
@@ -269,8 +278,11 @@ function toWebRequest(nodeReq: IncomingMessage, url: string): Request {
  * pipe the (possibly SSE-streamed) body. `pipeline` tears the source down if
  * the client disconnects mid-stream. `headers.forEach` is used instead of
  * iteration so it compiles under both the Node and DOM `Headers` definitions.
+ *
+ * Exported for the combined daemon server (FEAT-DAEMON-001): Express's
+ * `Response` extends `ServerResponse`, so the same bridge applies unchanged.
  */
-async function writeWebResponse(res: ServerResponse, web: Response): Promise<void> {
+export async function writeWebResponse(res: ServerResponse, web: Response): Promise<void> {
 	res.statusCode = web.status;
 	web.headers.forEach((value, key) => {
 		if (key.toLowerCase() === "transfer-encoding") return;

@@ -30,6 +30,12 @@ if (sub === "dashboard" || sub === "mcp-memory-dashboard") {
 	// Rebuild the served UI bundle if stale (no-op when fresh).
 	ensureDashboardBuild();
 	import("../dist/dashboard/server.js");
+} else if (sub === "daemon") {
+	// Combined dashboard + MCP daemon (FEAT-DAEMON-001): the worker serves the
+	// dashboard UI, so refresh the bundle before routing into server.ts, which
+	// dispatches the daemon/--daemon-worker branches.
+	ensureDashboardBuild();
+	import("../dist/mcp/server.js");
 } else if (sub === "--index") {
 	// Pass through --index and all subsequent args to server.ts
 	import("../dist/mcp/server.js");

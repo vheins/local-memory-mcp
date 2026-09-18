@@ -1,0 +1,358 @@
+/**
+ * Combined daemon worker (FEAT-DAEMON-001).
+ *
+ * Started by `--daemon-worker` (forked by {@link ./daemon}). Serves BOTH the
+ * existing dashboard Express app (all `/api` routes + the built UI) AND the MCP
+ * Streamable HTTP handler at `/mcp` on ONE loopback port (default `3456`, env
+ * `PORT`). The dashboard routes and the MCP endpoint therefore share one origin
+ * and one store — no bearer token is required because the listener is
+ * loopback-only.
+ *
+ * STORE OWNERSHIP: the dashboard route modules resolve their store from the
+ * `src/dashboard/lib/context` DI singleton (`import { db } from "../lib/context"`).
+ * The combined server therefore reuses that singleton (db, vectors,
+ * embeddingWorker, runtimeCapabilities) so MCP reads/writes and dashboard reads
+ * observe the SAME database. It only ADDS the engines the dashboard does not
+ * own (indexing / watcher / maintenance).
+ *
+ * The MCP handler is mounted as an Express pre-route so it owns `/mcp`
+ * exclusively (the SPA fallback can never answer it) and reads the raw request
+ * stream (the Node→Web bridge in `../transport/http` consumes the body before
+ * `express.json()` would).
+ */
+import http from "node:http";
+import path from "node:path";
+import type { AddressInfo } from "node:net";
+import { createMcpHandler, hostHeaderValidationResponse, originValidationResponse } from "@modelcontextprotocol/server";
+import type { McpHttpHandler } from "@modelcontextprotocol/server";
+import { createServerFactory } from "../transport/factory";
+import {
+	buildAllowedHostnames,
+	buildRequestUrl,
+	toWebRequest,
+	writeWebResponse,
+	MCP_HTTP_DEFAULT_HOST,
+	MCP_HTTP_DEFAULT_PATH
+} from "../transport/http";
+import { CAPABILITIES } from "../capabilities";
+import { logger } from "../utils/logger";
+import { bugCapture } from "../utils/bug-capture";
+import { reuseTelemetry } from "../utils/reuse-telemetry";
+import { runStartupMaintenance } from "../services/maintenance-job";
+import { runStartupVacuum } from "../services/vacuum";
+import { VACUUM_ON_STARTUP } from "../utils/constants";
+import { autoIndexIfStale } from "../codebase-index/services/indexing-service";
+import { getCodebaseParserPool } from "../codebase-index/parser/singleton";
+import { FileWatcher, registerRepo } from "../codebase-index/services/file-watcher";
+import { createExpressApp } from "../../dashboard/app";
+import type { ExpressPreRoute } from "../../dashboard/app";
+import type { SQLiteStore } from "../storage/sqlite";
+import type { RuntimeCapabilityRegistry } from "../runtime-capabilities";
+import type { VectorStore } from "../types";
+
+/** Default combined-server port — shared with the standalone dashboard. */
+export const DAEMON_DEFAULT_PORT = 3456;
+
+/** The minimal worker surface the combined server needs for lifecycle control. */
+interface WorkerLike {
+	start(): void;
+	stop(): void;
+}
+
+/** Options accepted by {@link startCombinedServer}. */
+export interface StartCombinedServerOptions {
+	/** Bind host — loopback only. Defaults to `127.0.0.1`. */
+	host?: string;
+	/** Bind port (`0` requests an ephemeral port). Defaults to `PORT`/3456. */
+	port?: number;
+	/**
+	 * Register + warm the background runtime engines (indexing, watcher,
+	 * maintenance). Defaults to `true`; tests disable it to keep startup
+	 * hermetic.
+	 */
+	enableEngines?: boolean;
+}
+
+/** Handle returned by {@link startCombinedServer}. */
+export interface CombinedServerHandle {
+	server: http.Server;
+	/** Actual bound port (resolved when `port: 0` was requested). */
+	port: number;
+	/** Base URL (no trailing slash). */
+	url: string;
+	/** Close the MCP handler, the HTTP listener, and any owned resources. */
+	close(): Promise<void>;
+}
+
+/**
+ * Resolve the shared runtime dependencies from the dashboard context
+ * singleton. Imported dynamically so the stdio server path never pulls in the
+ * dashboard/express graph.
+ */
+async function resolveRuntime(): Promise<{
+	db: SQLiteStore;
+	vectors: VectorStore;
+	embeddingWorker: WorkerLike;
+	runtimeCapabilities: RuntimeCapabilityRegistry;
+}> {
+	const ctx = await import("../../dashboard/lib/context");
+	return {
+		db: ctx.db,
+		vectors: ctx.vectors,
+		embeddingWorker: ctx.embeddingWorker,
+		runtimeCapabilities: ctx.runtimeCapabilities
+	};
+}
+
+/**
+ * Build the Express pre-route that serves the MCP Streamable HTTP handler at
+ * `/mcp`.
+ *
+ * Bridges each Express request (a Node `IncomingMessage`/`ServerResponse`
+ * subclass) into the SDK's Web-standard handler and back. Host/Origin
+ * validation mirrors `startHttpTransport`; bearer auth is intentionally absent
+ * because the combined listener is loopback-only.
+ */
+function createMcpPreRoute(handler: McpHttpHandler, host: string): ExpressPreRoute {
+	const allowedHostnames = buildAllowedHostnames(host);
+
+	return {
+		path: MCP_HTTP_DEFAULT_PATH,
+		handler: (req, res) => {
+			void (async () => {
+				const port = req.socket.localPort ?? DAEMON_DEFAULT_PORT;
+				const url = buildRequestUrl(req, host, port);
+				const webRequest = toWebRequest(req, url);
+
+				const rejected =
+					hostHeaderValidationResponse(webRequest, allowedHostnames) ??
+					originValidationResponse(webRequest, allowedHostnames);
+				if (rejected !== undefined) {
+					await writeWebResponse(res, rejected);
+					return;
+				}
+
+				const webResponse = await handler.fetch(webRequest);
+				await writeWebResponse(res, webResponse);
+			})().catch((error: unknown) => {
+				logger.error("[Daemon] MCP request failed", { error: String(error) });
+				if (!res.headersSent) {
+					res.statusCode = 500;
+					res.setHeader("Content-Type", "text/plain; charset=utf-8");
+				}
+				res.end("Internal Server Error");
+			});
+		}
+	};
+}
+
+/**
+ * Register the runtime engines the dashboard does not own (indexing, watcher,
+ * maintenance) on the shared capability registry. `semantic` is registered by
+ * the dashboard context; it is not re-registered here.
+ *
+ * @returns A teardown function stopping the file watcher.
+ */
+function registerEngines(db: SQLiteStore, runtimeCapabilities: RuntimeCapabilityRegistry): () => void {
+	let fileWatcher: FileWatcher | null = null;
+
+	runtimeCapabilities.register("indexing", () => getCodebaseParserPool().initialize());
+	runtimeCapabilities.register("watcher", () => {
+		fileWatcher ??= new FileWatcher(db, getCodebaseParserPool());
+		fileWatcher.start();
+	});
+	if (process.env.ENABLE_FILE_WATCHER === "false") {
+		runtimeCapabilities.disable("watcher", "Disabled via ENABLE_FILE_WATCHER=false");
+	}
+	runtimeCapabilities.register("maintenance", async () => {
+		const result = await runStartupMaintenance(db);
+		if (!result.skipped) {
+			logger.info("[Daemon] Startup maintenance complete", {
+				decayed: result.decay.decayed,
+				archived: result.expiredArchived + result.lowScoreArchived + result.decay.archived,
+				coldArchivedOffloaded: result.coldArchivedOffloaded
+			});
+		}
+	});
+
+	return () => fileWatcher?.stop();
+}
+
+/**
+ * Start the combined dashboard + MCP server.
+ *
+ * Resolves the shared runtime, builds the dashboard Express app with the MCP
+ * `/mcp` pre-route, and binds the listener. Returns a handle for lifecycle
+ * control.
+ */
+export async function startCombinedServer(options: StartCombinedServerOptions = {}): Promise<CombinedServerHandle> {
+	const host = options.host ?? MCP_HTTP_DEFAULT_HOST;
+	const port = options.port ?? (Number(process.env.PORT) || DAEMON_DEFAULT_PORT);
+	const enableEngines = options.enableEngines ?? true;
+
+	const { db, vectors, embeddingWorker, runtimeCapabilities } = await resolveRuntime();
+
+	// Optional operator-triggered space reclamation (TASK-047), gated off by
+	// default; mirrors the MCP server startup.
+	const startupVacuum = runStartupVacuum(db, VACUUM_ON_STARTUP);
+	if (startupVacuum) {
+		logger.info("[Daemon] VACUUM_ON_STARTUP ran", {
+			changed: startupVacuum.changed,
+			skipped: startupVacuum.skipped,
+			reason: startupVacuum.reason
+		});
+	}
+
+	const stopEngines = enableEngines ? registerEngines(db, runtimeCapabilities) : () => {};
+
+	logger.info("[Daemon] startup", {
+		pid: process.pid,
+		version: CAPABILITIES.serverInfo.version,
+		db: db.getDbPath(),
+		profile: runtimeCapabilities.profile
+	});
+
+	// --- Build the MCP handler + Express app ---
+	const mcpHandler = createMcpHandler(createServerFactory(db, vectors), {
+		onerror: (error) => logger.warn("[Daemon] MCP handler error", { error: error.message })
+	});
+	const mcpMount = createMcpPreRoute(mcpHandler, host);
+	const { app } = createExpressApp({ db, vectors, preRoutes: [mcpMount] });
+
+	// --- Bind ---
+	const server = http.createServer(app);
+	await new Promise<void>((resolve, reject) => {
+		const onError = (error: Error) => {
+			server.off("listening", onListening);
+			reject(error);
+		};
+		const onListening = () => {
+			server.off("error", onError);
+			resolve();
+		};
+		server.once("error", onError);
+		server.once("listening", onListening);
+		server.listen(port, host);
+	});
+
+	const boundPort = (server.address() as AddressInfo).port;
+	logger.info("[Daemon] listening", { host, port: boundPort, mcp: MCP_HTTP_DEFAULT_PATH });
+
+	// --- Warm up the runtime engines (full profile only), mirrors server.ts ---
+	if (enableEngines && runtimeCapabilities.profile === "full") {
+		void runtimeCapabilities.ensure("maintenance");
+
+		if (process.env.CODEBASE_AUTO_INDEX !== "false") {
+			const repoName = path.basename(process.cwd());
+			const repoPath = process.cwd();
+			registerRepo(repoName, repoPath);
+			void runtimeCapabilities.ensure("indexing").then((ready) => {
+				if (!ready) return;
+				void autoIndexIfStale(repoName, repoPath, db, getCodebaseParserPool())
+					.then((result) => {
+						logger.info("[Daemon] Auto-index check complete", {
+							repo: repoName,
+							status: result.status,
+							reason: result.reason
+						});
+						void runtimeCapabilities.ensure("watcher");
+					})
+					.catch((err) => {
+						runtimeCapabilities.markDegraded("indexing", String(err));
+						logger.warn("[Daemon] Auto-index check failed", { error: String(err) });
+					});
+			});
+		}
+	}
+
+	const close = async (): Promise<void> => {
+		try {
+			embeddingWorker.stop();
+		} catch {
+			/* best effort */
+		}
+		stopEngines();
+		await mcpHandler.close();
+		const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+		// Terminate lingering keep-alive / SSE connections so close() resolves.
+		server.closeAllConnections();
+		await closed;
+		reuseTelemetry.flush(db);
+		// The shared dashboard context store is process-owned; close it so the
+		// WAL is checkpointed on a clean daemon shutdown.
+		try {
+			db.close();
+		} catch {
+			/* best effort */
+		}
+	};
+
+	return { server, port: boundPort, url: `http://${host}:${boundPort}`, close };
+}
+
+/**
+ * Entry point for the forked `--daemon-worker` process. Boots the combined
+ * server, installs graceful-shutdown handlers, and stays alive until
+ * SIGTERM/SIGINT.
+ */
+export async function runDaemonWorker(): Promise<void> {
+	// The worker is HTTP-served (not stdio), so stdout/stderr are free for the
+	// daemon log file. The listener is loopback-only, so no bearer token is
+	// required.
+	process.env.MCP_SERVER = "false";
+	process.env.MCP_HTTP_ALLOW_INSECURE = "true";
+
+	// Crash containment (mirrors server.ts): a startup failure must exit
+	// non-zero; a post-start failure logs and continues.
+	let serverStarted = false;
+	process.on("unhandledRejection", (reason: unknown) => {
+		logger.error("[Daemon] Unhandled promise rejection", {
+			pid: process.pid,
+			error: reason instanceof Error ? `${reason.message}\n${reason.stack ?? ""}` : String(reason)
+		});
+		bugCapture.capture({
+			source: "unhandled_rejection",
+			message: reason instanceof Error ? reason.message : String(reason),
+			stack: reason instanceof Error ? (reason.stack ?? null) : null,
+			context: { pid: process.pid, startup: !serverStarted }
+		});
+		if (!serverStarted) process.exit(1);
+	});
+	process.on("uncaughtException", (err: Error) => {
+		logger.error("[Daemon] Uncaught exception", { pid: process.pid, error: err.message, stack: err.stack ?? "" });
+		bugCapture.capture({
+			source: "uncaught",
+			message: err.message,
+			stack: err.stack ?? null,
+			context: { pid: process.pid, startup: !serverStarted }
+		});
+		if (!serverStarted) process.exit(1);
+	});
+
+	let handle: CombinedServerHandle;
+	try {
+		handle = await startCombinedServer();
+	} catch (error) {
+		logger.error("[Daemon] Failed to start combined server — exiting", { error: String(error) });
+		process.exit(1);
+	}
+	serverStarted = true;
+
+	// Ready signal → daemon.log (the parent already printed "Daemon started").
+	process.stdout.write(`${new Date().toISOString()} DAEMON_READY ${handle.url} (pid ${process.pid})\n`);
+
+	let shuttingDown = false;
+	const shutdown = async (signal: string): Promise<void> => {
+		if (shuttingDown) return;
+		shuttingDown = true;
+		logger.info("[Daemon] shutdown", { signal, pid: process.pid });
+		try {
+			await handle.close();
+		} catch (error) {
+			logger.error("[Daemon] shutdown error", { error: String(error) });
+		}
+		process.exit(0);
+	};
+	process.on("SIGINT", () => void shutdown("SIGINT"));
+	process.on("SIGTERM", () => void shutdown("SIGTERM"));
+}

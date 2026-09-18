@@ -24,6 +24,26 @@ import { FileWatcher, registerRepo } from "./codebase-index/services/file-watche
 import fs from "fs";
 import path from "path";
 
+// --- CLI Daemon Mode (FEAT-DAEMON-001) ---
+// `daemon` forks the combined dashboard + MCP worker as a detached background
+// process and exits; `daemon stop`/`daemon status` manage the recorded PID.
+// `--daemon-worker` is the forked child entry point (never reached via the
+// bin's `daemon` route directly — the worker re-execs the bin with this flag).
+// Both branches run BEFORE the doctor/--index checks below so the daemon
+// subcommands can never be shadowed by another CLI mode. The worker branch is
+// checked FIRST so an OS service unit may spell the command either
+// `<bin> --daemon-worker` or `<bin> daemon --daemon-worker`.
+if (process.argv.includes("--daemon-worker")) {
+	const { runDaemonWorker } = await import("./cli/combined-server");
+	await runDaemonWorker();
+	// runDaemonWorker never resolves — unreachable
+}
+if (process.argv.includes("daemon")) {
+	const { runDaemonCli } = await import("./cli/daemon");
+	// runDaemonCli always calls process.exit — unreachable
+	runDaemonCli(process.argv.slice(process.argv.indexOf("daemon") + 1));
+}
+
 // --- CLI Doctor Mode ---
 if (process.argv.includes("doctor")) {
 	process.stderr.write("\n🏥 MCP Local Memory - System Diagnosis\n\n");
