@@ -63,6 +63,15 @@ export function createMcpServer(
 			});
 	});
 
+	// The log sink is registered in the process-global sink Set (see
+	// utils/logger.ts). Under HTTP, createServerFactory runs per session (legacy)
+	// and per request (modern), so WITHOUT an unsubscribe every served unit would
+	// permanently leak a sink — linear memory growth plus O(N) log fan-out per
+	// log line. The SDK chains any pre-existing server.onclose (modern per-request
+	// path; legacy via Protocol.connect → transport close), and the factory only
+	// sets oninitialized, so wiring the disposer here is safe and leak-free.
+	server.server.onclose = () => _removeLogSink();
+
 	// ── Wire completion handler ────────────────────────────────────────
 	// Prompt arguments are documented as text (no zod argsSchema due to
 	// v3/v4 incompatibility), so the SDK cannot use completable() for
