@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.0] — 2026-09-20
+
+### Added
+
+- **MCP `roots` capability + per-session scoping (`TASK-417` epic / `TASK-418`):** the server now advertises the `roots` capability and derives each session's `repo`/`owner`/`projectPath` from the client's declared filesystem roots (`applySessionRoots`), re-fetching on `notifications/roots/list_changed`. A multi-root session yields no inference and keeps prior values; a rootless session keeps CWD-derived defaults.
+- **Dashboard owner badge (`TASK-422`):** memory and task views render an informational owner badge (with an explicit "owner unknown (repo-only view)" placeholder for the `owner=""` namespace) so the repo-only merged view is no longer ambiguous.
+- **SQLite WAL write-contention benchmark (`TASK-424`):** a load test drives N concurrent `SQLiteStore` instances against one file-backed DB (N=10 default, N=50 opt-in) and asserts `SQLITE_BUSY`/lock waits stay at zero, with a benchmark write-up.
+- **Contention regression guard + cross-domain atomicity tests (`TASK-429`):** the concurrent-workload benchmark now fails on a `busy`/`timeout`/`lockWait` regression, and new tests lock in cross-domain atomicity (entity purge + queue cleanup, task→memory archival, maintenance sweep).
+
+### Changed
+
+- **Tool scope resolution hardened (`TASK-419`, `TASK-420`):** `normalizeToolArguments` now prefers roots-derived owner/repo over the CWD-derived session default, and a **write** whose scope cannot be determined (no explicit owner/repo, no roots) **fails loud** instead of silently writing to the daemon working directory. The guard is scoped to the **HTTP transport only** — stdio (single client, CWD = project) keeps the historical permissive fallback. ID-addressed (UUID) and interactive writes are exempt.
+
+### Fixed
+
+- **CRITICAL — HTTP transport served legacy sessions statelessly (`DEBT-423`, `FIX-423`):** the Streamable HTTP transport used the SDK's default `legacy: "stateless"` fallback, building a throwaway server + session per request, so the per-session `oninitialized` hook (which applies MCP roots) never persisted and multi-session isolation was broken — worst on the combined daemon (the primary deployment). Fixed with the SDK dual-handler pattern: modern traffic via a strict `legacy: "reject"` handler, and 2025-era traffic served by a **per-session stateful** transport keyed by `Mcp-Session-Id`, plus buffering of standalone server→client messages (e.g. `roots/list`) until the client's SSE stream opens. The shared `createDualHandler()` is reused by both `startHttpTransport` and the combined daemon.
+- **Daemon single-instance race (`TASK-425`):** two `daemon start` invocations could both pass the PID-file liveness check and race to bind the port. Added an atomic `daemon.lock` (`O_CREAT|O_EXCL`) acquired before the fork (recording the worker pid, reclaiming stale locks), an actionable `EADDRINUSE` message with a single clean exit, and lock release on `stop`/shutdown.
+- **Task not-found errors now name the searched scope (`TASK-426`):** task codes are unique per `(owner, repo)`, so a bare "Task not found: X" was misleading when the dashboard resolves with `owner=""` while an MCP session infers an owner. Every task not-found site now appends `(owner="…", repo="…")`.
+- **Startup auto-index guarded against non-project roots:** the stdio server and the daemon no longer auto-index a non-project CWD (commonly `$HOME`), which previously enumerated the whole tree synchronously, blocked the event loop, and — because the walk threw on permission-denied directories — never recorded `last_indexed_at`, so the watcher re-triggered it forever. The decision now routes through `evaluateAutoIndexTarget`, and file discovery skips permission-denied directories.
+- **Per-server log sink leak (review follow-up):** `createMcpServer` registered a log sink into the process-global sink set and never unregistered it; under HTTP (per-session/per-request server construction) this leaked a sink per served unit, causing linear memory growth and O(N) log fan-out on every log line. The unsubscribe is now wired to the server's `onclose`.
+- **Legacy HTTP sessions never expired (review follow-up):** `legacySessions` entries were removed only on client `DELETE` (which the MCP client SDK's normal `close()` does not send), so abandoned sessions pinned a server + transport indefinitely. Added an idle TTL (`MCP_HTTP_SESSION_IDLE_TTL_MS`, default 30 minutes) with a lazy + periodic sweep.
+- **Unbounded standalone-message buffer (review follow-up):** the legacy SSE buffer had no cap and its "SSE open" flag never reset. The buffer is now bounded (drops oldest) and the flag resets when the SSE stream closes, re-arming buffering for a later `GET`.
+
+### Docs
+
+- **ADR-011 — reject per-domain `memory.db` split (`TASK-428`):** records the evaluation of splitting the hot store per domain and the decision to keep the single-file store (WAL + busy-timeout + bounded retry already hold contention at zero; a split would break cross-domain atomicity). TASK-429 was scoped to verification/hardening.
+
+### Tests
+
+- New suites: `session.roots`, `transport.factory`, `transport.dual-handler`, `transport.http.multisession.integration`, `log-sink-lifecycle`, `transport.standalone-buffer`, `task-not-found-scope`, `atomicity.cross-domain`, `sqlite.wal-contention.perf`; extended `normalize-args`, `bug-capture`, `daemon`, `daemon-combined.integration`, and dashboard component tests.
+
 ## [0.47.3] — 2026-09-20
 
 ### Fixed
