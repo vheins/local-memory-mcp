@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.3] — 2026-09-20
+
+### Fixed
+
+- **Daemon — uncaught `Unable to update lock within the stale threshold` crash:** `WriteLock.acquire()` passed no `onCompromised` handler to `proper-lockfile`, so its default `(err) => { throw err }` turned a compromised lock into an uncaught exception that killed the process (`proper-lockfile/lib/lockfile.js:136`). A held lock is compromised when its heartbeat cannot refresh the lockfile mtime in time — e.g. a long synchronous `better-sqlite3` statement inside `withExclusiveLock` blocks the event loop past the 15s heartbeat / 30s stale window, another process steals the stale lock, and our next `stat` sees a foreign mtime. `acquire()` now records the loss instead of throwing, and `release()` skips unlocking a lock it no longer owns.
+- **Daemon — startup maintenance sweep froze the event loop (~41s) and starved sibling writers:** two maintenance steps were single, unbounded, synchronous correlated `DELETE`s — `deleteStaleObservations` (observations, 369k rows) and `deleteOrphanEntities` (entities, 299k rows). Their eligible sets are a tiny fraction of the table, so each forced a full-table correlated scan and blocked the Node event loop far past the exclusive lock's heartbeat, letting the lock go stale (above) and starving the KG-Archivist / EmbeddingWorker writers into `SqliteError: database is locked`. Both now delete in bounded `rowid` windows via a new `BaseEntity.deleteWindowed()` that awaits `setImmediate()` between windows; their callers (`pruneObservations`, `pruneRelations`) await them.
+- **Daemon — double-booted the store and workers:** `runDaemonWorker()` booted the combined HTTP + dashboard server and then returned, so `server.ts`'s `await runDaemonWorker()` fell through into the normal `[Server]` boot path and created a SECOND `SQLiteStore` + `EmbeddingWorker` + maintenance engine in the same pid (`[Daemon] startup` and `[Server] startup` under one pid, `[EmbeddingWorker] started` twice per boot, the maintenance sweep twice ~40s apart). `runDaemonWorker()` now parks on a never-settling promise; shutdown remains driven by the SIGINT/SIGTERM handlers.
+
 ## [0.47.2] — 2026-09-18
 
 ### Fixed
