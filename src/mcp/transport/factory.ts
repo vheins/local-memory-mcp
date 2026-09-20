@@ -5,6 +5,7 @@ import type { SessionContext } from "../session";
 import type { SQLiteStore } from "../storage/sqlite";
 import type { VectorStore } from "../types";
 import { logger } from "../utils/logger";
+import { bugCapture } from "../utils/bug-capture";
 
 /**
  * Build an SDK {@link McpServerFactory} that constructs one fully-wired
@@ -28,6 +29,18 @@ export function createServerFactory(store: SQLiteStore, vectors: VectorStore): M
 		// Wire oninitialized to capture client info from the initialize handshake
 		// (mirrors the historical stdio wiring in server.ts).
 		server.server.oninitialized = () => {
+			// Register the process-level fallback scope provider (TASK-421) so
+			// process-level captures (uncaught exceptions, unhandled rejections)
+			// at least attribute to the most-recently-initialized session. This is
+			// BEST-EFFORT for multi-session (HTTP) serving: one process serves many
+			// sessions, so a single global provider can only reflect the latest —
+			// call sites that know their scope pass owner/repo/sessionId explicitly.
+			bugCapture.setScopeProvider(() => ({
+				owner: ctx.owner,
+				repo: ctx.repo,
+				sessionId: ctx.sessionId
+			}));
+
 			try {
 				const clientVer = server.server.getClientVersion();
 				if (clientVer) {

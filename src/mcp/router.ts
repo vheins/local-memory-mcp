@@ -179,6 +179,7 @@ export function createRouter(
 		}
 
 		const repo = (args?.repo as string) || ((args?.scope as Record<string, unknown>)?.repo as string) || "unknown";
+		const owner = (args?.owner as string) || ((args?.scope as Record<string, unknown>)?.owner as string) || undefined;
 		const isWrite = WRITE_TOOLS.has(toolName);
 
 		logger.info(`[Tool] ${toolName}`, { repo, write: isWrite });
@@ -207,7 +208,14 @@ export function createRouter(
 			// native SDK transport produces (tools/index.ts) — OPT-CODE-01. This
 			// eliminates the legacy "log + rethrow raw exception" divergence so
 			// both transports surface identical shapes for the same failure class.
-			logger.error(`[Tool] ${toolName} failed`, { repo, error: String(err) });
+			// Attribution scope (TASK-421): owner/repo/sessionId are included so
+			// bugCapture.logSink persists them into the bug_reports context.
+			logger.error(`[Tool] ${toolName} failed`, {
+				repo,
+				owner,
+				sessionId: getSessionContext?.()?.sessionId,
+				error: String(err)
+			});
 			const errorResponse = toErrorResponse(err);
 			logToolAction(db, toolName, args, errorResponse);
 			return errorResponse;

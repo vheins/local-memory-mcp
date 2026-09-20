@@ -291,9 +291,16 @@ export function registerAllTools(
 					// must still show up in per-tool latency stats.
 					const errDurationMs = performance.now() - toolStartMs;
 					metrics.recordTool(toolName, errDurationMs, "error");
+					// Attribution scope (TASK-421): owner/repo/sessionId are added to
+					// the error log data so bugCapture.logSink persists them into the
+					// bug_reports.context JSON. Without these, captured tool failures
+					// cannot be tied back to a client/project/session.
 					logger.error(`[Tool] ${toolName} failed`, {
 						error: String(err),
-						durationMs: Math.round(errDurationMs * 100) / 100
+						durationMs: Math.round(errDurationMs * 100) / 100,
+						owner: normalizedArgs.owner,
+						repo: normalizedArgs.repo,
+						sessionId: session.sessionId
 					});
 					const errorResponse = toErrorResponse(err);
 					logToolAction(store, toolName, normalizedArgs, errorResponse);
