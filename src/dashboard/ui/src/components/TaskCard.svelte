@@ -44,6 +44,11 @@
 		{#if task.phase}
 			<span class="phase-chip">{task.phase}</span>
 		{/if}
+		{#if task.owner}
+			<span class="owner-badge" title="Owner: {task.owner}">{task.owner}</span>
+		{:else}
+			<span class="owner-badge owner-unknown" title="owner unknown (repo-only view)">unknown</span>
+		{/if}
 	</div>
 
 	<!-- Title — always visible, max 2 lines -->
@@ -225,6 +230,25 @@
 		background: rgba(129, 140, 248, 0.15);
 		color: #a5b4fc;
 		border-color: rgba(129, 140, 248, 0.25);
+	}
+
+	.owner-badge {
+		font-size: 0.58rem;
+		padding: 2px 6px;
+		border-radius: 9999px;
+		font-weight: 600;
+		background: rgba(148, 163, 184, 0.12);
+		color: var(--color-text-muted);
+		border: 1px solid rgba(148, 163, 184, 0.2);
+		font-family: "JetBrains Mono", monospace;
+		letter-spacing: 0.02em;
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+
+	.owner-badge.owner-unknown {
+		opacity: 0.6;
+		font-style: italic;
 	}
 
 	/* ── Hierarchy ── */

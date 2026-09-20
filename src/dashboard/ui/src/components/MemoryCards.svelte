@@ -59,7 +59,18 @@
 					</div>
 					<button class="memory-card-main" onclick={() => onMemoryClick(mem)}>
 						<strong>{mem.title || "Untitled memory"}</strong>
-						<span>{formatDate(mem.updated_at)} · {mem.hit_count ?? 0} hits</span>
+						<span>
+							{#if mem.owner || mem.scope?.owner}
+								<span class="owner-badge" title="Owner: {mem.owner || mem.scope?.owner}">
+									{mem.owner || mem.scope?.owner}
+								</span>
+								·
+							{:else}
+								<span class="owner-badge owner-unknown" title="owner unknown (repo-only view)"> unknown </span>
+								·
+							{/if}
+							{formatDate(mem.updated_at)} · {mem.hit_count ?? 0} hits
+						</span>
 					</button>
 					{#if mem.tags?.length}
 						<div class="memory-card-tags">
@@ -146,6 +157,25 @@
 			background: var(--color-surface-hover);
 			font-size: 0.6875rem;
 			color: var(--color-text-muted);
+		}
+
+		.owner-badge {
+			font-size: 0.6rem;
+			font-weight: 600;
+			padding: 1px 6px;
+			border-radius: 9999px;
+			background: rgba(148, 163, 184, 0.12);
+			color: var(--color-text-muted);
+			border: 1px solid rgba(148, 163, 184, 0.2);
+			font-family: "JetBrains Mono", monospace;
+			white-space: nowrap;
+			display: inline-flex;
+			align-items: center;
+		}
+
+		.owner-badge.owner-unknown {
+			opacity: 0.6;
+			font-style: italic;
 		}
 	}
 </style>

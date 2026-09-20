@@ -12,6 +12,7 @@ export interface TaskCoordination {
 
 export interface Task {
 	id: string;
+	owner?: string;
 	repo: string;
 	task_code: string;
 	phase: string;

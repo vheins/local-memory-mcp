@@ -9,7 +9,7 @@
 
 {#if $handler.memory}
 	<div class="meta-grid" style="margin-bottom:16px;">
-		{#each [{ label: "Importance", val: $handler.memory?.importance || 0 }, { label: "Hit Count", val: $handler.memory?.hit_count ?? 0 }, { label: "Created", val: formatDate($handler.memory?.created_at) }, { label: "Updated", val: formatDate($handler.memory?.updated_at) }] as m (m.label)}
+		{#each [{ label: "Owner", val: $handler.memory?.owner || $handler.memory?.scope?.owner || "unknown (repo-only view)" }, { label: "Importance", val: $handler.memory?.importance || 0 }, { label: "Hit Count", val: $handler.memory?.hit_count ?? 0 }, { label: "Created", val: formatDate($handler.memory?.created_at) }, { label: "Updated", val: formatDate($handler.memory?.updated_at) }] as m (m.label)}
 			<div class="meta-cell">
 				<div class="meta-label">{m.label}</div>
 				<div class="meta-value">{m.val}</div>

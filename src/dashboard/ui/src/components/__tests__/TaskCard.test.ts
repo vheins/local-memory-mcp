@@ -158,4 +158,65 @@ describe("TaskCard", () => {
 
 		unmount(component);
 	});
+
+	it("renders owner badge when owner is present", () => {
+		const target = document.createElement("div");
+		const task = createMockTask({ owner: "alice" });
+
+		const component = mount(TaskCard, {
+			target,
+			props: { task }
+		});
+
+		const ownerBadge = target.querySelector(".owner-badge");
+		expect(ownerBadge).not.toBeNull();
+		expect(ownerBadge?.textContent?.trim()).toBe("alice");
+		expect(ownerBadge?.getAttribute("title")).toBe("Owner: alice");
+		expect(ownerBadge?.classList.contains("owner-unknown")).toBe(false);
+
+		unmount(component);
+	});
+
+	it("renders unknown owner badge when owner is empty", () => {
+		const target = document.createElement("div");
+		const task = createMockTask({ owner: "" });
+
+		const component = mount(TaskCard, {
+			target,
+			props: { task }
+		});
+
+		const ownerBadge = target.querySelector(".owner-badge");
+		expect(ownerBadge).not.toBeNull();
+		expect(ownerBadge?.textContent?.trim()).toBe("unknown");
+		expect(ownerBadge?.getAttribute("title")).toBe("owner unknown (repo-only view)");
+		expect(ownerBadge?.classList.contains("owner-unknown")).toBe(true);
+
+		unmount(component);
+	});
+
+	it("renders distinct owner badges for two different tasks", () => {
+		const target1 = document.createElement("div");
+		const target2 = document.createElement("div");
+		const task1 = createMockTask({ id: "t1", owner: "alice", task_code: "TASK-1" });
+		const task2 = createMockTask({ id: "t2", owner: "bob", task_code: "TASK-2" });
+
+		const component1 = mount(TaskCard, {
+			target: target1,
+			props: { task: task1 }
+		});
+		const component2 = mount(TaskCard, {
+			target: target2,
+			props: { task: task2 }
+		});
+
+		const badge1 = target1.querySelector(".owner-badge");
+		const badge2 = target2.querySelector(".owner-badge");
+
+		expect(badge1?.textContent?.trim()).toBe("alice");
+		expect(badge2?.textContent?.trim()).toBe("bob");
+
+		unmount(component1);
+		unmount(component2);
+	});
 });
