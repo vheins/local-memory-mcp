@@ -36,6 +36,7 @@ import {
 	MCP_HTTP_DEFAULT_PATH
 } from "../transport/http";
 import { CAPABILITIES } from "../capabilities";
+import { resolveDaemonPaths, removeLock } from "./daemon";
 import { logger } from "../utils/logger";
 import { bugCapture } from "../utils/bug-capture";
 import { reuseTelemetry } from "../utils/reuse-telemetry";
@@ -400,8 +401,24 @@ export async function runDaemonWorker(options: RunDaemonWorkerOptions = {}): Pro
 		const boot = options.startServer ?? startCombinedServer;
 		handle = await boot(options);
 	} catch (error) {
+		// EADDRINUSE (TASK-425): another daemon/process already owns the port.
+		// Emit an ACTIONABLE message and exit ONCE — do NOT crash-loop.
+		if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
+			const port = options.port ?? (Number(process.env.PORT) || DAEMON_DEFAULT_PORT);
+			const message =
+				`Daemon port ${port} is already in use — another daemon or process is listening. ` +
+				`Run "daemon status" or stop the conflicting process.`;
+			logger.error("[Daemon] port in use", { port, pid: process.pid });
+			process.stderr.write(`${message}\n`);
+			// Release the single-instance lock so the next `daemon start` is not
+			// blocked by a lock this (failed) worker no longer legitimately holds.
+			removeLock(resolveDaemonPaths().lockFile);
+			process.exit(1);
+			return;
+		}
 		logger.error("[Daemon] Failed to start combined server — exiting", { error: String(error) });
 		process.exit(1);
+		return;
 	}
 	serverStarted = true;
 
@@ -418,6 +435,9 @@ export async function runDaemonWorker(options: RunDaemonWorkerOptions = {}): Pro
 		} catch (error) {
 			logger.error("[Daemon] shutdown error", { error: String(error) });
 		}
+		// Release the single-instance lock (TASK-425) so a subsequent
+		// `daemon start` can acquire it immediately.
+		removeLock(resolveDaemonPaths().lockFile);
 		process.exit(0);
 	};
 	if (options.installProcessHandlers !== false) {

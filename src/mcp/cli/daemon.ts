@@ -26,6 +26,12 @@
  * {@link resolveDaemonDir}), i.e. `~/.config/local-memory-mcp/daemon.pid` and
  * `~/.config/local-memory-mcp/daemon.log` on Linux. `MEMORY_DB_PATH` (used by
  * tests) and `LOCAL_MEMORY_DAEMON_DIR` relocate both.
+ *
+ * SINGLE-INSTANCE GUARD (TASK-425): beyond the PID file, a `daemon.lock` file
+ * is acquired ATOMICALLY (`O_CREAT | O_EXCL`) BEFORE the worker is forked. This
+ * closes the check-then-bind race in which two `daemon start` invocations both
+ * passed the PID liveness check and then raced to bind the port, leaving one to
+ * crash-loop on `EADDRINUSE`. Stale locks (dead owner) are reclaimed.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -41,6 +47,11 @@ export interface DaemonPaths {
 	pidFile: string;
 	/** Worker stdout+stderr log file path. */
 	logFile: string;
+	/**
+	 * Single-instance lock file path (TASK-425). Held for the daemon's whole
+	 * lifetime; acquired atomically before the worker is forked.
+	 */
+	lockFile: string;
 }
 
 /** Outcome of {@link startDaemon}. */
@@ -90,6 +101,94 @@ function defaultIo(): DaemonIo {
 }
 
 /**
+ * Outcome of a lock acquisition attempt (TASK-425).
+ *
+ * `acquired` is `true` when this call created the lock file (we now own it).
+ * When the lock was already held by a LIVE process, `acquired` is `false` and
+ * `pid` is the recorded owner pid (or `null` when the lock file had no pid).
+ */
+export interface AcquireLockResult {
+	acquired: boolean;
+	pid: number | null;
+}
+
+/**
+ * Read the pid recorded in a lock file, or `null` when it is absent/empty/not
+ * a positive integer. The lock file body is the owning pid (same format as the
+ * PID file), so {@link readDaemonPid} is reused.
+ */
+export function readLockPid(lockFile: string): number | null {
+	return readDaemonPid(lockFile);
+}
+
+/**
+ * Try to acquire the single-instance lock ATOMICALLY.
+ *
+ * Uses `fs.openSync(lockFile, "wx")` (`O_CREAT | O_EXCL`): the exclusive
+ * create either succeeds (we own the lock) or fails with `EEXIST` (another
+ * instance holds it). This is a single atomic syscall, so it closes the
+ * check-then-bind race that the PID-file + `process.kill(pid, 0)` scheme left
+ * open (two `daemon start`s could both pass the liveness check and then race to
+ * bind the port → one crash-loops on `EADDRINUSE`).
+ *
+ * On `EEXIST` the recorded owner pid is read and its liveness checked via
+ * {@link DaemonIo.isAlive}:
+ *   - LIVE  → return `{acquired:false, pid}` (caller reports "already running").
+ *   - STALE → remove the lock file and retry the exclusive create exactly once.
+ *
+ * The owning pid is written into the lock file so a later stale-lock recovery
+ * (and `stop`) can identify the holder.
+ */
+export function acquireLock(
+	lockFile: string,
+	io: Pick<DaemonIo, "isAlive">,
+	pid: number = process.pid
+): AcquireLockResult {
+	fs.mkdirSync(path.dirname(lockFile), { recursive: true });
+
+	const attempt = (): AcquireLockResult | null => {
+		try {
+			const fd = fs.openSync(lockFile, "wx");
+			try {
+				fs.writeSync(fd, `${pid}\n`);
+			} finally {
+				fs.closeSync(fd);
+			}
+			return { acquired: true, pid };
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "EEXIST") return null;
+			throw error;
+		}
+	};
+
+	const first = attempt();
+	if (first !== null) return first;
+
+	// Lock file already exists — inspect the recorded owner.
+	const owner = readLockPid(lockFile);
+	if (owner !== null && io.isAlive(owner)) {
+		return { acquired: false, pid: owner };
+	}
+
+	// Stale lock (dead owner or unreadable/empty body): remove and retry once.
+	removeLock(lockFile);
+	const second = attempt();
+	if (second !== null) return second;
+	// Lost the retry race — another process re-acquired between our remove and
+	// create. Report its pid when readable.
+	return { acquired: false, pid: readLockPid(lockFile) };
+}
+
+/** Best-effort removal of the single-instance lock file (TASK-425). */
+export function removeLock(lockFile: string): void {
+	try {
+		fs.unlinkSync(lockFile);
+	} catch {
+		/* already gone — best effort */
+	}
+}
+
+/**
  * Resolve the daemon config directory.
  *
  * Mirrors `SQLiteStore`'s DB-path resolution so the PID/log files always sit
@@ -111,13 +210,14 @@ export function resolveDaemonDir(env: NodeJS.ProcessEnv = process.env): string {
 	return path.join(os.homedir(), ".config", "local-memory-mcp");
 }
 
-/** Resolve the PID + log file paths for the daemon. */
+/** Resolve the PID + log + lock file paths for the daemon. */
 export function resolveDaemonPaths(env: NodeJS.ProcessEnv = process.env): DaemonPaths {
 	const dir = resolveDaemonDir(env);
 	return {
 		dir,
 		pidFile: path.join(dir, "daemon.pid"),
-		logFile: path.join(dir, "daemon.log")
+		logFile: path.join(dir, "daemon.log"),
+		lockFile: path.join(dir, "daemon.lock")
 	};
 }
 
@@ -165,56 +265,92 @@ export function isProcessAlive(pid: number): boolean {
 	}
 }
 
+/** Overwrite the pid recorded in the lock file (best effort). */
+export function writeLockPid(lockFile: string, pid: number): void {
+	try {
+		fs.writeFileSync(lockFile, `${pid}\n`, "utf8");
+	} catch {
+		/* best effort — liveness still tracked via the PID file */
+	}
+}
+
 /**
  * Fork the detached worker, write its PID, and report.
  *
- * When a live daemon is already recorded in the PID file, the fork is skipped
- * and the existing PID is reported (idempotent start). The worker's stdout and
- * stderr are redirected to the daemon log file; the inherited log descriptor
- * is closed in the parent immediately after spawn.
+ * Single-instance guard (TASK-425): the PID file is cleaned of a stale entry,
+ * a live PID is reported idempotently, and then the single-instance lock is
+ * acquired ATOMICALLY (see {@link acquireLock}) BEFORE the fork — closing the
+ * check-then-bind race that allowed a second daemon to start and crash-loop on
+ * `EADDRINUSE`. When the lock is held by a live process, the existing PID is
+ * reported (no fork). The worker's stdout and stderr are redirected to the
+ * daemon log file; the inherited log descriptor is closed in the parent
+ * immediately after spawn.
  */
 export function startDaemon(options: { paths?: DaemonPaths; io?: Partial<DaemonIo> } = {}): StartDaemonResult {
 	const paths = options.paths ?? resolveDaemonPaths();
 	const io = { ...defaultIo(), ...options.io };
 
+	// 1. Clean a stale PID file (recorded process is gone) before doing anything.
 	const existing = readDaemonPid(paths.pidFile);
 	if (existing !== null && io.isAlive(existing)) {
 		io.log(`Daemon already running (pid ${existing})`);
 		return { started: false, pid: existing };
 	}
+	if (existing !== null) removeDaemonPid(paths.pidFile);
 
+	// 2. Acquire the single-instance lock atomically BEFORE binding/forking.
+	const lock = acquireLock(paths.lockFile, io);
+	if (!lock.acquired) {
+		const owner = lock.pid ?? readDaemonPid(paths.pidFile) ?? 0;
+		io.log(`Daemon already running (pid ${owner})`);
+		return { started: false, pid: owner };
+	}
+
+	// 3. Fork. On any spawn failure the lock must be released so a retry works.
 	fs.mkdirSync(paths.dir, { recursive: true });
-	const logFd = fs.openSync(paths.logFile, "a");
-
 	let child: ChildProcess;
 	try {
-		child = io.spawnFn(io.execPath, [io.workerArg, "--daemon-worker"], {
-			detached: true,
-			shell: false,
-			windowsHide: true,
-			stdio: ["ignore", logFd, logFd],
-			env: { ...process.env },
-			cwd: process.cwd()
-		});
-	} finally {
-		// The child holds its own duplicate of the descriptor; the parent's copy
-		// must be closed or it would keep the log file open for the process'
-		// (short) lifetime.
-		fs.closeSync(logFd);
+		const logFd = fs.openSync(paths.logFile, "a");
+		try {
+			child = io.spawnFn(io.execPath, [io.workerArg, "--daemon-worker"], {
+				detached: true,
+				shell: false,
+				windowsHide: true,
+				stdio: ["ignore", logFd, logFd],
+				env: { ...process.env },
+				cwd: process.cwd()
+			});
+		} finally {
+			// The child holds its own duplicate of the descriptor; the parent's
+			// copy must be closed or it would keep the log file open for the
+			// process' (short) lifetime.
+			fs.closeSync(logFd);
+		}
+	} catch (error) {
+		removeLock(paths.lockFile);
+		throw error;
 	}
 
 	const pid = child.pid ?? 0;
-	if (pid > 0) writeDaemonPid(paths.pidFile, pid);
+	if (pid > 0) {
+		writeDaemonPid(paths.pidFile, pid);
+		// The parent exits right after the fork, so the lock must record the
+		// WORKER's pid — otherwise a later start would see the dead parent as a
+		// stale holder while the worker is still serving.
+		writeLockPid(paths.lockFile, pid);
+	}
 	child.unref();
 	io.log(`Daemon started (pid ${pid})`);
 	return { started: true, pid };
 }
 
 /**
- * Stop the daemon: SIGTERM the recorded PID and remove the PID file.
+ * Stop the daemon: SIGTERM the recorded PID, remove the PID file, and release
+ * the single-instance lock.
  *
  * A missing PID file, or a stale PID whose process is already gone, is
- * reported as "Daemon not running" (and the stale file is cleaned up).
+ * reported as "Daemon not running" (and the stale PID/lock files are cleaned
+ * up).
  */
 export function stopDaemon(options: { paths?: DaemonPaths; io?: Partial<DaemonIo> } = {}): StopDaemonResult {
 	const paths = options.paths ?? resolveDaemonPaths();
@@ -222,6 +358,7 @@ export function stopDaemon(options: { paths?: DaemonPaths; io?: Partial<DaemonIo
 
 	const pid = readDaemonPid(paths.pidFile);
 	if (pid === null) {
+		removeLock(paths.lockFile);
 		io.log("Daemon not running");
 		return { stopped: false };
 	}
@@ -234,12 +371,14 @@ export function stopDaemon(options: { paths?: DaemonPaths; io?: Partial<DaemonIo
 			// signal — treat as stopped.
 		}
 		removeDaemonPid(paths.pidFile);
+		removeLock(paths.lockFile);
 		io.log("Daemon stopped");
 		return { stopped: true, pid };
 	}
 
 	// Stale PID file: the recorded process no longer exists.
 	removeDaemonPid(paths.pidFile);
+	removeLock(paths.lockFile);
 	io.log("Daemon not running");
 	return { stopped: false, pid };
 }

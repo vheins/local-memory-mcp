@@ -13,6 +13,9 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import type { CombinedServerHandle } from "../cli/combined-server";
 
@@ -199,3 +202,40 @@ describe("runDaemonWorker — never resolves (no double-boot)", () => {
 	});
 });
 
+describe("runDaemonWorker — EADDRINUSE (TASK-425)", () => {
+	it("prints an actionable message and exits once instead of crash-looping", async () => {
+		const { runDaemonWorker } = await import("../cli/combined-server");
+
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lmc-eaddrinuse-"));
+		const prevDir = process.env.LOCAL_MEMORY_DAEMON_DIR;
+		process.env.LOCAL_MEMORY_DAEMON_DIR = dir;
+		const lockFile = path.join(dir, "daemon.lock");
+		fs.writeFileSync(lockFile, "1234\n", "utf8");
+
+		const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+		const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+		try {
+			await runDaemonWorker({
+				installProcessHandlers: false,
+				port: 3456,
+				startServer: async () => {
+					throw Object.assign(new Error("listen EADDRINUSE"), { code: "EADDRINUSE" });
+				}
+			});
+
+			expect(exitSpy).toHaveBeenCalledWith(1);
+			const output = stderrSpy.mock.calls.map((call) => String(call[0])).join("");
+			expect(output).toContain("Daemon port 3456 is already in use");
+			expect(output).toContain('Run "daemon status"');
+			// The single-instance lock is released so the next start is not blocked.
+			expect(fs.existsSync(lockFile)).toBe(false);
+		} finally {
+			exitSpy.mockRestore();
+			stderrSpy.mockRestore();
+			if (prevDir === undefined) delete process.env.LOCAL_MEMORY_DAEMON_DIR;
+			else process.env.LOCAL_MEMORY_DAEMON_DIR = prevDir;
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
+});
