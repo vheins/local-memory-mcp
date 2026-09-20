@@ -215,6 +215,8 @@ If, and only if, the re-open conditions in §Decision are met, TASK-429 becomes 
 - `src/mcp/tools/task.helpers.ts`, `src/mcp/tools/task-write/update-status.ts` — task→memory archival across domains
 - `src/mcp/tools/agent-context.ts`, `src/mcp/tools/agent-context-compiler.ts` — cross-domain reads without cross-file JOINs
 - `.agents/documents/application/testing/benchmarks/concurrent-workload-bench.md` — TASK-480 contention evidence (0.0%)
+- `scripts/bench/concurrent-eval/contention-guard.mjs` — TASK-429 contention regression guard (asserts `busy`/`timeout`/`lockWait` stay 0; fails the benchmark run on regression)
+- `src/mcp/tests/sqlite.wal-contention.perf.test.ts` — TASK-424 WAL write-contention load test (N concurrent `SQLiteStore` connections on one file; asserts busy/locked == 0)
 - `.agents/documents/design/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md` — ownership/scoping
 - `.agents/documents/design/decisions/ADR-009-optional-multi-database-support.md` — storage-port deferral
 - `.agents/documents/design/decisions/ADR-010-streamable-http-transport.md` — one-daemon/many-client contention mitigation
