@@ -21,6 +21,7 @@ import { createTestStore, type SQLiteStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import { createServerFactory } from "../transport/factory";
 import { createDualHandler, type DualHandler } from "../transport/http";
+import { MCP_HTTP_SESSION_IDLE_TTL_MS } from "../utils/constants";
 
 const ENDPOINT = "http://localhost/mcp";
 const JSON_HEADERS = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
@@ -36,7 +37,7 @@ const active: Array<{ store: SQLiteStore; handler: DualHandler }> = [];
 async function startHarness(): Promise<{ store: SQLiteStore; handler: DualHandler }> {
 	const store = await createTestStore();
 	const vectors = new StubVectorStore(store);
-	const handler = createDualHandler(createServerFactory(store, vectors));
+	const handler = createDualHandler(createServerFactory(store, vectors, "http"));
 	const harness = { store, handler };
 	active.push(harness);
 	return harness;
@@ -198,5 +199,83 @@ describe("createDualHandler — roots reach later tool calls (DEBT-423)", () => 
 		} finally {
 			await client.close();
 		}
+	});
+});
+
+/**
+ * Open a legacy session via a raw 2025-era `initialize` POST and return its
+ * `Mcp-Session-Id`. Reuses the same wire shape as the retention test above.
+ */
+async function openLegacySession(handler: DualHandler): Promise<string> {
+	const init = await handler.fetch(
+		new Request(ENDPOINT, {
+			method: "POST",
+			headers: JSON_HEADERS,
+			body: JSON.stringify({
+				jsonrpc: "2.0",
+				id: 1,
+				method: "initialize",
+				params: {
+					protocolVersion: "2025-06-18",
+					capabilities: {},
+					clientInfo: { name: "idle-sweep", version: "1.0.0" }
+				}
+			})
+		})
+	);
+	expect(init.status).toBe(200);
+	const sessionId = init.headers.get("mcp-session-id");
+	expect(sessionId).toBeTruthy();
+	await init.text();
+	return sessionId!;
+}
+
+/** A `tools/list` POST on a given legacy session id. */
+function listOnSession(handler: DualHandler, sessionId: string): Promise<Response> {
+	return handler.fetch(
+		new Request(ENDPOINT, {
+			method: "POST",
+			headers: { ...JSON_HEADERS, "mcp-session-id": sessionId },
+			body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
+		})
+	);
+}
+
+describe("createDualHandler — idle legacy session eviction", () => {
+	/**
+	 * The SDK client's normal `close()` never sends a `DELETE`, so an abandoned
+	 * legacy session would pin its server + transport forever without an idle
+	 * sweep. Driving the sweep past the TTL must evict the session, and a
+	 * subsequent request on that id must fall back to a fresh/absent session
+	 * (400 "Server not initialized" — the id is no longer retained).
+	 */
+	it("evicts a session idle past the TTL and a later request finds no session", async () => {
+		const { handler } = await startHarness();
+
+		const sessionId = await openLegacySession(handler);
+		// The session is live right after initialize.
+		expect((await listOnSession(handler, sessionId)).status).toBe(200);
+
+		// Drive the sweep just past the TTL using an injected clock.
+		handler.sweepIdleLegacySessions(Date.now() + MCP_HTTP_SESSION_IDLE_TTL_MS + 1);
+
+		// The id is gone: the request is served by a FRESH, un-initialized
+		// factory server, which refuses with "Server not initialized".
+		const afterEviction = await listOnSession(handler, sessionId);
+		expect(afterEviction.status).toBe(400);
+		expect(await afterEviction.text()).toContain("Server not initialized");
+	});
+
+	it("keeps a recently-used session alive", async () => {
+		const { handler } = await startHarness();
+
+		const sessionId = await openLegacySession(handler);
+		// Touch the session so `lastSeen` is current, then sweep with a `now`
+		// that is within the TTL of that touch.
+		expect((await listOnSession(handler, sessionId)).status).toBe(200);
+		handler.sweepIdleLegacySessions(Date.now() + MCP_HTTP_SESSION_IDLE_TTL_MS - 1_000);
+
+		// Still retained — the same initialized server answers.
+		expect((await listOnSession(handler, sessionId)).status).toBe(200);
 	});
 });

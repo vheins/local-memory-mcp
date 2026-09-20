@@ -47,7 +47,7 @@ import type {
 	McpServerFactory,
 	Server
 } from "@modelcontextprotocol/server";
-import { MCP_HTTP_ALLOW_INSECURE, MCP_HTTP_PORT } from "../utils/constants";
+import { MCP_HTTP_ALLOW_INSECURE, MCP_HTTP_PORT, MCP_HTTP_SESSION_IDLE_TTL_MS } from "../utils/constants";
 import { logger } from "../utils/logger";
 
 /** The two supported MCP transports. */
@@ -133,6 +133,63 @@ function normalizePath(raw: string | undefined): string {
 interface LegacySession {
 	transport: WebStandardStreamableHTTPServerTransport;
 	product: McpServer | Server;
+	/** Epoch ms of the last request served for this session (idle-sweep clock). */
+	lastSeen: number;
+}
+
+/**
+ * Upper bound on standalone messages buffered while a legacy session's SSE
+ * (`GET`) stream is closed. A client that initializes but never opens the SSE
+ * stream would otherwise let the buffer grow without limit; when the cap is
+ * exceeded the OLDEST entries are dropped so the most recent (most relevant)
+ * messages survive.
+ *
+ * Exported so the bound can be asserted directly in tests.
+ */
+export const MCP_HTTP_STANDALONE_BUFFER_MAX = 100;
+
+/**
+ * Wrap a GET SSE `Response` so `onClose` fires exactly once when the stream
+ * ends OR the consumer cancels/aborts it. Used to reset the session's
+ * `sseOpen` flag so a later `GET` can re-arm buffering (the SDK itself allows
+ * only one live SSE stream per session, so a re-armed buffer is only drained by
+ * a genuinely new stream).
+ */
+function onResponseStreamClose(response: Response, onClose: () => void): Response {
+	const body = response.body;
+	if (body === null) return response;
+	const reader = body.getReader();
+	let settled = false;
+	const finish = () => {
+		if (settled) return;
+		settled = true;
+		onClose();
+	};
+	const wrapped = new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			try {
+				const { done, value } = await reader.read();
+				if (done) {
+					finish();
+					controller.close();
+					return;
+				}
+				controller.enqueue(value);
+			} catch (error) {
+				finish();
+				controller.error(error);
+			}
+		},
+		cancel(reason) {
+			finish();
+			return reader.cancel(reason);
+		}
+	});
+	return new Response(wrapped, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: response.headers
+	});
 }
 
 /**
@@ -149,11 +206,22 @@ interface LegacySession {
  * otherwise be lost and the roots would never reach later tool calls. Buffering
  * until the stream opens closes that window deterministically (no timers).
  *
+ * The buffer is BOUNDED ({@link MCP_HTTP_STANDALONE_BUFFER_MAX}); a client that
+ * initializes but never opens the SSE stream cannot grow it without limit. The
+ * `sseOpen` flag is reset when the SSE stream ends or is cancelled, so a later
+ * `GET` can re-arm buffering for the (new) stream.
+ *
  * Only standalone traffic is buffered; request/response traffic (anything with
  * a `relatedRequestId`, plus result/error responses) passes straight through,
  * so normal tool-call round-trips are unaffected.
+ *
+ * @returns A small handle exposing the buffer size and `sseOpen` state, so the
+ *   bound and the reset can be asserted directly in tests.
  */
-function bufferStandaloneUntilSse(transport: WebStandardStreamableHTTPServerTransport): void {
+export function bufferStandaloneUntilSse(transport: WebStandardStreamableHTTPServerTransport): {
+	bufferedCount: () => number;
+	isSseOpen: () => boolean;
+} {
 	const buffered: JSONRPCMessage[] = [];
 	let sseOpen = false;
 	const send = transport.send.bind(transport);
@@ -165,6 +233,10 @@ function bufferStandaloneUntilSse(transport: WebStandardStreamableHTTPServerTran
 		const isResponse = "id" in message && !("method" in message);
 		if (!isResponse && options?.relatedRequestId === undefined && !sseOpen) {
 			buffered.push(message);
+			// Bound memory: keep only the most recent messages.
+			if (buffered.length > MCP_HTTP_STANDALONE_BUFFER_MAX) {
+				buffered.splice(0, buffered.length - MCP_HTTP_STANDALONE_BUFFER_MAX);
+			}
 			return Promise.resolve();
 		}
 		return send(message, options);
@@ -172,12 +244,22 @@ function bufferStandaloneUntilSse(transport: WebStandardStreamableHTTPServerTran
 
 	transport.handleRequest = async (request, options) => {
 		const response = await handleRequest(request, options);
-		if (!sseOpen && request.method === "GET" && response.status === 200) {
-			sseOpen = true;
-			for (const message of buffered.splice(0)) await send(message);
+		if (request.method === "GET" && response.status === 200) {
+			// Reset `sseOpen` once this SSE stream ends/cancels so a subsequent
+			// GET can re-arm buffering.
+			const wrapped = onResponseStreamClose(response, () => {
+				sseOpen = false;
+			});
+			if (!sseOpen) {
+				sseOpen = true;
+				for (const message of buffered.splice(0)) await send(message);
+			}
+			return wrapped;
 		}
 		return response;
 	};
+
+	return { bufferedCount: () => buffered.length, isSseOpen: () => sseOpen };
 }
 
 /** The web-standard face returned by {@link createDualHandler}. */
@@ -186,6 +268,12 @@ export interface DualHandler {
 	fetch: (request: Request, options?: McpHandlerRequestOptions) => Promise<Response>;
 	/** Tear down BOTH the modern handler and every live legacy session. */
 	close: () => Promise<void>;
+	/**
+	 * Evict legacy sessions idle for longer than the configured TTL. Exposed so
+	 * tests can drive eviction deterministically with an injected `now`; the
+	 * handler also calls it lazily on every `serveLegacy` and on a timer.
+	 */
+	sweepIdleLegacySessions: (now?: number) => void;
 }
 
 /**
@@ -233,21 +321,61 @@ export function createDualHandler(factory: McpServerFactory, onerror?: (error: E
 	const legacySessions = new Map<string, LegacySession>();
 
 	/**
+	 * Evict legacy sessions idle (no `serveLegacy` hit) for longer than
+	 * {@link MCP_HTTP_SESSION_IDLE_TTL_MS}. Each entry pins a stateful transport
+	 * + an initialized `McpServer`; the MCP client SDK's normal `close()` does
+	 * NOT send a `DELETE` (only `terminateSession()` does, which this repo never
+	 * calls), so without this sweep an abandoned session would live forever —
+	 * unbounded map growth on a long-lived daemon. Exposed on the returned
+	 * {@link DualHandler} so tests can drive it with an injected `now`.
+	 */
+	function sweepIdleLegacySessions(now: number = Date.now()): void {
+		for (const [id, session] of legacySessions) {
+			if (now - session.lastSeen > MCP_HTTP_SESSION_IDLE_TTL_MS) {
+				legacySessions.delete(id);
+				try {
+					void session.transport.close().catch(() => {});
+				} catch {
+					/* best effort */
+				}
+				try {
+					void session.product.close().catch(() => {});
+				} catch {
+					/* best effort */
+				}
+			}
+		}
+	}
+
+	// Idle eviction also runs on a timer so an abandoned session is reclaimed
+	// even when no further traffic arrives. `unref()` keeps the timer from
+	// holding the process open; it is cleared in `close()`.
+	const idleSweepTimer = setInterval(() => sweepIdleLegacySessions(), MCP_HTTP_SESSION_IDLE_TTL_MS);
+	idleSweepTimer.unref?.();
+
+	/**
 	 * Serve one legacy request. Requests carrying a known `Mcp-Session-Id` go
 	 * straight to that session's transport; anything else (an `initialize`, or
 	 * a stray/expired request) gets a fresh factory server + transport, which
 	 * is RETAINED only when the exchange actually opens a session.
 	 */
 	async function serveLegacy(webRequest: Request): Promise<Response> {
+		// Lazy idle sweep: deterministic and testable, and it reclaims an
+		// abandoned session the moment new traffic arrives.
+		sweepIdleLegacySessions();
+
 		const sessionId = webRequest.headers.get("mcp-session-id");
 		const existing = sessionId !== null ? legacySessions.get(sessionId) : undefined;
-		if (existing !== undefined) return existing.transport.handleRequest(webRequest);
+		if (existing !== undefined) {
+			existing.lastSeen = Date.now();
+			return existing.transport.handleRequest(webRequest);
+		}
 
 		const product = await factory({ era: "legacy", requestInfo: webRequest });
 		const transport = new WebStandardStreamableHTTPServerTransport({
 			sessionIdGenerator: () => randomUUID(),
 			onsessioninitialized: (id) => {
-				legacySessions.set(id, { transport, product });
+				legacySessions.set(id, { transport, product, lastSeen: Date.now() });
 			}
 		});
 		// Assign BEFORE connect(): `Protocol.connect` captures the transport's
@@ -277,7 +405,9 @@ export function createDualHandler(factory: McpServerFactory, onerror?: (error: E
 		// stays fully readable for whichever handler it is routed to.
 		fetch: async (request, options) =>
 			(await isLegacyRequest(request)) ? await serveLegacy(request) : await modernHandler.fetch(request, options),
+		sweepIdleLegacySessions,
 		close: async () => {
+			clearInterval(idleSweepTimer);
 			await modernHandler.close();
 			const closingLegacy = [...legacySessions.values()].map(async ({ transport, product }) => {
 				await transport.close().catch(() => {});

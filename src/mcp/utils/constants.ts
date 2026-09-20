@@ -621,6 +621,15 @@ export const MCP_HTTP_PORT = envInt("MCP_HTTP_PORT", 3457);
 // escape hatch is explicitly set true for local dev. Default false: the
 // server refuses to start an unauthenticated HTTP listener.
 export const MCP_HTTP_ALLOW_INSECURE = envBool("MCP_HTTP_ALLOW_INSECURE", false);
+// Idle TTL for a retained legacy (2025-era) HTTP session. Each legacy session
+// owns a stateful transport + initialized McpServer; they are removed only on
+// an explicit client DELETE (transport.onclose) or global close(). The MCP
+// client SDK's normal close() does NOT send DELETE (only terminateSession()
+// does, which this repo never calls), so without an idle sweep an abandoned
+// session would pin its server + transport forever — unbounded map growth on a
+// long-lived daemon. A sweep evicts any session unused for this long. Env-
+// overridable so operators can tune the window without a code change.
+export const MCP_HTTP_SESSION_IDLE_TTL_MS = envInt("MCP_HTTP_SESSION_IDLE_TTL_MS", 30 * 60 * 1000);
 
 // ── Local bug telemetry ───────────────────────────────────────────────────
 // Automatic capture of runtime errors (uncaught/unhandled, error-level logs,
