@@ -231,30 +231,30 @@ describe("pruneActionLog", () => {
 });
 
 describe("pruneObservations", () => {
-	it("delegates to KnowledgeGraphEntity.deleteStaleObservations with an ISO cutoff", () => {
-		const deleteSpy = vi.fn().mockReturnValue(3);
+	it("delegates to KnowledgeGraphEntity.deleteStaleObservations with an ISO cutoff", async () => {
+		const deleteSpy = vi.fn().mockResolvedValue(3);
 		const kg = { deleteStaleObservations: deleteSpy } as unknown as KnowledgeGraphEntity;
 
-		const result = pruneObservations(kg, 7);
+		const result = await pruneObservations(kg, 7);
 
 		expect(result).toEqual({ deleted: 3 });
 		expect(deleteSpy).toHaveBeenCalledTimes(1);
 		expect(deleteSpy.mock.calls[0][0]).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 	});
 
-	it("returns deleted: 0 when nothing is pruned", () => {
-		const kg = { deleteStaleObservations: vi.fn().mockReturnValue(0) } as unknown as KnowledgeGraphEntity;
+	it("returns deleted: 0 when nothing is pruned", async () => {
+		const kg = { deleteStaleObservations: vi.fn().mockResolvedValue(0) } as unknown as KnowledgeGraphEntity;
 
-		expect(pruneObservations(kg)).toEqual({ deleted: 0 });
+		expect(await pruneObservations(kg)).toEqual({ deleted: 0 });
 	});
 
-	it("logs the configured retention window", () => {
+	it("logs the configured retention window", async () => {
 		const logs: Array<Record<string, unknown>> = [];
 		const removeSink = addLogSink((payload) => logs.push(payload.data));
-		const kg = { deleteStaleObservations: vi.fn().mockReturnValue(3) } as unknown as KnowledgeGraphEntity;
+		const kg = { deleteStaleObservations: vi.fn().mockResolvedValue(3) } as unknown as KnowledgeGraphEntity;
 
 		try {
-			pruneObservations(kg, 14);
+			await pruneObservations(kg, 14);
 		} finally {
 			removeSink();
 		}
@@ -269,7 +269,7 @@ describe("pruneRelations observability", () => {
 		const removeSink = addLogSink((payload) => logs.push(payload.data));
 		const kg = {
 			deleteUnreachableRelations: vi.fn().mockResolvedValue(2),
-			deleteOrphanEntities: vi.fn().mockReturnValue(1),
+			deleteOrphanEntities: vi.fn().mockResolvedValue(1),
 			countPrunableRelations: vi.fn().mockReturnValue(4)
 		} as unknown as KnowledgeGraphEntity;
 
@@ -285,7 +285,7 @@ describe("pruneRelations observability", () => {
 	it("counts the exact remainder when the run does NOT hit the cap (TASK-041)", async () => {
 		const kg = {
 			deleteUnreachableRelations: vi.fn().mockResolvedValue(2),
-			deleteOrphanEntities: vi.fn().mockReturnValue(1),
+			deleteOrphanEntities: vi.fn().mockResolvedValue(1),
 			countPrunableRelations: vi.fn().mockReturnValue(4)
 		} as unknown as KnowledgeGraphEntity;
 
@@ -299,7 +299,7 @@ describe("pruneRelations observability", () => {
 	it("SKIPS the expensive count and reports the sentinel when the run hits the cap (TASK-041)", async () => {
 		const kg = {
 			deleteUnreachableRelations: vi.fn().mockResolvedValue(100),
-			deleteOrphanEntities: vi.fn().mockReturnValue(1),
+			deleteOrphanEntities: vi.fn().mockResolvedValue(1),
 			countPrunableRelations: vi.fn().mockReturnValue(4)
 		} as unknown as KnowledgeGraphEntity;
 
@@ -324,7 +324,7 @@ describe("runStartupMaintenance (TASK-124 contract)", () => {
 		withExclusiveWriteSpy = vi.spyOn(db, "withExclusiveWrite").mockImplementation(async (fn) => fn());
 		vi.spyOn(db.memoryArchives, "archiveExpiredMemories").mockReturnValue(2);
 		vi.spyOn(db.memoryArchives, "archiveLowScoreMemories").mockReturnValue(1);
-		vi.spyOn(db.knowledgeGraph, "deleteStaleObservations").mockReturnValue(5);
+		vi.spyOn(db.knowledgeGraph, "deleteStaleObservations").mockResolvedValue(5);
 	});
 
 	afterEach(() => {

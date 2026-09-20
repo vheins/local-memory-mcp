@@ -139,6 +139,59 @@ export abstract class BaseEntity {
 		return runWithSqliteWriteRetry(() => immediate());
 	}
 
+	/**
+	 * Delete every row matching a predicate, in bounded `rowid` windows, yielding
+	 * to the event loop between windows.
+	 *
+	 * **Why not a `LIMIT`-based chunk loop** (the `deleteUnreachableRelations`
+	 * shape): when the eligible rows are SPARSE, the first `... LIMIT n` chunk
+	 * must scan the WHOLE table to find its `n` matches, so the first chunk is
+	 * still one full-table correlated scan. Windowing by `rowid` instead bounds
+	 * every synchronous unit to `chunkSize` rows regardless of match density, so
+	 * a caller holding the exclusive write lock (proper-lockfile) can refresh its
+	 * heartbeat between windows instead of letting the lock go stale and be
+	 * stolen. Measured on a real deployment: `observations` (369k rows, ~204
+	 * eligible) previously froze the event loop ~41s in a single DELETE.
+	 *
+	 * `predicateSql` must reference the row alias `_row` (never `o`/`e`/`t`, which
+	 * collide with inner subquery aliases), must be a pure WHERE body (no leading
+	 * `WHERE`), and must NOT itself filter on `rowid` — the window bounds are
+	 * appended. `params` binds to `predicateSql` placeholders in order.
+	 *
+	 * @param table - Table name (from `constants.ts`, never inlined).
+	 * @param predicateSql - WHERE body referencing alias `_row`.
+	 * @param params - Parameters for `predicateSql`.
+	 * @param chunkSize - Rowids examined per window (and per transaction).
+	 * @returns Total rows deleted.
+	 */
+	protected async deleteWindowed(
+		table: string,
+		predicateSql: string,
+		params: unknown[],
+		chunkSize: number
+	): Promise<number> {
+		const chunk = Math.max(1, chunkSize);
+		// `MAX(rowid)` on a rowid table is O(1) (SQLite reads the last page), so
+		// the loop bound costs nothing next to the delete it bounds.
+		const maxRowid = this.get<{ m: number | null }>(`SELECT MAX(rowid) AS m FROM ${table}`)?.m ?? 0;
+		if (maxRowid <= 0) return 0;
+
+		const deleteSql = `DELETE FROM ${table} WHERE rowid IN (
+			SELECT _row.rowid FROM ${table} AS _row WHERE ${predicateSql} AND _row.rowid > ? AND _row.rowid <= ?
+		)`;
+
+		let deleted = 0;
+		for (let lo = 0; lo < maxRowid; lo += chunk) {
+			const hi = lo + chunk;
+			deleted += this.transaction(() => this.run(deleteSql, [...params, lo, hi]).changes);
+			// Yield between windows: lets the MCP server stay responsive and the
+			// exclusive proper-lockfile refresh its 15s heartbeat while the
+			// maintenance sweep holds `withExclusiveWrite`.
+			await new Promise<void>((resolve) => setImmediate(resolve));
+		}
+		return deleted;
+	}
+
 	protected run(sql: string, params: unknown[] = []): { changes: number } {
 		const stmt = this.prepare(sql);
 		const result = stmt.run(...(params as (string | number | null | Buffer)[]));

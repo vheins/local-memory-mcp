@@ -399,6 +399,19 @@ export const KG_RELATION_PRUNE_CHUNK = envInt("KG_RELATION_PRUNE_CHUNK", 2_000);
 // `remaining !== 0` (see maintenance-job's `truncated` log field).
 export const KG_RELATION_PRUNE_REMAINING_UNKNOWN = -1;
 
+// Rowid-window size for the SPARSE-predicate deletes in the maintenance sweep
+// (`deleteStaleObservations` / `deleteOrphanEntities`). These statements use
+// correlated `NOT EXISTS` predicates whose eligible set is a tiny fraction of
+// the table (measured: ~204 of 369k observations; a few thousand of 299k
+// entities), so a `... LIMIT n` chunk loop would still force one full-table
+// correlated scan to find its first `n` matches. Windowing by `rowid` instead
+// bounds EVERY synchronous unit to this many rows regardless of match density,
+// keeping the maintenance sweep's `withExclusiveWrite` hold yielding to the
+// event loop so proper-lockfile's 15s heartbeat can refresh. Deliberately
+// independent of the relation-prune chunk: the per-row cost of these
+// correlated subqueries differs from the trigger-heavy relation delete.
+export const KG_PRUNE_WINDOW_CHUNK = envInt("KG_PRUNE_WINDOW_CHUNK", 2_000);
+
 // ── Codebase ARCHITECTURE bounds (OPT-PERF-08) ───────────────────────────
 // Max number of top-level exports (exported symbols with no parent) returned
 // by an ARCHITECTURE read. The handler fetches them with a SQL LIMIT instead

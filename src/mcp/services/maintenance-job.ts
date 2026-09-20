@@ -156,8 +156,10 @@ export async function runStartupMaintenance(
 		const prunedActionLogResult = pruneActionLog(db.db, 30, ACTION_LOG_MAX_ROWS);
 
 		// 5. Prune observations whose parent document is gone (audit F1 — the
-		//    previous age-only prune severed live documents from their graph)
-		const prunedObservationsResult = pruneObservations(db.knowledgeGraph, 7);
+		//    previous age-only prune severed live documents from their graph).
+		//    Windowed + yielding so the correlated scan never freezes the event
+		//    loop past the exclusive lock's heartbeat (TASK-041 follow-up).
+		const prunedObservationsResult = await pruneObservations(db.knowledgeGraph, 7);
 
 		// 6. Prune relations no read path can reach again, then sweep the
 		//    entities that only those edges kept alive (audit F1). Bounded per

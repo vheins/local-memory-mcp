@@ -1,4 +1,5 @@
 import { BaseEntity } from "../../storage/base";
+import { KG_PRUNE_WINDOW_CHUNK } from "../../utils/constants";
 
 /** Retention-only SQL kept separate from KG CRUD/query orchestration. */
 export class KnowledgeGraphRetentionEntity extends BaseEntity {
@@ -36,49 +37,55 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 	 * `fetchKgContext`'s `repo ?? ""` call for the standard domain (standards
 	 * may be global).
 	 *
+	 * **Windowed + yielding.** The eligible set is a tiny fraction of the table
+	 * (measured ~204 of 369k rows), so a single `DELETE` with these correlated
+	 * `NOT EXISTS` predicates is one long synchronous full-table scan — it froze
+	 * the event loop ~41s on a real deployment and let the maintenance sweep's
+	 * `withExclusiveWrite` proper-lockfile go stale. `deleteWindowed` bounds each
+	 * unit to `KG_PRUNE_WINDOW_CHUNK` rowids and yields between windows.
+	 *
 	 * @param cutoff - ISO timestamp; only rows older than this are considered.
+	 * @param chunkSize - Rowids examined per window/transaction.
 	 * @returns Number of rows deleted.
 	 */
-	deleteStaleObservations(cutoff: string): number {
-		const result = this.run(
-			`DELETE FROM observations WHERE rowid IN (
-			   SELECT o.rowid FROM observations o
-			   WHERE o.created_at < ?
-			     AND (
+	async deleteStaleObservations(cutoff: string, chunkSize = KG_PRUNE_WINDOW_CHUNK): Promise<number> {
+		return await this.deleteWindowed(
+			"observations",
+			`_row.created_at < ?
+			   AND (
 			       -- 1. contract-format, parent document gone
 			       (
-			         o.observation LIKE 'Mentioned in %'
+			         _row.observation LIKE 'Mentioned in %'
 			         AND NOT (
-			              (o.observation LIKE 'Mentioned in memory: %'
+			              (_row.observation LIKE 'Mentioned in memory: %'
 			                AND EXISTS (SELECT 1 FROM memories m
-			                             WHERE m.repo = o.repo
-			                               AND 'Mentioned in memory: ' || m.title = o.observation))
-			           OR (o.observation LIKE 'Mentioned in task: %'
+			                             WHERE m.repo = _row.repo
+			                               AND 'Mentioned in memory: ' || m.title = _row.observation))
+			           OR (_row.observation LIKE 'Mentioned in task: %'
 			                AND EXISTS (SELECT 1 FROM tasks t
-			                             WHERE t.repo = o.repo
-			                               AND 'Mentioned in task: ' || t.title = o.observation))
-			           OR (o.observation LIKE 'Mentioned in standard: %'
+			                             WHERE t.repo = _row.repo
+			                               AND 'Mentioned in task: ' || t.title = _row.observation))
+			           OR (_row.observation LIKE 'Mentioned in standard: %'
 			                AND EXISTS (SELECT 1 FROM coding_standards s
-			                             WHERE 'Mentioned in standard: ' || s.title = o.observation))
-			           OR (o.observation LIKE 'Mentioned in codebase: %'
+			                             WHERE 'Mentioned in standard: ' || s.title = _row.observation))
+			           OR (_row.observation LIKE 'Mentioned in codebase: %'
 			                AND EXISTS (SELECT 1 FROM derived.codebase_files f
-			                             WHERE f.repo = o.repo
-			                               AND 'Mentioned in codebase: ' || f.file_path = o.observation))
+			                             WHERE f.repo = _row.repo
+			                               AND 'Mentioned in codebase: ' || f.file_path = _row.observation))
 			         )
 			       )
 			       -- 2. inline-format row for an entity with no contract anchor
 			       OR (
-			         o.observation NOT LIKE 'Mentioned in %'
+			         _row.observation NOT LIKE 'Mentioned in %'
 			         AND NOT EXISTS (SELECT 1 FROM observations anchor
-			                          WHERE anchor.entity_name = o.entity_name
-			                            AND anchor.repo = o.repo
+			                          WHERE anchor.entity_name = _row.entity_name
+			                            AND anchor.repo = _row.repo
 			                            AND anchor.observation LIKE 'Mentioned in %')
 			       )
-			     )
-			 )`,
-			[cutoff]
+			     )`,
+			[cutoff],
+			chunkSize
 		);
-		return result.changes;
 	}
 
 	/**

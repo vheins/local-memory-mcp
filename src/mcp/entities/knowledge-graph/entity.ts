@@ -1,7 +1,12 @@
 import { BaseEntity } from "../../storage/base";
 import { KnowledgeGraphRetentionEntity } from "./retention";
 import { logger } from "../../utils/logger";
-import { KG_MAX_CONTEXT_ENTITIES, KG_MAX_CONTEXT_RELATIONS, KG_MAX_GRAPH_EDGES } from "../../utils/constants";
+import {
+	KG_MAX_CONTEXT_ENTITIES,
+	KG_MAX_CONTEXT_RELATIONS,
+	KG_MAX_GRAPH_EDGES,
+	KG_PRUNE_WINDOW_CHUNK
+} from "../../utils/constants";
 import * as queries from "./queries";
 import type { KgQueryRunner, KgEntityRow, KgRelationRow, KgObservationRow } from "./queries";
 import {
@@ -405,13 +410,26 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		});
 	}
 
-	/** Delete repository-scoped entity rows with no same-repo observation or relation. */
-	deleteOrphanEntities(): number {
-		const result = this.run(`DELETE FROM entities AS e WHERE
-			NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = e.name AND o.repo = e.repo)
-			AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.from_entity = e.name AND r.repo = e.repo)
-			AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.to_entity = e.name AND r.repo = e.repo)`);
-		return result.changes;
+	/**
+	 * Delete repository-scoped entity rows with no same-repo observation or
+	 * relation.
+	 *
+	 * Windowed + yielding: the eligible set is a small fraction of `entities`
+	 * (299k rows on a real deployment), so the single correlated `DELETE` was
+	 * one long synchronous full-table scan inside the maintenance sweep's
+	 * `withExclusiveWrite`. `deleteWindowed` bounds each unit to
+	 * `KG_PRUNE_WINDOW_CHUNK` rowids and yields between windows so
+	 * proper-lockfile's heartbeat can refresh.
+	 */
+	async deleteOrphanEntities(chunkSize = KG_PRUNE_WINDOW_CHUNK): Promise<number> {
+		return await this.deleteWindowed(
+			"entities",
+			`NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = _row.name AND o.repo = _row.repo)
+			 AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.from_entity = _row.name AND r.repo = _row.repo)
+			 AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.to_entity = _row.name AND r.repo = _row.repo)`,
+			[],
+			chunkSize
+		);
 	}
 
 	/**
@@ -446,8 +464,8 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		return this.run("DELETE FROM observations WHERE id = ?", [id]);
 	}
 
-	deleteStaleObservations(cutoff: string): number {
-		return this.retention.deleteStaleObservations(cutoff);
+	deleteStaleObservations(cutoff: string, chunkSize?: number): Promise<number> {
+		return this.retention.deleteStaleObservations(cutoff, chunkSize);
 	}
 
 	countPrunableRelations(cutoff: string): number {

@@ -247,10 +247,13 @@ export function pruneActionLog(
  * @param retentionDays - Only rows older than this are considered (default: 7)
  * @returns Number of rows deleted
  */
-export function pruneObservations(knowledgeGraph: KnowledgeGraphEntity, retentionDays = 7): PruneObservationsResult {
+export async function pruneObservations(
+	knowledgeGraph: KnowledgeGraphEntity,
+	retentionDays = 7
+): Promise<PruneObservationsResult> {
 	const cutoff = new Date(Date.now() - retentionDays * TTL_MS_PER_DAY).toISOString();
 
-	const deleted = knowledgeGraph.deleteStaleObservations(cutoff);
+	const deleted = await knowledgeGraph.deleteStaleObservations(cutoff);
 
 	if (deleted > 0) {
 		logger.info("[SoulMaintenance] Pruned orphaned observations", {
@@ -323,7 +326,7 @@ export async function pruneRelations(
 
 	// The edges are gone; their endpoint entities may now be orphans. This is
 	// the pass that actually reclaims the space.
-	const orphanEntitiesDeleted = knowledgeGraph.deleteOrphanEntities();
+	const orphanEntitiesDeleted = await knowledgeGraph.deleteOrphanEntities();
 
 	// TASK-041: only pay for the correlated remaining-count at the tail.
 	// `deleteUnreachableRelations` stops early ONLY when a chunk deletes 0 rows

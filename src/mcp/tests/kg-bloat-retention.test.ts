@@ -291,52 +291,52 @@ describe("KG audit F1 — deleteStaleObservations keeps live document links", ()
 	});
 	afterEach(() => db.close());
 
-	it("KEEPS an old observation whose parent memory still exists", () => {
+	it("KEEPS an old observation whose parent memory still exists", async () => {
 		seedEntity(db, "LiveEntity", REPO, OLD);
 		seedObservation(db, "LiveEntity", observationText("memory", memory.title), REPO, OLD);
 
-		const deleted = db.knowledgeGraph.deleteStaleObservations(NOW);
+		const deleted = await db.knowledgeGraph.deleteStaleObservations(NOW);
 
 		expect(deleted).toBe(0);
 		expect(countObservations(db)).toBe(1);
 	});
 
-	it("DELETES an old observation whose parent memory is gone", () => {
+	it("DELETES an old observation whose parent memory is gone", async () => {
 		seedEntity(db, "GhostEntity", REPO, OLD);
 		seedObservation(db, "GhostEntity", observationText("memory", "Deleted Memory"), REPO, OLD);
 
-		expect(db.knowledgeGraph.deleteStaleObservations(NOW)).toBe(1);
+		expect(await db.knowledgeGraph.deleteStaleObservations(NOW)).toBe(1);
 		expect(countObservations(db)).toBe(0);
 	});
 
-	it("DELETES an inline-format observation when the entity has no contract anchor", () => {
+	it("DELETES an inline-format observation when the entity has no contract anchor", async () => {
 		seedEntity(db, "InlineOnly", REPO, OLD);
 		seedObservation(db, "InlineOnly", "call relation: InlineOnly → Other", REPO, OLD);
 
-		expect(db.knowledgeGraph.deleteStaleObservations(NOW)).toBe(1);
+		expect(await db.knowledgeGraph.deleteStaleObservations(NOW)).toBe(1);
 	});
 
-	it("KEEPS an inline-format observation when the entity IS contract-anchored", () => {
+	it("KEEPS an inline-format observation when the entity IS contract-anchored", async () => {
 		seedEntity(db, "Anchored", REPO, OLD);
 		seedObservation(db, "Anchored", observationText("memory", memory.title), REPO, OLD);
 		seedObservation(db, "Anchored", "call relation: Anchored → Other", REPO, OLD);
 
-		expect(db.knowledgeGraph.deleteStaleObservations(NOW)).toBe(0);
+		expect(await db.knowledgeGraph.deleteStaleObservations(NOW)).toBe(0);
 		expect(countObservations(db)).toBe(2);
 	});
 
-	it("never touches rows newer than the cutoff", () => {
+	it("never touches rows newer than the cutoff", async () => {
 		seedEntity(db, "FreshGhost", REPO, NOW);
 		seedObservation(db, "FreshGhost", observationText("memory", "Deleted Memory"), REPO, NOW);
 
-		expect(db.knowledgeGraph.deleteStaleObservations(OLD)).toBe(0);
+		expect(await db.knowledgeGraph.deleteStaleObservations(OLD)).toBe(0);
 	});
 
-	it("pruneObservations reports the delegated count", () => {
+	it("pruneObservations reports the delegated count", async () => {
 		seedEntity(db, "GhostEntity", REPO, OLD);
 		seedObservation(db, "GhostEntity", observationText("memory", "Deleted Memory"), REPO, OLD);
 
-		expect(pruneObservations(db.knowledgeGraph, 7)).toEqual({ deleted: 1 });
+		expect(await pruneObservations(db.knowledgeGraph, 7)).toEqual({ deleted: 1 });
 	});
 });
 
@@ -507,6 +507,66 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 			orphanEntitiesDeleted: 0,
 			remaining: 0
 		});
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Sparse-predicate windowed deletes yield to the event loop (heartbeat fix)
+// ---------------------------------------------------------------------------
+
+describe("windowed deletes yield so the exclusive lock heartbeat can refresh", () => {
+	let db: SQLiteStore;
+
+	beforeEach(async () => {
+		db = await createTestStore();
+	});
+	afterEach(() => db.close());
+
+	it("deleteStaleObservations yields between rowid windows", async () => {
+		// 6 prunable observations spread across rowids; window of 2 → ≥3 windows,
+		// so the sweep MUST yield at least once.
+		for (let i = 0; i < 6; i++) {
+			seedEntity(db, `ghost${i}`, REPO, OLD);
+			seedObservation(db, `ghost${i}`, observationText("memory", `Deleted ${i}`), REPO, OLD);
+		}
+
+		const order: string[] = [];
+		setImmediate(() => order.push("external"));
+
+		const sweep = db.knowledgeGraph.deleteStaleObservations(NOW, 2);
+		await sweep.then(() => order.push("sweep"));
+
+		// If the delete never yielded, "sweep" would precede "external".
+		expect(order).toEqual(["external", "sweep"]);
+		expect(await sweep).toBe(6);
+		expect(countObservations(db)).toBe(0);
+	});
+
+	it("deleteOrphanEntities yields between rowid windows", async () => {
+		for (let i = 0; i < 6; i++) seedEntity(db, `orphan${i}`, REPO, OLD);
+
+		const order: string[] = [];
+		setImmediate(() => order.push("external"));
+
+		const sweep = db.knowledgeGraph.deleteOrphanEntities(2);
+		await sweep.then(() => order.push("sweep"));
+
+		expect(order).toEqual(["external", "sweep"]);
+		expect(await sweep).toBe(6);
+	});
+
+	it("deleteOrphanEntities keeps entities still referenced by an observation", async () => {
+		seedEntity(db, "keepMe", REPO, OLD);
+		seedObservation(db, "keepMe", observationText("memory", "Some Memory"), REPO, OLD);
+		seedEntity(db, "dropMe", REPO, OLD);
+
+		expect(await db.knowledgeGraph.deleteOrphanEntities(1)).toBe(1);
+		const remaining = db.db.prepare("SELECT name FROM entities").all() as Array<{ name: string }>;
+		expect(remaining.map((r) => r.name)).toEqual(["keepMe"]);
+	});
+
+	it("deleteOrphanEntities is a no-op on an empty table", async () => {
+		expect(await db.knowledgeGraph.deleteOrphanEntities(100)).toBe(0);
 	});
 });
 
