@@ -40,6 +40,10 @@ export const CAPABILITIES = {
 		version: pkgVersion
 	},
 	capabilities: {
+		// Advertises roots-derived per-session scoping intent: the server reads
+		// the client's MCP roots (listRoots + notifications/roots/list_changed)
+		// to resolve owner/repo/projectPath per connection.
+		roots: {},
 		completions: {},
 		logging: {},
 		resources: {

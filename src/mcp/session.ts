@@ -107,6 +107,42 @@ export function updateSessionRoots(session: SessionContext, roots: McpRoot[]): b
 	return previous !== next;
 }
 
+/**
+ * Applies the client's MCP roots to a session and recomputes the session-wide
+ * scoping defaults (`repo`, `owner`, `projectPath`) from them.
+ *
+ * Derivation:
+ *   - `repo` / `owner` are recomputed via `inferRepoFromSession` /
+ *     `inferOwnerFromSession`, which already understand the single-root vs.
+ *     rootless (CWD fallback) cases. Values are only assigned when inference
+ *     produces one — a multi-root session yields `undefined` and deliberately
+ *     leaves any prior value intact rather than blanking it.
+ *   - `projectPath` is set to the first filesystem root when one exists; when
+ *     the session is rootless the CWD-derived default is left untouched.
+ *
+ * @returns Whether the stored root set actually changed.
+ */
+export function applySessionRoots(session: SessionContext, roots: unknown): boolean {
+	const changed = updateSessionRoots(session, normalizeRoots(roots));
+
+	const repo = inferRepoFromSession(session);
+	if (repo !== undefined) {
+		session.repo = repo;
+	}
+
+	const owner = inferOwnerFromSession(session);
+	if (owner !== undefined) {
+		session.owner = owner;
+	}
+
+	const filesystemRoots = getFilesystemRoots(session);
+	if (filesystemRoots.length > 0) {
+		session.projectPath = filesystemRoots[0];
+	}
+
+	return changed;
+}
+
 export function normalizeRoots(roots: unknown): McpRoot[] {
 	if (!Array.isArray(roots)) return [];
 
