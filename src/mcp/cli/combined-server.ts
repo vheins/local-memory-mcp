@@ -42,6 +42,7 @@ import { runStartupMaintenance } from "../services/maintenance-job";
 import { runStartupVacuum } from "../services/vacuum";
 import { VACUUM_ON_STARTUP } from "../utils/constants";
 import { autoIndexIfStale } from "../codebase-index/services/indexing-service";
+import { evaluateAutoIndexTarget } from "../codebase-index/services/project-detection";
 import { getCodebaseParserPool } from "../codebase-index/parser/singleton";
 import { FileWatcher, registerRepo } from "../codebase-index/services/file-watcher";
 import { createExpressApp } from "../../dashboard/app";
@@ -264,25 +265,42 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
 		void runtimeCapabilities.ensure("maintenance");
 
 		if (process.env.CODEBASE_AUTO_INDEX !== "false") {
-			const repoName = path.basename(process.cwd());
+			// GUARD (project detection): the daemon auto-indexes its CWD, and
+			// `daemon start` forks the worker with the launching shell's CWD.
+			// Launching from a NON-project root (most commonly the user's HOME —
+			// `npx … daemon` run from `~`) enumerates the entire tree
+			// synchronously, blocks the event loop (starving the HTTP server →
+			// client socket timeouts), and — because the walk throws on a
+			// permission-denied child directory — never records a
+			// `last_indexed_at`, so the watcher re-triggers it every sweep
+			// forever. Only index a directory that is actually a project.
 			const repoPath = process.cwd();
-			registerRepo(repoName, repoPath);
-			void runtimeCapabilities.ensure("indexing").then((ready) => {
-				if (!ready) return;
-				void autoIndexIfStale(repoName, repoPath, db, getCodebaseParserPool())
-					.then((result) => {
-						logger.info("[Daemon] Auto-index check complete", {
-							repo: repoName,
-							status: result.status,
-							reason: result.reason
+			const eligibility = evaluateAutoIndexTarget(repoPath);
+			if (!eligibility.eligible) {
+				logger.info("[Daemon] Auto-index skipped — working directory is not a project", {
+					cwd: repoPath,
+					reason: eligibility.reason
+				});
+			} else {
+				const repoName = path.basename(repoPath);
+				registerRepo(repoName, repoPath);
+				void runtimeCapabilities.ensure("indexing").then((ready) => {
+					if (!ready) return;
+					void autoIndexIfStale(repoName, repoPath, db, getCodebaseParserPool())
+						.then((result) => {
+							logger.info("[Daemon] Auto-index check complete", {
+								repo: repoName,
+								status: result.status,
+								reason: result.reason
+							});
+							void runtimeCapabilities.ensure("watcher");
+						})
+						.catch((err) => {
+							runtimeCapabilities.markDegraded("indexing", String(err));
+							logger.warn("[Daemon] Auto-index check failed", { error: String(err) });
 						});
-						void runtimeCapabilities.ensure("watcher");
-					})
-					.catch((err) => {
-						runtimeCapabilities.markDegraded("indexing", String(err));
-						logger.warn("[Daemon] Auto-index check failed", { error: String(err) });
-					});
-			});
+				});
+			}
 		}
 	}
 
