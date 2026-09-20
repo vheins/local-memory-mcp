@@ -108,3 +108,38 @@ describe("combined server — MCP face", () => {
 		expect(res.status).toBe(200);
 	});
 });
+
+describe("runDaemonWorker — never resolves (no double-boot)", () => {
+	it("does NOT settle after booting, so server.ts never falls into the [Server] path", async () => {
+		const { runDaemonWorker } = await import("../cli/combined-server");
+
+		// Inject a stub boot so this stays hermetic — no real listener, no second
+		// store. The contract under test is purely "the promise never settles".
+		let booted = false;
+		const fakeHandle = {
+			server: {} as never,
+			port: 0,
+			url: "http://127.0.0.1:0",
+			close: vi.fn().mockResolvedValue(undefined)
+		};
+
+		let settled = false;
+		void runDaemonWorker({
+			installProcessHandlers: false,
+			startServer: async () => {
+				booted = true;
+				return fakeHandle;
+			}
+		}).then(
+			() => (settled = true),
+			() => (settled = true)
+		);
+
+		// Let the boot + several macrotasks elapse. Pre-fix the function RETURNED,
+		// so `await runDaemonWorker()` in server.ts fell through and booted a
+		// SECOND SQLiteStore + EmbeddingWorker in the same pid.
+		await new Promise((r) => setTimeout(r, 50));
+		expect(booted).toBe(true);
+		expect(settled).toBe(false);
+	});
+});

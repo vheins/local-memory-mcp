@@ -59,7 +59,9 @@ interface WorkerLike {
 	stop(): void;
 }
 
-/** Options accepted by {@link startCombinedServer}. */
+/**
+ * Options accepted by {@link startCombinedServer}.
+ */
 export interface StartCombinedServerOptions {
 	/** Bind host — loopback only. Defaults to `127.0.0.1`. */
 	host?: string;
@@ -71,6 +73,25 @@ export interface StartCombinedServerOptions {
 	 * hermetic.
 	 */
 	enableEngines?: boolean;
+}
+
+/**
+ * Options accepted by {@link runDaemonWorker}. Extends the combined-server
+ * options so a production caller can still pin host/port/engines.
+ */
+export interface RunDaemonWorkerOptions extends StartCombinedServerOptions {
+	/**
+	 * Test-only seam: override the boot function so a test can assert the
+	 * never-resolving contract WITHOUT binding a real listener (or polluting
+	 * the process with a second store). Production callers never pass this.
+	 */
+	startServer?: (options: StartCombinedServerOptions) => Promise<CombinedServerHandle>;
+	/**
+	 * Test-only seam: skip installing the process-level crash/signal handlers
+	 * (which would otherwise leak onto the test runner process). Defaults to
+	 * `true` in production.
+	 */
+	installProcessHandlers?: boolean;
 }
 
 /** Handle returned by {@link startCombinedServer}. */
@@ -294,8 +315,22 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
  * Entry point for the forked `--daemon-worker` process. Boots the combined
  * server, installs graceful-shutdown handlers, and stays alive until
  * SIGTERM/SIGINT.
+ *
+ * **Never resolves.** `server.ts` runs `await runDaemonWorker()` and, on
+ * return, would fall through into the NORMAL `[Server]` boot path — creating a
+ * SECOND `SQLiteStore` + `EmbeddingWorker` + maintenance engine in the same
+ * pid (observed as `[Daemon] startup` AND `[Server] startup` under one pid,
+ * with `[EmbeddingWorker] started` twice per boot). Two stores and two workers
+ * on one DB is a major write-contention amplifier (the KG-Archivist /
+ * EmbeddingWorker `database is locked` storm). The function therefore parks on
+ * a never-settling promise; shutdown is driven exclusively by the signal
+ * handlers below via `process.exit`.
+ *
+ * @param options - Boot options + an optional `startServer` seam for tests.
+ *   Production callers pass nothing (defaults); tests inject a stub boot so
+ *   they can assert the never-resolving contract hermetically.
  */
-export async function runDaemonWorker(): Promise<void> {
+export async function runDaemonWorker(options: RunDaemonWorkerOptions = {}): Promise<void> {
 	// The worker is HTTP-served (not stdio), so stdout/stderr are free for the
 	// daemon log file. The listener is loopback-only, so no bearer token is
 	// required.
@@ -305,33 +340,40 @@ export async function runDaemonWorker(): Promise<void> {
 	// Crash containment (mirrors server.ts): a startup failure must exit
 	// non-zero; a post-start failure logs and continues.
 	let serverStarted = false;
-	process.on("unhandledRejection", (reason: unknown) => {
-		logger.error("[Daemon] Unhandled promise rejection", {
-			pid: process.pid,
-			error: reason instanceof Error ? `${reason.message}\n${reason.stack ?? ""}` : String(reason)
+	if (options.installProcessHandlers !== false) {
+		process.on("unhandledRejection", (reason: unknown) => {
+			logger.error("[Daemon] Unhandled promise rejection", {
+				pid: process.pid,
+				error: reason instanceof Error ? `${reason.message}\n${reason.stack ?? ""}` : String(reason)
+			});
+			bugCapture.capture({
+				source: "unhandled_rejection",
+				message: reason instanceof Error ? reason.message : String(reason),
+				stack: reason instanceof Error ? (reason.stack ?? null) : null,
+				context: { pid: process.pid, startup: !serverStarted }
+			});
+			if (!serverStarted) process.exit(1);
 		});
-		bugCapture.capture({
-			source: "unhandled_rejection",
-			message: reason instanceof Error ? reason.message : String(reason),
-			stack: reason instanceof Error ? (reason.stack ?? null) : null,
-			context: { pid: process.pid, startup: !serverStarted }
+		process.on("uncaughtException", (err: Error) => {
+			logger.error("[Daemon] Uncaught exception", {
+				pid: process.pid,
+				error: err.message,
+				stack: err.stack ?? ""
+			});
+			bugCapture.capture({
+				source: "uncaught",
+				message: err.message,
+				stack: err.stack ?? null,
+				context: { pid: process.pid, startup: !serverStarted }
+			});
+			if (!serverStarted) process.exit(1);
 		});
-		if (!serverStarted) process.exit(1);
-	});
-	process.on("uncaughtException", (err: Error) => {
-		logger.error("[Daemon] Uncaught exception", { pid: process.pid, error: err.message, stack: err.stack ?? "" });
-		bugCapture.capture({
-			source: "uncaught",
-			message: err.message,
-			stack: err.stack ?? null,
-			context: { pid: process.pid, startup: !serverStarted }
-		});
-		if (!serverStarted) process.exit(1);
-	});
+	}
 
 	let handle: CombinedServerHandle;
 	try {
-		handle = await startCombinedServer();
+		const boot = options.startServer ?? startCombinedServer;
+		handle = await boot(options);
 	} catch (error) {
 		logger.error("[Daemon] Failed to start combined server — exiting", { error: String(error) });
 		process.exit(1);
@@ -353,6 +395,12 @@ export async function runDaemonWorker(): Promise<void> {
 		}
 		process.exit(0);
 	};
-	process.on("SIGINT", () => void shutdown("SIGINT"));
-	process.on("SIGTERM", () => void shutdown("SIGTERM"));
+	if (options.installProcessHandlers !== false) {
+		process.on("SIGINT", () => void shutdown("SIGINT"));
+		process.on("SIGTERM", () => void shutdown("SIGTERM"));
+	}
+
+	// Park forever (see the "Never resolves" note above): returning here would
+	// re-enter server.ts's normal boot path and double-boot the store + worker.
+	await new Promise<void>(() => {});
 }
