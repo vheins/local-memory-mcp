@@ -260,7 +260,7 @@ describe("CoordinationService.releaseClaim", () => {
 		vi.mocked(mocks.db.tasks.getTaskByCode).mockReturnValue(null);
 
 		await expect(CoordinationService.releaseClaim({ task_code: "NOPE", repo: "app" })).rejects.toThrow(
-			"Task not found: NOPE in repo app"
+			'Task not found: NOPE (owner="", repo="app")'
 		);
 		expect(mocks.db.handoffs.releaseClaim).not.toHaveBeenCalled();
 	});

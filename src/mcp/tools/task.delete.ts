@@ -43,10 +43,13 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 		} else if (isBulk) {
 			// Bulk partial execution — warn and skip instead of throw
 			logger.warn("[Tool] task.delete — skipping not found", { targetId });
-			skippedErrors.push({ identifier: targetId, error: `Task not found: ${targetId}` });
+			skippedErrors.push({
+				identifier: targetId,
+				error: `Task not found: ${targetId} (owner="${owner}", repo="${repo}")`
+			});
 		} else {
 			// Single target not found — fail loud (OPT-CODE-04)
-			throw new Error(`Task not found: ${targetId}`);
+			throw new Error(`Task not found: ${targetId} (owner="${owner}", repo="${repo}")`);
 		}
 	}
 

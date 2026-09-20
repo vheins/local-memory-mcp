@@ -102,7 +102,7 @@ export async function handleDetailMode(
 		}
 
 		if (!task) {
-			throw new Error(`Task not found: ${identifier} in repo ${repo}`);
+			throw new Error(`Task not found: ${identifier} (owner="${owner}", repo="${repo}")`);
 		}
 
 		// getTaskById / getTaskByCode already load comments (batched) — reuse them

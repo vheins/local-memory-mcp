@@ -59,7 +59,7 @@ export function resolveTaskByRef(
 	if (resolvedId && !UUID_REGEX.test(resolvedId)) {
 		const task = storage.tasks.getTaskByCode(owner, repo, resolvedId);
 		if (!task) {
-			throw new Error(`Task not found: ${resolvedId} in repo ${repo}`);
+			throw new Error(`Task not found: ${resolvedId} (owner="${owner}", repo="${repo}")`);
 		}
 		resolvedId = task.id;
 		resolvedCode = task.task_code;
@@ -69,7 +69,7 @@ export function resolveTaskByRef(
 	if (resolvedId) {
 		const task = storage.tasks.getTaskById(resolvedId);
 		if (!task || task.repo !== repo) {
-			throw new Error(`Task not found: ${resolvedId} in repo ${repo}`);
+			throw new Error(`Task not found: ${resolvedId} (owner="${owner}", repo="${repo}")`);
 		}
 		return { taskId: resolvedId, taskCode: resolvedCode ?? task.task_code, task };
 	}
@@ -78,7 +78,7 @@ export function resolveTaskByRef(
 	if (taskCode) {
 		const task = storage.tasks.getTaskByCode(owner, repo, taskCode);
 		if (!task) {
-			throw new Error(`Task not found: ${taskCode} in repo ${repo}`);
+			throw new Error(`Task not found: ${taskCode} (owner="${owner}", repo="${repo}")`);
 		}
 		return { taskId: task.id, taskCode: task.task_code, task };
 	}

@@ -111,9 +111,11 @@ export const CoordinationService = {
 		let resolvedTaskId = task_id;
 		if (!resolvedTaskId && task_code) {
 			const repo = attributes.repo as string;
+			// Dashboard resolves codes with owner="" (TASK-426) — the scope is
+			// surfaced in the error so the empty owner namespace is obvious.
 			const task = db.tasks.getTaskByCode("", repo, task_code);
 			if (!task) {
-				throw new Error(`Task not found: ${task_code} in repo ${repo}`);
+				throw new Error(`Task not found: ${task_code} (owner="", repo="${repo}")`);
 			}
 			resolvedTaskId = task.id;
 		}
