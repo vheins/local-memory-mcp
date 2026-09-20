@@ -23,14 +23,15 @@
 import http from "node:http";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
-import { createMcpHandler, hostHeaderValidationResponse, originValidationResponse } from "@modelcontextprotocol/server";
-import type { McpHttpHandler } from "@modelcontextprotocol/server";
+import { hostHeaderValidationResponse, originValidationResponse } from "@modelcontextprotocol/server";
 import { createServerFactory } from "../transport/factory";
 import {
 	buildAllowedHostnames,
 	buildRequestUrl,
+	createDualHandler,
 	toWebRequest,
 	writeWebResponse,
+	type DualHandler,
 	MCP_HTTP_DEFAULT_HOST,
 	MCP_HTTP_DEFAULT_PATH
 } from "../transport/http";
@@ -135,7 +136,7 @@ async function resolveRuntime(): Promise<{
  * validation mirrors `startHttpTransport`; bearer auth is intentionally absent
  * because the combined listener is loopback-only.
  */
-function createMcpPreRoute(handler: McpHttpHandler, host: string): ExpressPreRoute {
+function createMcpPreRoute(handler: DualHandler, host: string): ExpressPreRoute {
 	const allowedHostnames = buildAllowedHostnames(host);
 
 	return {
@@ -235,9 +236,15 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
 	});
 
 	// --- Build the MCP handler + Express app ---
-	const mcpHandler = createMcpHandler(createServerFactory(db, vectors), {
-		onerror: (error) => logger.warn("[Daemon] MCP handler error", { error: error.message })
-	});
+	// DUAL-ERA handler (DEBT-423): modern (2026-07-28) traffic is served by a
+	// strict `legacy: "reject"` handler; 2025-era traffic — the era OpenCode and
+	// most current MCP clients speak — is served by a PER-SESSION stateful
+	// transport so MCP roots applied on `oninitialized` survive into later tool
+	// calls. Without this the daemon (the PRIMARY deployment) fell back to the
+	// SDK's throwaway stateless legacy serving and roots never reached tools.
+	const mcpHandler = createDualHandler(createServerFactory(db, vectors), (error) =>
+		logger.warn("[Daemon] MCP handler error", { error: error.message })
+	);
 	const mcpMount = createMcpPreRoute(mcpHandler, host);
 	const { app } = createExpressApp({ db, vectors, preRoutes: [mcpMount] });
 

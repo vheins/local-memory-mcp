@@ -11,6 +11,19 @@
  * the Web `Request`/`Response` the handler expects, enforces bearer auth and
  * localhost Host/Origin validation, and reuses the ONE shared store/worker
  * startup from `server.ts` via a per-session {@link McpServerFactory}.
+ *
+ * DUAL-HANDLER ROUTING (DEBT-423): the SDK entry has no handler-valued
+ * `legacy` option, so 2025-era (legacy) traffic — which is what OpenCode and
+ * most current MCP clients speak — must be routed by hand with
+ * {@link isLegacyRequest} in front of a strict `legacy: "reject"` modern
+ * handler. The modern path stays per-request; the legacy path is served by a
+ * STATEFUL {@link WebStandardStreamableHTTPServerTransport} PER SESSION,
+ * keyed by the `Mcp-Session-Id` header. That per-session transport retains the
+ * initialized `McpServer`, so `oninitialized` (which applies MCP roots via
+ * `applySessionRoots`, TASK-418) fires once on the REAL session and its scope
+ * reaches every later tool call. A single shared transport cannot do this:
+ * the SDK transport holds one `sessionId`/`_initialized` pair, so a second
+ * concurrent `initialize` is rejected with "Server already initialized".
  */
 import http from "node:http";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
@@ -18,14 +31,22 @@ import type { AddressInfo } from "node:net";
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeWebReadableStream } from "node:stream/web";
 import { pipeline } from "node:stream/promises";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import {
 	createMcpHandler,
 	hostHeaderValidationResponse,
+	isLegacyRequest,
 	originValidationResponse,
-	localhostAllowedHostnames
+	localhostAllowedHostnames,
+	WebStandardStreamableHTTPServerTransport
 } from "@modelcontextprotocol/server";
-import type { McpServerFactory } from "@modelcontextprotocol/server";
+import type {
+	JSONRPCMessage,
+	McpHandlerRequestOptions,
+	McpServer,
+	McpServerFactory,
+	Server
+} from "@modelcontextprotocol/server";
 import { MCP_HTTP_ALLOW_INSECURE, MCP_HTTP_PORT } from "../utils/constants";
 import { logger } from "../utils/logger";
 
@@ -108,12 +129,180 @@ function normalizePath(raw: string | undefined): string {
 	return withLeading.endsWith("/") ? withLeading.slice(0, -1) : withLeading;
 }
 
+/** A live legacy (2025-era) session: one stateful transport plus its server. */
+interface LegacySession {
+	transport: WebStandardStreamableHTTPServerTransport;
+	product: McpServer | Server;
+}
+
+/**
+ * Wrap a legacy session transport so server→client messages emitted before the
+ * client's standalone SSE (`GET`) stream is open are BUFFERED, not dropped.
+ *
+ * The SDK transport routes standalone messages — server→client requests such
+ * as `roots/list`, and unsolicited notifications — to the single `_GET_stream`
+ * registered by a `GET` request, and its `send()` SILENTLY DISCARDS such a
+ * message while that stream is closed. A 2025-era client opens the `GET` stream
+ * only AFTER its `notifications/initialized` POST returns `202` — strictly
+ * after the server's `oninitialized` hook runs — so the initialize-time
+ * `roots/list` (which applies the session's MCP roots, TASK-418) would
+ * otherwise be lost and the roots would never reach later tool calls. Buffering
+ * until the stream opens closes that window deterministically (no timers).
+ *
+ * Only standalone traffic is buffered; request/response traffic (anything with
+ * a `relatedRequestId`, plus result/error responses) passes straight through,
+ * so normal tool-call round-trips are unaffected.
+ */
+function bufferStandaloneUntilSse(transport: WebStandardStreamableHTTPServerTransport): void {
+	const buffered: JSONRPCMessage[] = [];
+	let sseOpen = false;
+	const send = transport.send.bind(transport);
+	const handleRequest = transport.handleRequest.bind(transport);
+
+	transport.send = (message, options) => {
+		// Mirror the SDK's own routing: a message is standalone when it is not a
+		// result/error response and carries no related request id.
+		const isResponse = "id" in message && !("method" in message);
+		if (!isResponse && options?.relatedRequestId === undefined && !sseOpen) {
+			buffered.push(message);
+			return Promise.resolve();
+		}
+		return send(message, options);
+	};
+
+	transport.handleRequest = async (request, options) => {
+		const response = await handleRequest(request, options);
+		if (!sseOpen && request.method === "GET" && response.status === 200) {
+			sseOpen = true;
+			for (const message of buffered.splice(0)) await send(message);
+		}
+		return response;
+	};
+}
+
+/** The web-standard face returned by {@link createDualHandler}. */
+export interface DualHandler {
+	/** Serve one HTTP request, routing by protocol era (modern vs legacy). */
+	fetch: (request: Request, options?: McpHandlerRequestOptions) => Promise<Response>;
+	/** Tear down BOTH the modern handler and every live legacy session. */
+	close: () => Promise<void>;
+}
+
+/**
+ * Build the dual-era MCP handler shared by the standalone HTTP transport and
+ * the combined daemon server (FEAT-DAEMON-001).
+ *
+ * The SDK entry ({@link createMcpHandler}) has no handler-valued `legacy`
+ * option, so 2025-era traffic — the era OpenCode and most current MCP clients
+ * speak — is routed by hand with {@link isLegacyRequest} in front of a strict
+ * `legacy: "reject"` modern handler (DEBT-423). The modern path stays
+ * per-request; the legacy path is served by a STATEFUL
+ * {@link WebStandardStreamableHTTPServerTransport} PER SESSION, keyed by the
+ * `Mcp-Session-Id` header. That per-session transport retains the initialized
+ * `McpServer`, so `oninitialized` (which applies MCP roots via
+ * `applySessionRoots`, TASK-418) fires once on the REAL session and its scope
+ * reaches every later tool call. A single shared transport cannot do this: the
+ * SDK transport holds one `sessionId`/`_initialized` pair, so a second
+ * concurrent `initialize` is rejected with "Server already initialized".
+ *
+ * Extracted so both mounts (the plain Node listener in
+ * {@link startHttpTransport} and the Express pre-route in `combined-server.ts`)
+ * share ONE implementation and cannot drift apart.
+ *
+ * @param factory - Per-session server factory (see {@link createServerFactory}).
+ * @param onerror - Reporting callback for out-of-band errors on either leg
+ *   (never alters the response). The same callback serves both the modern
+ *   handler and each legacy session's transport.
+ * @returns A {@link DualHandler} exposing `fetch` and a `close()` that tears
+ *   down both legs.
+ */
+export function createDualHandler(factory: McpServerFactory, onerror?: (error: Error) => void): DualHandler {
+	// Modern (2026-07-28) face. Strict: 2025-era traffic is routed by hand
+	// (below) rather than served by the SDK's throwaway stateless fallback.
+	const modernHandler = createMcpHandler(factory, { legacy: "reject", onerror });
+
+	/**
+	 * Live legacy sessions keyed by `Mcp-Session-Id`. Each entry owns ONE
+	 * stateful transport (which retains its initialized server) so per-session
+	 * state — most importantly the MCP roots applied on `oninitialized` —
+	 * persists across that session's requests. A single shared transport cannot
+	 * do this: the SDK transport tracks one `sessionId`/`_initialized` pair, so
+	 * a second concurrent `initialize` is rejected with "Server already
+	 * initialized".
+	 */
+	const legacySessions = new Map<string, LegacySession>();
+
+	/**
+	 * Serve one legacy request. Requests carrying a known `Mcp-Session-Id` go
+	 * straight to that session's transport; anything else (an `initialize`, or
+	 * a stray/expired request) gets a fresh factory server + transport, which
+	 * is RETAINED only when the exchange actually opens a session.
+	 */
+	async function serveLegacy(webRequest: Request): Promise<Response> {
+		const sessionId = webRequest.headers.get("mcp-session-id");
+		const existing = sessionId !== null ? legacySessions.get(sessionId) : undefined;
+		if (existing !== undefined) return existing.transport.handleRequest(webRequest);
+
+		const product = await factory({ era: "legacy", requestInfo: webRequest });
+		const transport = new WebStandardStreamableHTTPServerTransport({
+			sessionIdGenerator: () => randomUUID(),
+			onsessioninitialized: (id) => {
+				legacySessions.set(id, { transport, product });
+			}
+		});
+		// Assign BEFORE connect(): `Protocol.connect` captures the transport's
+		// current `onclose`/`onerror` and chains them, so setting these after
+		// connect would clobber the server's own teardown hooks.
+		transport.onclose = () => {
+			if (transport.sessionId !== undefined) legacySessions.delete(transport.sessionId);
+		};
+		transport.onerror = (error) => onerror?.(error);
+		bufferStandaloneUntilSse(transport);
+		await product.connect(transport);
+
+		try {
+			return await transport.handleRequest(webRequest);
+		} finally {
+			// Only an `initialize` opens a session (setting `sessionId`); any
+			// other un-keyed exchange is one-shot and must not leak its server.
+			if (transport.sessionId === undefined) {
+				void transport.close().catch(() => {});
+				void product.close().catch(() => {});
+			}
+		}
+	}
+
+	return {
+		// `isLegacyRequest` classifies from an internal clone, so `request`
+		// stays fully readable for whichever handler it is routed to.
+		fetch: async (request, options) =>
+			(await isLegacyRequest(request)) ? await serveLegacy(request) : await modernHandler.fetch(request, options),
+		close: async () => {
+			await modernHandler.close();
+			const closingLegacy = [...legacySessions.values()].map(async ({ transport, product }) => {
+				await transport.close().catch(() => {});
+				await product.close().catch(() => {});
+			});
+			legacySessions.clear();
+			await Promise.all(closingLegacy);
+		}
+	};
+}
+
 /**
  * Start the Streamable HTTP transport and begin accepting MCP sessions.
  *
  * The store and process-wide workers are NOT touched here — they are already
  * initialized exactly once by the caller (`server.ts`). Each session gets its
  * own `McpServer`/`SessionContext` from `factory`, sharing the single store.
+ *
+ * Traffic is split by era via {@link createDualHandler} (DEBT-423): modern
+ * (2026-07-28) requests go to a strict `legacy: "reject"`
+ * {@link createMcpHandler}; 2025-era requests — the era OpenCode and most
+ * current clients speak — go to a per-session stateful
+ * {@link WebStandardStreamableHTTPServerTransport} so the initialize-time
+ * `oninitialized` hook (and the MCP roots it applies) survives into later tool
+ * calls instead of being torn down with a throwaway stateless instance.
  *
  * @param options - Resolved config plus the per-session server factory.
  * @returns A handle exposing the bound port/url and a `close()` method.
@@ -129,9 +318,9 @@ export async function startHttpTransport(options: HttpTransportOptions): Promise
 		);
 	}
 
-	const handler = createMcpHandler(factory, {
-		onerror: (error) => logger.warn("[MCP HTTP] handler error", { error: error.message })
-	});
+	const handler = createDualHandler(factory, (error) =>
+		logger.warn("[MCP HTTP] handler error", { error: error.message })
+	);
 
 	const allowedHostnames = buildAllowedHostnames(host);
 
@@ -151,7 +340,7 @@ export async function startHttpTransport(options: HttpTransportOptions): Promise
 
 	/**
 	 * Handle one Node HTTP exchange: path gate → auth → Host/Origin validation →
-	 * delegate to the SDK handler → bridge the Web response back to Node.
+	 * route by era → bridge the Web response back to Node.
 	 */
 	async function handleNodeRequest(nodeReq: IncomingMessage, res: ServerResponse): Promise<void> {
 		const url = buildRequestUrl(nodeReq, host, boundPort);
