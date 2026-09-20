@@ -156,10 +156,15 @@ export function createRouter(
 		onProgress?: (progress: number, total?: number) => void
 	): Promise<unknown> {
 		const { name } = params || {};
-		const args = normalizeToolArguments(params?.arguments, getSessionContext?.()) as Record<string, unknown>;
 		// Normalize tool naming: accept both dot (memory.store) and hyphen (memory-store)
 		const rawName = String(name).replace(/\./g, "-");
 		const toolName = TOOL_ALIASES[rawName] ?? rawName;
+		// The resolved canonical tool name is threaded into normalization so a
+		// WRITE tool can fail loud when its scope is undeterminable (TASK-420).
+		const args = normalizeToolArguments(params?.arguments, getSessionContext?.(), { toolName }) as Record<
+			string,
+			unknown
+		>;
 
 		// Single dispatch core shared with the production SDK path
 		// (registerAllTools). Session is resolved per call to preserve the

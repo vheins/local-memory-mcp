@@ -215,7 +215,9 @@ export function registerAllTools(
 			},
 			async (args, extra) => {
 				const rawArgs = (args ?? {}) as Record<string, unknown>;
-				const normalizedArgs = normalizeToolArguments(rawArgs, session) as Record<string, unknown>;
+				// The canonical tool name is threaded into normalization so a WRITE
+				// tool can fail loud when its scope is undeterminable (TASK-420).
+				const normalizedArgs = normalizeToolArguments(rawArgs, session, { toolName }) as Record<string, unknown>;
 				// Dispatch instrumentation (OPT-OBS-01): measure the full tool
 				// call with performance.now() so slow tools are visible in logs
 				// AND the in-process metrics registry (p50/p95 per tool).
