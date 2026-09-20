@@ -56,16 +56,67 @@ describe("WriteLock", () => {
 
 			await lock.acquire();
 
-			expect(lockfile.lock).toHaveBeenCalledWith(dbPath, {
-				stale: 30000,
-				retries: {
-					retries: 250,
-					minTimeout: 200,
-					maxTimeout: 200
-				},
-				realpath: false
-			});
+			expect(lockfile.lock).toHaveBeenCalledWith(
+				dbPath,
+				expect.objectContaining({
+					stale: 30000,
+					retries: {
+						retries: 250,
+						minTimeout: 200,
+						maxTimeout: 200
+					},
+					realpath: false,
+					onCompromised: expect.any(Function)
+				})
+			);
 			// Can't directly access private 'locked', but we can infer it works if release tries to unlock
+		});
+
+		it("passes an onCompromised handler that never throws (uncaught-exception fix)", async () => {
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+			const lock = new WriteLock(dbPath);
+
+			await lock.acquire();
+
+			const opts = vi.mocked(lockfile.lock).mock.calls[0][1] as { onCompromised: (e: Error) => void };
+			// proper-lockfile's DEFAULT onCompromised THROWS, escaping as an
+			// uncaught exception ("Unable to update lock within the stale
+			// threshold"). Our handler must swallow it instead.
+			expect(() => opts.onCompromised(new Error("Unable to update lock within the stale threshold"))).not.toThrow();
+		});
+	});
+
+	describe("compromised lock recovery", () => {
+		it("does NOT unlock a lock another process stole after compromise", async () => {
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+			const lock = new WriteLock(dbPath);
+			await lock.acquire();
+
+			// Simulate the heartbeat detecting a foreign mtime mid-section.
+			const opts = vi.mocked(lockfile.lock).mock.calls[0][1] as { onCompromised: (e: Error) => void };
+			opts.onCompromised(new Error("Unable to update lock within the stale threshold"));
+
+			vi.mocked(lockfile.unlock).mockClear();
+			await lock.release();
+
+			// Unlocking here would delete a lock we no longer own — must skip.
+			expect(lockfile.unlock).not.toHaveBeenCalled();
+		});
+
+		it("clears the compromised flag so a later acquire/release unlocks normally", async () => {
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+			const lock = new WriteLock(dbPath);
+			await lock.acquire();
+
+			const opts = vi.mocked(lockfile.lock).mock.calls[0][1] as { onCompromised: (e: Error) => void };
+			opts.onCompromised(new Error("stolen"));
+			await lock.release(); // skips unlock, resets state
+
+			vi.mocked(lockfile.unlock).mockClear();
+			await lock.acquire();
+			await lock.release();
+
+			expect(lockfile.unlock).toHaveBeenCalledTimes(1);
 		});
 	});
 

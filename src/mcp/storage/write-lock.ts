@@ -25,6 +25,7 @@
 import lockfile from "proper-lockfile";
 import path from "path";
 import fs from "fs";
+import { logger } from "../utils/logger";
 
 const LOCK_STALE_MS = 30_000; // consider lock stale after 30s (handles crashed processes)
 const LOCK_RETRY_DELAY_MS = 200;
@@ -33,6 +34,16 @@ const LOCK_RETRY_COUNT = 250; // 250 * 200ms = 50s max wait
 export class WriteLock {
 	private lockTarget: string;
 	private locked = false;
+	/**
+	 * Set when proper-lockfile reports the held lock as COMPROMISED — another
+	 * process treated it as stale (its mtime aged past `stale`) and took it
+	 * over while we still believed we held it. proper-lockfile's default
+	 * `onCompromised` THROWS, which becomes an uncaught exception that kills
+	 * the process (FEAT-DAEMON-001 / "Unable to update lock within the stale
+	 * threshold"). We instead record the loss so `release()` skips the now
+	 * foreign lock and the exclusive section completes normally.
+	 */
+	private compromised = false;
 	/**
 	 * Intra-process acquisition queue for the EXCLUSIVE path: resolves when
 	 * the previous withExclusiveLock section (acquire → fn → release) fully
@@ -123,22 +134,47 @@ export class WriteLock {
 				minTimeout: LOCK_RETRY_DELAY_MS,
 				maxTimeout: LOCK_RETRY_DELAY_MS
 			},
-			realpath: false
+			realpath: false,
+			// A held lock can be compromised when the heartbeat cannot refresh it
+			// in time — e.g. a long synchronous better-sqlite3 statement inside
+			// `withExclusiveLock` blocks the event loop past the 15s heartbeat /
+			// 30s stale window, another process legitimately steals the stale
+			// lock, and our next `stat` sees a foreign mtime. proper-lockfile's
+			// DEFAULT onCompromised THROWS ("Unable to update lock within the
+			// stale threshold"), which escapes as an uncaught exception and kills
+			// the process. We instead record the loss: the section completes and
+			// `release()` skips unlocking a lock we no longer own.
+			onCompromised: (error: Error) => {
+				this.compromised = true;
+				this.locked = false;
+				logger.warn("[WriteLock] Exclusive lock compromised — another process took over", {
+					lock: this.lockTarget,
+					error: error.message
+				});
+			}
 		});
 		this.locked = true;
+		this.compromised = false;
 	}
 
 	/**
 	 * Release the exclusive proper-lockfile.
+	 *
+	 * If the lock was compromised while held (see {@link acquire}) another
+	 * process now owns it, so we must NOT unlock it — that would delete a lock
+	 * we do not hold. Skipping is the correct, race-safe outcome.
 	 */
 	async release(): Promise<void> {
 		if (!this.locked) return;
+		const compromised = this.compromised;
+		this.locked = false;
+		this.compromised = false;
+		if (compromised) return;
 		try {
 			await lockfile.unlock(this.lockTarget, { realpath: false });
 		} catch {
 			// Ignore unlock errors (lock may have already expired)
 		}
-		this.locked = false;
 	}
 
 	/**
