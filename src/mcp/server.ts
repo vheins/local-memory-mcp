@@ -336,7 +336,7 @@ if (transportMode === "http") {
 	try {
 		handle = await startHttpTransport({
 			...resolveHttpTransportConfig(),
-			factory: createServerFactory(db, vectors)
+			factory: createServerFactory(db, vectors, "http")
 		});
 	} catch (error) {
 		// A listen/bind failure (e.g. EADDRINUSE) or a missing bearer token must
@@ -345,5 +345,5 @@ if (transportMode === "http") {
 		process.exit(1);
 	}
 } else {
-	handle = serveStdio(createServerFactory(db, vectors));
+	handle = serveStdio(createServerFactory(db, vectors, "stdio"));
 }

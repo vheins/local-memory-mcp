@@ -240,17 +240,19 @@ describe("normalizeToolArguments", () => {
 
 	// ── TASK-420: roots-first scope priority + write fail-loud ─────────────
 	describe("scope priority and write fail-loud (TASK-420)", () => {
-		it("WRITE with no explicit scope and a rootless session THROWS", () => {
-			// A rootless session whose repo/owner are CWD-derived only: a write
-			// must refuse rather than silently target the daemon working dir.
-			const session = makeSession({ roots: [], repo: "cwd-repo", owner: "cwd-owner" });
+		it("WRITE with no explicit scope and a rootless HTTP session THROWS", () => {
+			// A rootless HTTP session whose repo/owner are CWD-derived only: a
+			// write must refuse rather than silently target the daemon working
+			// dir. The guard is HTTP-only — under stdio the CWD IS the client's
+			// project (see the regression test below).
+			const session = makeSession({ roots: [], repo: "cwd-repo", owner: "cwd-owner", transport: "http" });
 			expect(() => normalizeToolArguments({ content: "x" }, session, { toolName: "memory-write" })).toThrow(
 				/owner\/repo could not be determined for a write operation/
 			);
 		});
 
 		it("WRITE with an explicit repo does NOT throw", () => {
-			const session = makeSession({ roots: [] });
+			const session = makeSession({ roots: [], transport: "http" });
 			const result = normalizeToolArguments({ content: "x", repo: "my-repo" }, session, {
 				toolName: "memory-write"
 			});
@@ -264,14 +266,14 @@ describe("normalizeToolArguments", () => {
 			vi.mocked(inferRepoFromSession).mockReturnValue("rootrepo");
 			vi.mocked(inferOwnerFromSession).mockReturnValue("alice");
 			const root = path.resolve("/Users", "alice", "rootrepo");
-			const session = makeSession({ roots: [{ uri: pathToFileURL(root).href }] });
+			const session = makeSession({ roots: [{ uri: pathToFileURL(root).href }], transport: "http" });
 			const result = normalizeToolArguments({ content: "x" }, session, { toolName: "memory-write" });
 			expect(result.repo).toBe("rootrepo");
 			expect(result.owner).toBe("alice");
 		});
 
 		it("WRITE addressed by UUID does NOT throw (scope inherited from the entity)", () => {
-			const session = makeSession({ roots: [] });
+			const session = makeSession({ roots: [], transport: "http" });
 			const result = normalizeToolArguments(
 				{ id: "123e4567-e89b-12d3-a456-426614174000", status: "expired" },
 				session,
@@ -281,13 +283,13 @@ describe("normalizeToolArguments", () => {
 		});
 
 		it("interactive WRITE does NOT throw (scope elicited before the write)", () => {
-			const session = makeSession({ roots: [] });
+			const session = makeSession({ roots: [], transport: "http" });
 			expect(() => normalizeToolArguments({ interactive: true }, session, { toolName: "task-write" })).not.toThrow();
 		});
 
 		it("READ with no scope does NOT throw and is tagged __scopeInferred", () => {
 			const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-			const session = makeSession({ roots: [], repo: "cwd-repo", owner: "cwd-owner" });
+			const session = makeSession({ roots: [], repo: "cwd-repo", owner: "cwd-owner", transport: "http" });
 			const result = normalizeToolArguments({ query: "q" }, session, { toolName: "memory-read" });
 			expect(result.repo).toBe("cwd-repo");
 			expect(result.owner).toBe("cwd-owner");
@@ -317,11 +319,38 @@ describe("normalizeToolArguments", () => {
 			expect(result.owner).toBe("alice");
 		});
 
-		it("isWrite override (without a toolName) also fails loud", () => {
-			const session = makeSession({ roots: [] });
+		it("isWrite override (without a toolName) also fails loud for an HTTP session", () => {
+			const session = makeSession({ roots: [], transport: "http" });
 			expect(() => normalizeToolArguments({ content: "x" }, session, { isWrite: true })).toThrow(
 				/owner\/repo could not be determined/
 			);
+		});
+
+		// ── Regression: stdio CWD fallback MUST stay permissive ─────────────
+		// A stdio client that does not advertise MCP roots always has
+		// `roots === []`, and its CWD IS its project, so the historical
+		// CWD-derived scope is correct. Failing loud here was a backward-compat
+		// regression (the pre-TASK-420 behavior silently filled session.repo/
+		// session.owner). The guard is therefore HTTP-only.
+		it("WRITE with no explicit scope and a rootless stdio session does NOT throw (CWD fallback preserved)", () => {
+			const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+			const session = makeSession({ roots: [], repo: "cwd-repo", owner: "cwd-owner", transport: "stdio" });
+			const result = normalizeToolArguments({ content: "x" }, session, { toolName: "memory-write" });
+			expect(result.repo).toBe("cwd-repo");
+			expect(result.owner).toBe("cwd-owner");
+			expect(warnSpy).toHaveBeenCalled();
+		});
+
+		it("WRITE with no explicit scope and an undefined transport does NOT throw (historical default)", () => {
+			const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+			const session = makeSession({ roots: [], repo: "cwd-repo", owner: "cwd-owner" });
+			// `transport` is intentionally left undefined to prove the guard
+			// requires an EXPLICIT "http" (default/historical = permissive).
+			expect(session.transport).toBeUndefined();
+			const result = normalizeToolArguments({ content: "x" }, session, { toolName: "memory-write" });
+			expect(result.repo).toBe("cwd-repo");
+			expect(result.owner).toBe("cwd-owner");
+			expect(warnSpy).toHaveBeenCalled();
 		});
 	});
 });

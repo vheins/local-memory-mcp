@@ -146,9 +146,11 @@ function stripEmptyStringKeys(value: unknown): unknown {
  *
  * WRITE FAIL-LOUD (TASK-420): when `options.isWrite` is true (or
  * `options.toolName` is in {@link WRITE_TOOLS}) and the scope is genuinely
- * undeterminable — no explicit owner/repo, no MCP roots — the call throws
- * rather than silently writing to the daemon working directory. Reads stay
- * permissive and are tagged with a `__scopeInferred` marker for observability.
+ * undeterminable — no explicit owner/repo, no MCP roots — an HTTP/daemon
+ * session (`session.transport === "http"`) throws rather than silently writing
+ * to the daemon working directory. A stdio session stays permissive (its CWD IS
+ * the client's project). Reads stay permissive and are tagged with a
+ * `__scopeInferred` marker for observability.
  *
  * @param args  Raw tool arguments — may be `unknown` from params?.arguments.
  * @param session  Current session context (optional in router.ts path).
@@ -312,10 +314,22 @@ export function normalizeToolArguments(
 	// ── Scope-provenance guard (TASK-420) ────────────────────────────────────
 	// The scope is "CWD-derived only" when the caller supplied no explicit
 	// owner/repo AND the session declared no MCP roots. In that case every
-	// resolved value came from the daemon's working directory.
+	// resolved value came from the process working directory.
 	const scopeFromCwdFallback = !explicitScopeArg && rootsEmpty;
 
-	if (isWrite === true && scopeFromCwdFallback && !isScopeResolvableWithoutCwd(nextArgs)) {
+	// The fail-loud guard fires for HTTP/daemon serving ONLY. Under HTTP the
+	// process CWD is the daemon's working directory, NOT the caller's project,
+	// so a CWD-derived scope would silently write to the wrong repo. Under
+	// stdio the process CWD IS the client's project (one client per process),
+	// so the historical CWD-derived scope is correct and MUST stay permissive —
+	// a stdio client that does not advertise MCP roots always has `roots === []`,
+	// and failing loud there would be a backward-compatibility regression.
+	if (
+		isWrite === true &&
+		scopeFromCwdFallback &&
+		session?.transport === "http" &&
+		!isScopeResolvableWithoutCwd(nextArgs)
+	) {
 		// FAIL-LOUD: refuse to silently write to the daemon CWD. The dispatch
 		// layer wraps thrown errors into the canonical error envelope.
 		//

@@ -1,6 +1,6 @@
 import type { McpServerFactory, Server } from "@modelcontextprotocol/server";
 import { createMcpServer } from "../mcp-server";
-import { applySessionRoots, updateSessionFromInitialize } from "../session";
+import { applySessionRoots, createSessionContext, updateSessionFromInitialize } from "../session";
 import type { SessionContext } from "../session";
 import type { SQLiteStore } from "../storage/sqlite";
 import type { VectorStore } from "../types";
@@ -18,13 +18,24 @@ import { bugCapture } from "../utils/bug-capture";
  * capture (client name/version/capabilities into the session context) can
  * never drift between the two transports.
  *
+ * `transport` is threaded into the per-session {@link SessionContext} so the
+ * TASK-420 write fail-loud guard can distinguish a stdio session (whose CWD IS
+ * the client's project) from an HTTP/daemon session (whose CWD is the daemon's,
+ * not the caller's). It defaults to `"stdio"` to preserve the historical
+ * behavior of every existing caller/test.
+ *
  * @param store - The process-wide SQLiteStore shared by every session.
  * @param vectors - The process-wide vector store shared by every session.
+ * @param transport - The serving transport (`"stdio"` default, or `"http"`).
  * @returns A zero-argument factory assignable to the SDK's McpServerFactory.
  */
-export function createServerFactory(store: SQLiteStore, vectors: VectorStore): McpServerFactory {
+export function createServerFactory(
+	store: SQLiteStore,
+	vectors: VectorStore,
+	transport: "stdio" | "http" = "stdio"
+): McpServerFactory {
 	return () => {
-		const { server, ctx } = createMcpServer(store, vectors);
+		const { server, ctx } = createMcpServer(store, vectors, createSessionContext(transport));
 
 		// Wire oninitialized to capture client info from the initialize handshake
 		// (mirrors the historical stdio wiring in server.ts).

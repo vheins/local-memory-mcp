@@ -96,4 +96,28 @@ describe("createServerFactory per-session isolation (TASK-419)", () => {
 			db.close();
 		}
 	});
+
+	// TASK-420 regression: the transport discriminator must reach the session so
+	// the write fail-loud guard can be HTTP-only (stdio CWD = client project).
+	it("threads the transport discriminator into each session context", async () => {
+		const db = await createTestStore();
+		const vectors: VectorStore = new StubVectorStore(db);
+
+		const transports: Array<string | undefined> = [];
+		const realCreateSessionContext = sessionModule.createSessionContext;
+		vi.spyOn(sessionModule, "createSessionContext").mockImplementation((transport?: "stdio" | "http") => {
+			transports.push(transport);
+			return realCreateSessionContext(transport);
+		});
+
+		try {
+			createServerFactory(db, vectors, "http")({ era: "legacy" });
+			createServerFactory(db, vectors, "stdio")({ era: "legacy" });
+			createServerFactory(db, vectors)({ era: "legacy" }); // default
+
+			expect(transports).toEqual(["http", "stdio", "stdio"]);
+		} finally {
+			db.close();
+		}
+	});
 });

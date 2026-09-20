@@ -243,7 +243,7 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
 	// transport so MCP roots applied on `oninitialized` survive into later tool
 	// calls. Without this the daemon (the PRIMARY deployment) fell back to the
 	// SDK's throwaway stateless legacy serving and roots never reached tools.
-	const mcpHandler = createDualHandler(createServerFactory(db, vectors), (error) =>
+	const mcpHandler = createDualHandler(createServerFactory(db, vectors, "http"), (error) =>
 		logger.warn("[Daemon] MCP handler error", { error: error.message })
 	);
 	const mcpMount = createMcpPreRoute(mcpHandler, host);

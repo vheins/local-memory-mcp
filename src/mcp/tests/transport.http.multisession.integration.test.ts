@@ -121,8 +121,8 @@ describe("TASK-423 — HTTP multi-session project isolation", () => {
 		// Instrument the factory: delegate to the real createSessionContext but
 		// record every context the daemon builds for the shared store.
 		const realCreateSessionContext = sessionModule.createSessionContext;
-		vi.spyOn(sessionModule, "createSessionContext").mockImplementation(() => {
-			const ctx = realCreateSessionContext();
+		vi.spyOn(sessionModule, "createSessionContext").mockImplementation((transport?: "stdio" | "http") => {
+			const ctx = realCreateSessionContext(transport);
 			capturedContexts.push(ctx);
 			return ctx;
 		});
@@ -133,7 +133,7 @@ describe("TASK-423 — HTTP multi-session project isolation", () => {
 			path: "/mcp",
 			token: undefined,
 			allowInsecure: true,
-			factory: createServerFactory(store, vectors)
+			factory: createServerFactory(store, vectors, "http")
 		});
 	});
 
@@ -345,7 +345,9 @@ describe("TASK-423 — HTTP multi-session project isolation", () => {
 		});
 
 		it("throws for a rootless write with no explicit owner/repo (TASK-420)", () => {
-			const rootless = createSessionContext();
+			// The fail-loud guard is HTTP-only (the daemon CWD is not the
+			// caller's project); a stdio session stays permissive.
+			const rootless = createSessionContext("http");
 			expect(() => normalizeToolArguments({ content: "x" }, rootless, { toolName: "memory-write" })).toThrow(
 				/could not be determined/
 			);

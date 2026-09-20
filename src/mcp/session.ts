@@ -37,9 +37,16 @@ export type SessionContext = {
 	// Lazy-captured from args — fallback for subsequent tool calls
 	lastSeenModel?: string;
 	lastSeenAgent?: string;
+
+	// Serving transport that created this session. "stdio" means the process CWD
+	// IS the client's project (one client per process), so a CWD-derived scope is
+	// safe. "http" means the process serves MANY clients from the daemon's own
+	// CWD, so a CWD-derived scope is NOT the caller's project. Defaults to
+	// "stdio" for backward compatibility with every existing caller.
+	transport?: "stdio" | "http";
 };
 
-export function createSessionContext(): SessionContext {
+export function createSessionContext(transport: "stdio" | "http" = "stdio"): SessionContext {
 	const cwd = process.cwd();
 	const repo = path.basename(cwd);
 	const projectPath = cwd;
@@ -68,7 +75,8 @@ export function createSessionContext(): SessionContext {
 		clientName: undefined,
 		clientVersion: undefined,
 		lastSeenModel: undefined,
-		lastSeenAgent: undefined
+		lastSeenAgent: undefined,
+		transport
 	};
 }
 
