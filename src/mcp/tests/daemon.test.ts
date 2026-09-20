@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import type { spawn } from "node:child_process";
 import {
+	acquireLock,
 	buildLaunchdPlist,
 	buildSchtasksCommand,
 	buildSystemdUnit,
@@ -20,7 +21,9 @@ import {
 	isProcessAlive,
 	launchdPlistPath,
 	readDaemonPid,
+	readLockPid,
 	removeDaemonPid,
+	removeLock,
 	resolveDaemonDir,
 	resolveDaemonPaths,
 	resolveServiceCommand,
@@ -44,7 +47,12 @@ const tempDirs: string[] = [];
 function makePaths(): DaemonPaths {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lmc-daemon-"));
 	tempDirs.push(dir);
-	return { dir, pidFile: path.join(dir, "daemon.pid"), logFile: path.join(dir, "daemon.log") };
+	return {
+		dir,
+		pidFile: path.join(dir, "daemon.pid"),
+		logFile: path.join(dir, "daemon.log"),
+		lockFile: path.join(dir, "daemon.lock")
+	};
 }
 
 /** Collect log lines emitted by the injected io. */
@@ -74,10 +82,11 @@ describe("daemon — path resolution", () => {
 		expect(dir).toContain("local-memory-mcp");
 	});
 
-	it("places daemon.pid and daemon.log in the resolved dir", () => {
+	it("places daemon.pid, daemon.log, and daemon.lock in the resolved dir", () => {
 		const paths = resolveDaemonPaths({ LOCAL_MEMORY_DAEMON_DIR: "/tmp/lmc" });
 		expect(paths.pidFile).toBe(path.join("/tmp/lmc", "daemon.pid"));
 		expect(paths.logFile).toBe(path.join("/tmp/lmc", "daemon.log"));
+		expect(paths.lockFile).toBe(path.join("/tmp/lmc", "daemon.lock"));
 	});
 });
 
@@ -135,6 +144,8 @@ describe("daemon — start", () => {
 		expect(readDaemonPid(paths.pidFile)).toBe(5150);
 		expect(lines).toEqual(["Daemon started (pid 5150)"]);
 		expect(fs.existsSync(paths.logFile)).toBe(true);
+		// The single-instance lock is created and records the WORKER pid.
+		expect(readLockPid(paths.lockFile)).toBe(5150);
 	});
 
 	it("does not fork when a live daemon is already recorded", () => {
@@ -160,6 +171,99 @@ describe("daemon — start", () => {
 
 		expect(result).toEqual({ started: true, pid: 222 });
 		expect(readDaemonPid(paths.pidFile)).toBe(222);
+		expect(readLockPid(paths.lockFile)).toBe(222);
+	});
+
+	it("releases the lock when the spawn itself throws", () => {
+		const paths = makePaths();
+		const { log } = collector();
+		const spawnFn = (() => {
+			throw new Error("spawn failed");
+		}) as unknown as typeof spawn;
+
+		expect(() => startDaemon({ paths, io: { spawnFn, log } })).toThrow("spawn failed");
+		expect(fs.existsSync(paths.lockFile)).toBe(false);
+	});
+});
+
+describe("daemon — single-instance lock (TASK-425)", () => {
+	it("acquireLock creates the lock file and records the pid", () => {
+		const paths = makePaths();
+		const result = acquireLock(paths.lockFile, { isAlive: () => false }, 4242);
+
+		expect(result).toEqual({ acquired: true, pid: 4242 });
+		expect(readLockPid(paths.lockFile)).toBe(4242);
+	});
+
+	it("two sequential startDaemon calls → only the first starts; the second reports the first pid", () => {
+		const paths = makePaths();
+		const { lines, log } = collector();
+		const first = (() => ({ pid: 6001, unref: () => undefined })) as unknown as typeof spawn;
+
+		const r1 = startDaemon({ paths, io: { spawnFn: first, log, isAlive: () => true } });
+		expect(r1).toEqual({ started: true, pid: 6001 });
+
+		// Second start: the lock file now exists and its owner is alive.
+		const second = vi.fn() as unknown as typeof spawn;
+		const r2 = startDaemon({ paths, io: { spawnFn: second, log, isAlive: () => true } });
+
+		expect(r2).toEqual({ started: false, pid: 6001 });
+		expect(second).not.toHaveBeenCalled();
+		expect(lines).toEqual(["Daemon started (pid 6001)", "Daemon already running (pid 6001)"]);
+	});
+
+	it("reports the lock holder's pid when the lock is present but the PID file is absent", () => {
+		const paths = makePaths();
+		// Simulate a lock held by a live process, no PID file (parent crashed
+		// between lock acquisition and PID write, or file was removed).
+		fs.writeFileSync(paths.lockFile, "9100\n", "utf8");
+		const { lines, log } = collector();
+		const spawnFn = vi.fn() as unknown as typeof spawn;
+
+		const result = startDaemon({ paths, io: { spawnFn, log, isAlive: () => true } });
+
+		expect(result).toEqual({ started: false, pid: 9100 });
+		expect(spawnFn).not.toHaveBeenCalled();
+		expect(lines).toEqual(["Daemon already running (pid 9100)"]);
+	});
+
+	it("removes a stale lock held by a dead process and starts", () => {
+		const paths = makePaths();
+		fs.writeFileSync(paths.lockFile, "9999\n", "utf8");
+		const { lines, log } = collector();
+		const spawnFn = (() => ({ pid: 7007, unref: () => undefined })) as unknown as typeof spawn;
+
+		const result = startDaemon({ paths, io: { spawnFn, log, isAlive: () => false } });
+
+		expect(result).toEqual({ started: true, pid: 7007 });
+		expect(readLockPid(paths.lockFile)).toBe(7007);
+		expect(lines).toEqual(["Daemon started (pid 7007)"]);
+	});
+
+	it("removes an empty/corrupt lock file (no readable pid) and starts", () => {
+		const paths = makePaths();
+		fs.writeFileSync(paths.lockFile, "not-a-pid\n", "utf8");
+		const { log } = collector();
+		const spawnFn = (() => ({ pid: 7100, unref: () => undefined })) as unknown as typeof spawn;
+
+		const result = startDaemon({ paths, io: { spawnFn, log, isAlive: () => true } });
+
+		expect(result).toEqual({ started: true, pid: 7100 });
+		expect(readLockPid(paths.lockFile)).toBe(7100);
+	});
+
+	it("cleans a stale PID file AND a stale lock, then starts", () => {
+		const paths = makePaths();
+		writeDaemonPid(paths.pidFile, 111);
+		fs.writeFileSync(paths.lockFile, "222\n", "utf8");
+		const { log } = collector();
+		const spawnFn = (() => ({ pid: 333, unref: () => undefined })) as unknown as typeof spawn;
+
+		const result = startDaemon({ paths, io: { spawnFn, log, isAlive: () => false } });
+
+		expect(result).toEqual({ started: true, pid: 333 });
+		expect(readDaemonPid(paths.pidFile)).toBe(333);
+		expect(readLockPid(paths.lockFile)).toBe(333);
 	});
 });
 
@@ -176,6 +280,42 @@ describe("daemon — stop", () => {
 		expect(kill).toHaveBeenCalledWith(888, "SIGTERM");
 		expect(fs.existsSync(paths.pidFile)).toBe(false);
 		expect(lines).toEqual(["Daemon stopped"]);
+	});
+
+	it("releases the single-instance lock file (TASK-425)", () => {
+		const paths = makePaths();
+		writeDaemonPid(paths.pidFile, 888);
+		fs.writeFileSync(paths.lockFile, "888\n", "utf8");
+		const { log } = collector();
+		const kill = vi.fn();
+
+		const result = stopDaemon({ paths, io: { log, kill, isAlive: () => true } });
+
+		expect(result).toEqual({ stopped: true, pid: 888 });
+		expect(fs.existsSync(paths.pidFile)).toBe(false);
+		expect(fs.existsSync(paths.lockFile)).toBe(false);
+	});
+
+	it("releases the lock even when only a stale PID file exists", () => {
+		const paths = makePaths();
+		writeDaemonPid(paths.pidFile, 999);
+		fs.writeFileSync(paths.lockFile, "999\n", "utf8");
+		const { log } = collector();
+
+		const result = stopDaemon({ paths, io: { log, isAlive: () => false } });
+
+		expect(result.stopped).toBe(false);
+		expect(fs.existsSync(paths.pidFile)).toBe(false);
+		expect(fs.existsSync(paths.lockFile)).toBe(false);
+	});
+
+	it("removeLock is idempotent", () => {
+		const paths = makePaths();
+		expect(() => removeLock(paths.lockFile)).not.toThrow();
+		fs.writeFileSync(paths.lockFile, "1\n", "utf8");
+		removeLock(paths.lockFile);
+		expect(fs.existsSync(paths.lockFile)).toBe(false);
+		expect(() => removeLock(paths.lockFile)).not.toThrow();
 	});
 
 	it("logs 'Daemon not running' when there is no pid file", () => {
@@ -437,7 +577,8 @@ describe("daemon install/uninstall — macOS launchd", () => {
 		const paths: DaemonPaths = {
 			dir: home,
 			pidFile: path.join(home, "daemon.pid"),
-			logFile: path.join(home, "daemon.log")
+			logFile: path.join(home, "daemon.log"),
+			lockFile: path.join(home, "daemon.lock")
 		};
 
 		const result = installDaemon({ io, paths });

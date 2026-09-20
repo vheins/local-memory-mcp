@@ -1,8 +1,77 @@
 import path from "node:path";
 import type { SessionContext } from "../session";
-import { findContainingRoot, inferOwnerFromSession, inferRepoFromSession, isPathWithinRoots } from "../session";
+import {
+	findContainingRoot,
+	getFilesystemRoots,
+	inferOwnerFromSession,
+	inferRepoFromSession,
+	isPathWithinRoots
+} from "../session";
 import { logger } from "./logger";
 import { parseRepoInput } from "./normalize";
+import { WRITE_TOOLS } from "./tool-plumbing";
+import { UUID_REGEX } from "./uuid";
+
+/**
+ * Optional call-site context for {@link normalizeToolArguments}.
+ *
+ * `toolName` lets the normalizer decide whether the call is a write (via
+ * {@link WRITE_TOOLS}) so it can fail loud rather than silently targeting the
+ * daemon CWD. `isWrite` is an explicit override for callers that already know
+ * the write-ness and want to avoid re-deriving it.
+ */
+export type NormalizeToolArgumentsOptions = {
+	toolName?: string;
+	isWrite?: boolean;
+};
+
+/** True only for a non-empty (post-trim) string — the "explicitly provided" test. */
+function isNonEmptyString(value: unknown): value is string {
+	return typeof value === "string" && value.trim().length > 0;
+}
+
+/**
+ * Identifier argument keys that, when carrying a UUID, make a write
+ * self-scoping: the handler resolves the stored entity by id and inherits that
+ * entity's owner/repo, so the daemon CWD is never consulted (TASK-420).
+ */
+const IDENTIFIER_KEYS = [
+	"id",
+	"ids",
+	"task_id",
+	"task_ids",
+	"memory_id",
+	"memory_ids",
+	"handoff_id",
+	"standard_id",
+	"standard_ids"
+] as const;
+
+/** Whether any identifier argument carries a UUID (an entity-self-scoping write). */
+function hasUuidIdentifier(args: Record<string, unknown>): boolean {
+	for (const key of IDENTIFIER_KEYS) {
+		const value = args[key];
+		if (typeof value === "string" && UUID_REGEX.test(value)) return true;
+		if (Array.isArray(value) && value.some((item) => typeof item === "string" && UUID_REGEX.test(item))) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Whether a write's scope is determinable WITHOUT the daemon CWD fallback:
+ *   - the call addresses an existing entity by UUID (`id`/`ids`/…), whose own
+ *     owner/repo is inherited by the handler; or
+ *   - the call is interactive (`interactive: true`) — the scope is elicited
+ *     from the user before any write.
+ *
+ * A code-addressed or pure-create write with no explicit owner/repo and no MCP
+ * roots is NOT exempt: its target would silently fall back to the daemon CWD.
+ */
+function isScopeResolvableWithoutCwd(args: Record<string, unknown>): boolean {
+	return args.interactive === true || hasUuidIdentifier(args);
+}
 
 /**
  * Validates that an absolute path value stays within the active MCP roots.
@@ -70,14 +139,34 @@ function stripEmptyStringKeys(value: unknown): unknown {
  * Used by both the upstream MCP router (router.ts) and the native MCP SDK
  * tool registration (tools/index.ts).
  *
+ * SCOPE PRIORITY (TASK-420): explicit args always win, then roots-derived
+ * values (`inferRepoFromSession`/`inferOwnerFromSession`), and only then the
+ * CWD-derived `session.repo`/`session.owner`. This keeps a client that declared
+ * MCP roots pinned to its project even when the daemon's CWD differs.
+ *
+ * WRITE FAIL-LOUD (TASK-420): when `options.isWrite` is true (or
+ * `options.toolName` is in {@link WRITE_TOOLS}) and the scope is genuinely
+ * undeterminable — no explicit owner/repo, no MCP roots — an HTTP/daemon
+ * session (`session.transport === "http"`) throws rather than silently writing
+ * to the daemon working directory. A stdio session stays permissive (its CWD IS
+ * the client's project). Reads stay permissive and are tagged with a
+ * `__scopeInferred` marker for observability.
+ *
  * @param args  Raw tool arguments — may be `unknown` from params?.arguments.
  * @param session  Current session context (optional in router.ts path).
+ * @param options  Optional call-site context (`toolName`/`isWrite`).
  * @returns Normalized args with owner/repo/scope/agent/model populated.
  */
-export function normalizeToolArguments(args: unknown, session?: SessionContext): Record<string, unknown> {
+export function normalizeToolArguments(
+	args: unknown,
+	session?: SessionContext,
+	options?: NormalizeToolArgumentsOptions
+): Record<string, unknown> {
 	if (!args || typeof args !== "object") {
 		return args as Record<string, unknown>;
 	}
+
+	const isWrite = options?.isWrite ?? (options?.toolName ? WRITE_TOOLS.has(options.toolName) : undefined);
 
 	const anyArgs = args as Record<string, unknown>;
 	const strippedArgs = stripEmptyStringKeys(anyArgs) as Record<string, unknown>;
@@ -108,16 +197,30 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 	validateRootBoundPath(nextArgs.current_file_path, "current_file_path", session);
 	validateRootBoundPath(nextArgs.doc_path, "doc_path", session);
 
-	// Session-wide defaults for owner/repo — prefer session-wide values
-	// over re-deriving every call
-	if (!nextArgs.repo && session?.repo) {
-		nextArgs.repo = session.repo;
-	}
+	const scope = nextArgs.scope as Record<string, unknown> | undefined;
+
+	// ── Explicit-scope detection (pre-injection) ─────────────────────────────
+	// Captured before any session/roots fill so the write fail-loud guard and
+	// the `__scopeInferred` marker can tell a caller-supplied scope from one we
+	// derived from the session/CWD.
+	const explicitScopeArg =
+		isNonEmptyString(nextArgs.repo) ||
+		isNonEmptyString(nextArgs.owner) ||
+		isNonEmptyString(scope?.repo) ||
+		isNonEmptyString(scope?.owner);
+	const rootsEmpty = getFilesystemRoots(session).length === 0;
+
+	// ── Repo resolution: roots-derived first, then the CWD session default ───
+	// `inferRepoFromSession` reads the declared MCP roots (single-root →
+	// basename). Only when it yields nothing do we fall back to the session's
+	// CWD-derived `repo` (TASK-420 priority inversion).
 	if (!nextArgs.repo) {
 		nextArgs.repo = inferRepoFromSession(session);
 	}
+	if (!nextArgs.repo && session?.repo) {
+		nextArgs.repo = session.repo;
+	}
 
-	const scope = nextArgs.scope as Record<string, unknown> | undefined;
 	if (scope && !scope.repo) {
 		scope.repo = (nextArgs.repo as string) ?? inferRepoFromSession(session);
 	}
@@ -133,14 +236,14 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 		delete nextArgs.owner;
 	}
 
-	if (!ownerExplicit && !nextArgs.owner && session?.owner) {
-		nextArgs.owner = session.owner;
-	}
-
+	// Owner resolution mirrors the repo rule (TASK-420): an explicit `owner`
+	// (or the owner segment of an `owner/repo` string) wins, then the
+	// roots-derived owner (`inferOwnerFromSession`), and only then the
+	// CWD-derived `session.owner`.
 	if (!ownerExplicit && !nextArgs.owner) {
 		const repoVal = (nextArgs.repo as string) || "";
 		const parsed = parseRepoInput(repoVal, undefined);
-		const inferredOwner = parsed.owner || inferOwnerFromSession(session);
+		const inferredOwner = parsed.owner || inferOwnerFromSession(session) || session?.owner;
 		if (inferredOwner !== undefined) {
 			nextArgs.owner = inferredOwner;
 			if (!repoVal.includes("/")) {
@@ -206,6 +309,46 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 				scope.folder = relativeFolder;
 			}
 		}
+	}
+
+	// ── Scope-provenance guard (TASK-420) ────────────────────────────────────
+	// The scope is "CWD-derived only" when the caller supplied no explicit
+	// owner/repo AND the session declared no MCP roots. In that case every
+	// resolved value came from the process working directory.
+	const scopeFromCwdFallback = !explicitScopeArg && rootsEmpty;
+
+	// The fail-loud guard fires for HTTP/daemon serving ONLY. Under HTTP the
+	// process CWD is the daemon's working directory, NOT the caller's project,
+	// so a CWD-derived scope would silently write to the wrong repo. Under
+	// stdio the process CWD IS the client's project (one client per process),
+	// so the historical CWD-derived scope is correct and MUST stay permissive —
+	// a stdio client that does not advertise MCP roots always has `roots === []`,
+	// and failing loud there would be a backward-compatibility regression.
+	if (
+		isWrite === true &&
+		scopeFromCwdFallback &&
+		session?.transport === "http" &&
+		!isScopeResolvableWithoutCwd(nextArgs)
+	) {
+		// FAIL-LOUD: refuse to silently write to the daemon CWD. The dispatch
+		// layer wraps thrown errors into the canonical error envelope.
+		//
+		// Exemption: an id-addressed write (UUID `id`/`ids`/…) or an interactive
+		// (elicitation) write resolves its scope from the stored entity or the
+		// user, not the CWD, so it is not at risk of a silent cross-project
+		// write. Only a genuinely undeterminable scope fails loud.
+		throw new Error(
+			"owner/repo could not be determined for a write operation — pass explicit owner/repo or connect from a " +
+				"project root (MCP roots). Refusing to write to the daemon working directory."
+		);
+	}
+
+	if (isWrite !== true && scopeFromCwdFallback) {
+		// READ (or unknown) stays permissive, but is tagged so callers/tests can
+		// observe that the scope was inferred rather than supplied. Handlers
+		// ignore unknown keys (Zod objects strip them; the SDK JSON Schema keeps
+		// additional properties open), so the marker never reaches persistence.
+		nextArgs.__scopeInferred = true;
 	}
 
 	// Lazy capture model & agent — fall back to session-wide values when

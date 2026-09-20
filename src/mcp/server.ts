@@ -19,6 +19,7 @@ import { runStartupVacuum } from "./services/vacuum";
 import { VACUUM_ON_STARTUP } from "./utils/constants";
 import { runCliIndex } from "./codebase-index/cli";
 import { autoIndexIfStale } from "./codebase-index/services/indexing-service";
+import { evaluateAutoIndexTarget } from "./codebase-index/services/project-detection";
 import { getCodebaseParserPool } from "./codebase-index/parser/singleton";
 import { FileWatcher, registerRepo } from "./codebase-index/services/file-watcher";
 import fs from "fs";
@@ -246,26 +247,42 @@ if (runtimeCapabilities.profile === "full") {
 // runs in the background; the dashboard polls /api/codebase/index-status.
 // The repo is registered with the file watcher so the polling sweep keeps it
 // fresh after the first build (watch set = startup repo + tool-indexed repos).
+//
+// GUARD (project detection): the startup auto-index must only run when the CWD
+// is actually a project. Indexing a NON-project root (most commonly the user's
+// HOME — e.g. the stdio server spawned by a client whose CWD is `~`) enumerates
+// the entire tree synchronously, blocks the event loop, and — because the walk
+// throws on a permission-denied child directory — never records a
+// `last_indexed_at`, so the watcher re-triggers it forever. Explicit indexing
+// (the codebase-index tool, `--index`, the dashboard) is NOT gated here.
 if (runtimeCapabilities.profile === "full" && process.env.CODEBASE_AUTO_INDEX !== "false") {
-	const repoName = path.basename(process.cwd());
 	const repoPath = process.cwd();
-	registerRepo(repoName, repoPath);
-	void runtimeCapabilities.ensure("indexing").then((ready) => {
-		if (!ready) return;
-		void autoIndexIfStale(repoName, repoPath, db, getCodebaseParserPool())
-			.then((result) => {
-				logger.info("[Server] Auto-index check complete", {
-					repo: repoName,
-					status: result.status,
-					reason: result.reason
+	const eligibility = evaluateAutoIndexTarget(repoPath);
+	if (!eligibility.eligible) {
+		logger.info("[Server] Auto-index skipped — working directory is not a project", {
+			cwd: repoPath,
+			reason: eligibility.reason
+		});
+	} else {
+		const repoName = path.basename(repoPath);
+		registerRepo(repoName, repoPath);
+		void runtimeCapabilities.ensure("indexing").then((ready) => {
+			if (!ready) return;
+			void autoIndexIfStale(repoName, repoPath, db, getCodebaseParserPool())
+				.then((result) => {
+					logger.info("[Server] Auto-index check complete", {
+						repo: repoName,
+						status: result.status,
+						reason: result.reason
+					});
+					void runtimeCapabilities.ensure("watcher");
+				})
+				.catch((err) => {
+					runtimeCapabilities.markDegraded("indexing", String(err));
+					logger.warn("[Server] Auto-index check failed", { error: String(err) });
 				});
-				void runtimeCapabilities.ensure("watcher");
-			})
-			.catch((err) => {
-				runtimeCapabilities.markDegraded("indexing", String(err));
-				logger.warn("[Server] Auto-index check failed", { error: String(err) });
-			});
-	});
+		});
+	}
 }
 
 // Ignore EPIPE errors on stdout/stderr (e.g. if the client disconnects prematurely)
@@ -319,7 +336,7 @@ if (transportMode === "http") {
 	try {
 		handle = await startHttpTransport({
 			...resolveHttpTransportConfig(),
-			factory: createServerFactory(db, vectors)
+			factory: createServerFactory(db, vectors, "http")
 		});
 	} catch (error) {
 		// A listen/bind failure (e.g. EADDRINUSE) or a missing bearer token must
@@ -328,5 +345,5 @@ if (transportMode === "http") {
 		process.exit(1);
 	}
 } else {
-	handle = serveStdio(createServerFactory(db, vectors));
+	handle = serveStdio(createServerFactory(db, vectors, "stdio"));
 }

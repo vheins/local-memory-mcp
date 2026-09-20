@@ -162,7 +162,7 @@ describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-read
 			arguments: { repo: REPO, owner: "test", task_code: "NON-EXISTENT" }
 		});
 		expect(res2.isError).toBe(true);
-		expect(getPrimaryTextContent(res2)).toContain(`Task not found: NON-EXISTENT in repo ${REPO}`);
+		expect(getPrimaryTextContent(res2)).toContain(`Task not found: NON-EXISTENT (owner="test", repo="${REPO}")`);
 	});
 
 	it("should return isError envelope if coding standard not found", async () => {

@@ -9,6 +9,7 @@ import { buildMemoryCorpus, BENCH_EPOCH_MS, BENCH_EPOCH_ISO } from "./memory-eva
 import { percentiles, throughput } from "./memory-eval/metrics.mjs";
 import { collectBenchRevision } from "./concurrent-eval/lifecycle.mjs";
 import { buildMarkdown } from "./concurrent-eval/report.mjs";
+import { checkContention, formatGuardReport } from "./concurrent-eval/contention-guard.mjs";
 import { measureScenarioReadersOnly } from "./concurrent-eval/scenarios/readers-only.mjs";
 import { measureScenarioWritersOnly } from "./concurrent-eval/scenarios/writers-only.mjs";
 import { measureScenarioMixed } from "./concurrent-eval/scenarios/mixed.mjs";
@@ -244,6 +245,17 @@ async function main() {
 			},
 			scenarios
 		};
+		// TASK-429 / ADR-011 acceptance item 2: contention regression guard.
+		// Asserts busy/timeout/lockWait stay 0 at supported concurrency and
+		// fails the run on a regression. Recorded in meta.errors BEFORE the
+		// artifacts are written, so the JSON/Markdown carry the verdict. The
+		// guard also re-reads the written JSON as a standalone CLI
+		// (contention-guard.mjs).
+		const guard = checkContention(result);
+		if (!guard.ok)
+			errors.push({ scenario: "contention-guard", error: `${guard.failures.length} contention regression(s)` });
+		if (errors.length > 0) result.meta.errors = errors;
+
 		fs.mkdirSync(path.dirname(jsonOut), { recursive: true });
 		fs.writeFileSync(jsonOut, JSON.stringify(result, null, 2));
 		console.log(`JSON → ${jsonOut}`);
@@ -251,6 +263,8 @@ async function main() {
 		fs.writeFileSync(markdownOut, `${buildMarkdown(result)}\n`);
 		console.log(`Markdown → ${markdownOut}`);
 		console.log(`Errors: ${totalErrors} (busy ${totalBusy}, timeout ${totalTimeout}, other ${totalOther})`);
+		console.log(formatGuardReport(guard));
+
 		if (errors.length > 0 || totalErrors > 0) process.exitCode = 1;
 	} finally {
 		fs.rmSync(tmpDir, { recursive: true, force: true });

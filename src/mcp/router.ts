@@ -156,10 +156,15 @@ export function createRouter(
 		onProgress?: (progress: number, total?: number) => void
 	): Promise<unknown> {
 		const { name } = params || {};
-		const args = normalizeToolArguments(params?.arguments, getSessionContext?.()) as Record<string, unknown>;
 		// Normalize tool naming: accept both dot (memory.store) and hyphen (memory-store)
 		const rawName = String(name).replace(/\./g, "-");
 		const toolName = TOOL_ALIASES[rawName] ?? rawName;
+		// The resolved canonical tool name is threaded into normalization so a
+		// WRITE tool can fail loud when its scope is undeterminable (TASK-420).
+		const args = normalizeToolArguments(params?.arguments, getSessionContext?.(), { toolName }) as Record<
+			string,
+			unknown
+		>;
 
 		// Single dispatch core shared with the production SDK path
 		// (registerAllTools). Session is resolved per call to preserve the
@@ -174,6 +179,7 @@ export function createRouter(
 		}
 
 		const repo = (args?.repo as string) || ((args?.scope as Record<string, unknown>)?.repo as string) || "unknown";
+		const owner = (args?.owner as string) || ((args?.scope as Record<string, unknown>)?.owner as string) || undefined;
 		const isWrite = WRITE_TOOLS.has(toolName);
 
 		logger.info(`[Tool] ${toolName}`, { repo, write: isWrite });
@@ -202,7 +208,14 @@ export function createRouter(
 			// native SDK transport produces (tools/index.ts) — OPT-CODE-01. This
 			// eliminates the legacy "log + rethrow raw exception" divergence so
 			// both transports surface identical shapes for the same failure class.
-			logger.error(`[Tool] ${toolName} failed`, { repo, error: String(err) });
+			// Attribution scope (TASK-421): owner/repo/sessionId are included so
+			// bugCapture.logSink persists them into the bug_reports context.
+			logger.error(`[Tool] ${toolName} failed`, {
+				repo,
+				owner,
+				sessionId: getSessionContext?.()?.sessionId,
+				error: String(err)
+			});
 			const errorResponse = toErrorResponse(err);
 			logToolAction(db, toolName, args, errorResponse);
 			return errorResponse;

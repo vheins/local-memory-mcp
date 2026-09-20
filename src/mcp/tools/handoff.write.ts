@@ -83,14 +83,14 @@ async function coreCreate(
 	if (resolvedTaskId && !UUID_REGEX.test(resolvedTaskId)) {
 		const task = storage.tasks.getTaskByCode(params.owner, params.repo, resolvedTaskId);
 		if (!task) {
-			throw new Error(`Task not found: ${resolvedTaskId} in repo ${params.repo}`);
+			throw new Error(`Task not found: ${resolvedTaskId} (owner="${params.owner}", repo="${params.repo}")`);
 		}
 		resolvedTaskId = task.id;
 	}
 	if (!resolvedTaskId && params.task_code) {
 		const task = storage.tasks.getTaskByCode(params.owner, params.repo, params.task_code);
 		if (!task) {
-			throw new Error(`Task not found: ${params.task_code} in repo ${params.repo}`);
+			throw new Error(`Task not found: ${params.task_code} (owner="${params.owner}", repo="${params.repo}")`);
 		}
 		resolvedTaskId = task.id;
 	}

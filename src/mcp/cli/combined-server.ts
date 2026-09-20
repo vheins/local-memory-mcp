@@ -23,18 +23,20 @@
 import http from "node:http";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
-import { createMcpHandler, hostHeaderValidationResponse, originValidationResponse } from "@modelcontextprotocol/server";
-import type { McpHttpHandler } from "@modelcontextprotocol/server";
+import { hostHeaderValidationResponse, originValidationResponse } from "@modelcontextprotocol/server";
 import { createServerFactory } from "../transport/factory";
 import {
 	buildAllowedHostnames,
 	buildRequestUrl,
+	createDualHandler,
 	toWebRequest,
 	writeWebResponse,
+	type DualHandler,
 	MCP_HTTP_DEFAULT_HOST,
 	MCP_HTTP_DEFAULT_PATH
 } from "../transport/http";
 import { CAPABILITIES } from "../capabilities";
+import { resolveDaemonPaths, removeLock } from "./daemon";
 import { logger } from "../utils/logger";
 import { bugCapture } from "../utils/bug-capture";
 import { reuseTelemetry } from "../utils/reuse-telemetry";
@@ -42,6 +44,7 @@ import { runStartupMaintenance } from "../services/maintenance-job";
 import { runStartupVacuum } from "../services/vacuum";
 import { VACUUM_ON_STARTUP } from "../utils/constants";
 import { autoIndexIfStale } from "../codebase-index/services/indexing-service";
+import { evaluateAutoIndexTarget } from "../codebase-index/services/project-detection";
 import { getCodebaseParserPool } from "../codebase-index/parser/singleton";
 import { FileWatcher, registerRepo } from "../codebase-index/services/file-watcher";
 import { createExpressApp } from "../../dashboard/app";
@@ -134,7 +137,7 @@ async function resolveRuntime(): Promise<{
  * validation mirrors `startHttpTransport`; bearer auth is intentionally absent
  * because the combined listener is loopback-only.
  */
-function createMcpPreRoute(handler: McpHttpHandler, host: string): ExpressPreRoute {
+function createMcpPreRoute(handler: DualHandler, host: string): ExpressPreRoute {
 	const allowedHostnames = buildAllowedHostnames(host);
 
 	return {
@@ -234,9 +237,15 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
 	});
 
 	// --- Build the MCP handler + Express app ---
-	const mcpHandler = createMcpHandler(createServerFactory(db, vectors), {
-		onerror: (error) => logger.warn("[Daemon] MCP handler error", { error: error.message })
-	});
+	// DUAL-ERA handler (DEBT-423): modern (2026-07-28) traffic is served by a
+	// strict `legacy: "reject"` handler; 2025-era traffic — the era OpenCode and
+	// most current MCP clients speak — is served by a PER-SESSION stateful
+	// transport so MCP roots applied on `oninitialized` survive into later tool
+	// calls. Without this the daemon (the PRIMARY deployment) fell back to the
+	// SDK's throwaway stateless legacy serving and roots never reached tools.
+	const mcpHandler = createDualHandler(createServerFactory(db, vectors, "http"), (error) =>
+		logger.warn("[Daemon] MCP handler error", { error: error.message })
+	);
 	const mcpMount = createMcpPreRoute(mcpHandler, host);
 	const { app } = createExpressApp({ db, vectors, preRoutes: [mcpMount] });
 
@@ -264,25 +273,42 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
 		void runtimeCapabilities.ensure("maintenance");
 
 		if (process.env.CODEBASE_AUTO_INDEX !== "false") {
-			const repoName = path.basename(process.cwd());
+			// GUARD (project detection): the daemon auto-indexes its CWD, and
+			// `daemon start` forks the worker with the launching shell's CWD.
+			// Launching from a NON-project root (most commonly the user's HOME —
+			// `npx … daemon` run from `~`) enumerates the entire tree
+			// synchronously, blocks the event loop (starving the HTTP server →
+			// client socket timeouts), and — because the walk throws on a
+			// permission-denied child directory — never records a
+			// `last_indexed_at`, so the watcher re-triggers it every sweep
+			// forever. Only index a directory that is actually a project.
 			const repoPath = process.cwd();
-			registerRepo(repoName, repoPath);
-			void runtimeCapabilities.ensure("indexing").then((ready) => {
-				if (!ready) return;
-				void autoIndexIfStale(repoName, repoPath, db, getCodebaseParserPool())
-					.then((result) => {
-						logger.info("[Daemon] Auto-index check complete", {
-							repo: repoName,
-							status: result.status,
-							reason: result.reason
+			const eligibility = evaluateAutoIndexTarget(repoPath);
+			if (!eligibility.eligible) {
+				logger.info("[Daemon] Auto-index skipped — working directory is not a project", {
+					cwd: repoPath,
+					reason: eligibility.reason
+				});
+			} else {
+				const repoName = path.basename(repoPath);
+				registerRepo(repoName, repoPath);
+				void runtimeCapabilities.ensure("indexing").then((ready) => {
+					if (!ready) return;
+					void autoIndexIfStale(repoName, repoPath, db, getCodebaseParserPool())
+						.then((result) => {
+							logger.info("[Daemon] Auto-index check complete", {
+								repo: repoName,
+								status: result.status,
+								reason: result.reason
+							});
+							void runtimeCapabilities.ensure("watcher");
+						})
+						.catch((err) => {
+							runtimeCapabilities.markDegraded("indexing", String(err));
+							logger.warn("[Daemon] Auto-index check failed", { error: String(err) });
 						});
-						void runtimeCapabilities.ensure("watcher");
-					})
-					.catch((err) => {
-						runtimeCapabilities.markDegraded("indexing", String(err));
-						logger.warn("[Daemon] Auto-index check failed", { error: String(err) });
-					});
-			});
+				});
+			}
 		}
 	}
 
@@ -375,8 +401,24 @@ export async function runDaemonWorker(options: RunDaemonWorkerOptions = {}): Pro
 		const boot = options.startServer ?? startCombinedServer;
 		handle = await boot(options);
 	} catch (error) {
+		// EADDRINUSE (TASK-425): another daemon/process already owns the port.
+		// Emit an ACTIONABLE message and exit ONCE — do NOT crash-loop.
+		if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
+			const port = options.port ?? (Number(process.env.PORT) || DAEMON_DEFAULT_PORT);
+			const message =
+				`Daemon port ${port} is already in use — another daemon or process is listening. ` +
+				`Run "daemon status" or stop the conflicting process.`;
+			logger.error("[Daemon] port in use", { port, pid: process.pid });
+			process.stderr.write(`${message}\n`);
+			// Release the single-instance lock so the next `daemon start` is not
+			// blocked by a lock this (failed) worker no longer legitimately holds.
+			removeLock(resolveDaemonPaths().lockFile);
+			process.exit(1);
+			return;
+		}
 		logger.error("[Daemon] Failed to start combined server — exiting", { error: String(error) });
 		process.exit(1);
+		return;
 	}
 	serverStarted = true;
 
@@ -393,6 +435,9 @@ export async function runDaemonWorker(options: RunDaemonWorkerOptions = {}): Pro
 		} catch (error) {
 			logger.error("[Daemon] shutdown error", { error: String(error) });
 		}
+		// Release the single-instance lock (TASK-425) so a subsequent
+		// `daemon start` can acquire it immediately.
+		removeLock(resolveDaemonPaths().lockFile);
 		process.exit(0);
 	};
 	if (options.installProcessHandlers !== false) {

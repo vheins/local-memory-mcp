@@ -111,7 +111,7 @@ async function coreUpdate(
 			for (const targetId of targetIds) {
 				const existingTask = taskMap.get(targetId);
 				if (!existingTask) {
-					throw new Error(`Task not found: ${targetId}`);
+					throw new Error(`Task not found: ${targetId} (owner="${owner}", repo="${repo}")`);
 				}
 
 				const isStatusChanging = isStatusChangingGlobal && updates.status !== existingTask.status;

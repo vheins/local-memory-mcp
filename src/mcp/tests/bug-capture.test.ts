@@ -79,6 +79,72 @@ describe("bugCapture end-to-end", () => {
 	});
 });
 
+describe("bugCapture scope attribution (TASK-421)", () => {
+	it("persists explicit owner/repo/sessionId from context", async () => {
+		const store = await createTestStore();
+		bugCapture.bind(store);
+
+		bugCapture.capture({
+			source: "tool",
+			message: "boom",
+			context: { owner: "vheins", repo: "local-memory-mcp", sessionId: "sess-1" }
+		});
+
+		const [row] = store.bugReports.list();
+		expect(row.context.owner).toBe("vheins");
+		expect(row.context.repo).toBe("local-memory-mcp");
+		expect(row.context.sessionId).toBe("sess-1");
+	});
+
+	it("still redacts secret-named context keys alongside scope", async () => {
+		const store = await createTestStore();
+		bugCapture.bind(store);
+
+		bugCapture.capture({
+			source: "tool",
+			message: "boom",
+			context: { owner: "vheins", repo: "local-memory-mcp", sessionId: "sess-1", token: "super-secret" }
+		});
+
+		const [row] = store.bugReports.list();
+		expect(row.context.token).toBe("***");
+		expect(row.context.owner).toBe("vheins");
+		expect(row.context.repo).toBe("local-memory-mcp");
+		expect(row.context.sessionId).toBe("sess-1");
+	});
+
+	it("fills owner/repo/sessionId from the scope provider when absent", async () => {
+		const store = await createTestStore();
+		bugCapture.bind(store);
+		bugCapture.setScopeProvider(() => ({ owner: "prov-owner", repo: "prov-repo", sessionId: "prov-session" }));
+
+		bugCapture.capture({ source: "uncaught", message: "boom" });
+
+		const [row] = store.bugReports.list();
+		expect(row.context.owner).toBe("prov-owner");
+		expect(row.context.repo).toBe("prov-repo");
+		expect(row.context.sessionId).toBe("prov-session");
+	});
+
+	it("prefers explicit context over the scope provider and only fills non-empty keys", async () => {
+		const store = await createTestStore();
+		bugCapture.bind(store);
+		bugCapture.setScopeProvider(() => ({ owner: "prov-owner", repo: "prov-repo", sessionId: "prov-session" }));
+
+		bugCapture.capture({
+			source: "tool",
+			message: "boom",
+			context: { owner: "explicit-owner", sessionId: "" }
+		});
+
+		const [row] = store.bugReports.list();
+		// Explicit non-empty owner wins; empty sessionId is treated as absent and filled.
+		expect(row.context.owner).toBe("explicit-owner");
+		expect(row.context.repo).toBe("prov-repo");
+		expect(row.context.sessionId).toBe("prov-session");
+	});
+});
+
 describe("bugCapture.logSink", () => {
 	it("persists error-level entries", async () => {
 		const store = await createTestStore();
@@ -98,5 +164,21 @@ describe("bugCapture.logSink", () => {
 		bugCapture.logSink({ level: "info", logger: "tool", data: { message: "x" } });
 
 		expect(store.bugReports.list()).toHaveLength(0);
+	});
+
+	it("persists owner/repo/sessionId carried in the log data", async () => {
+		const store = await createTestStore();
+		bugCapture.bind(store);
+
+		bugCapture.logSink({
+			level: "error",
+			logger: "tool",
+			data: { message: "x", owner: "vheins", repo: "local-memory-mcp", sessionId: "sess-1" }
+		});
+
+		const [row] = store.bugReports.list();
+		expect(row.context.owner).toBe("vheins");
+		expect(row.context.repo).toBe("local-memory-mcp");
+		expect(row.context.sessionId).toBe("sess-1");
 	});
 });

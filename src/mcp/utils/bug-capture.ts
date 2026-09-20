@@ -16,6 +16,35 @@ export interface BugCaptureInput {
 	context?: Record<string, unknown>;
 }
 
+/**
+ * Attribution scope for a captured bug. Threaded into the event `context` so a
+ * bug_reports row can be tied back to the client/project/session that hit it.
+ */
+export interface BugScope {
+	owner?: string;
+	repo?: string;
+	sessionId?: string;
+}
+
+/**
+ * Supplies the "current" attribution scope for captures that did not carry
+ * their own. Used as a FALLBACK only — an explicit `context.owner` /
+ * `context.repo` / `context.sessionId` always wins.
+ *
+ * LIMITATION: a single process serves MANY sessions (HTTP transport), so a
+ * process-global provider is inherently ambiguous — it can only ever reflect
+ * the most-recently-initialized session. Call sites that know their scope
+ * (e.g. the tool/logger wrappers) MUST pass owner/repo/sessionId explicitly;
+ * this provider exists so process-level captures (uncaught errors, unhandled
+ * rejections) at least attribute to *a* session rather than none.
+ */
+export type ScopeProvider = () => BugScope | undefined;
+
+/** True only for a non-empty (post-trim) string. */
+function isNonEmptyString(value: unknown): value is string {
+	return typeof value === "string" && value.trim().length > 0;
+}
+
 /** Fully-resolved, redacted event handed to every sink. */
 export interface BugEvent {
 	fingerprint: string;
@@ -116,6 +145,38 @@ class BugCapture {
 	private readonly sinks = new Map<string, BugSink>();
 	private lastPruneAt = 0;
 	private readonly enabled = BUG_TELEMETRY_ENABLED;
+	private scopeProvider: ScopeProvider | null = null;
+
+	/**
+	 * Register (or clear, with `null`) the process-level fallback scope provider.
+	 * See {@link ScopeProvider} for the multi-session limitation: this is a
+	 * best-effort fallback, not a substitute for passing explicit scope.
+	 */
+	setScopeProvider(fn: ScopeProvider | null): void {
+		this.scopeProvider = fn;
+	}
+
+	/**
+	 * Merge the provider scope into an explicit context WITHOUT overwriting any
+	 * non-empty value the caller already supplied. Only non-empty values are
+	 * merged, so a partially-known provider never blanks a known key.
+	 */
+	private mergeScope(context: Record<string, unknown>): Record<string, unknown> {
+		if (!this.scopeProvider) return context;
+		let scope: BugScope | undefined;
+		try {
+			scope = this.scopeProvider();
+		} catch {
+			return context;
+		}
+		if (!scope) return context;
+		const merged = { ...context };
+		for (const key of ["owner", "repo", "sessionId"] as const) {
+			if (isNonEmptyString(merged[key])) continue;
+			if (isNonEmptyString(scope[key])) merged[key] = scope[key];
+		}
+		return merged;
+	}
 
 	/**
 	 * Attach the local SQLite sink. Called once per process (MCP server and
@@ -142,13 +203,14 @@ class BugCapture {
 		try {
 			const message = String(redact(input.message));
 			const stack = input.stack ? String(redact(input.stack)) : null;
+			const scopedContext = this.mergeScope(input.context ?? {});
 			const event: BugEvent = {
 				fingerprint: computeFingerprint(input.source, message, stack),
 				source: input.source,
 				severity: input.severity ?? "error",
 				message,
 				stack,
-				context: (redact(input.context ?? {}) as Record<string, unknown>) ?? {},
+				context: (redact(scopedContext) as Record<string, unknown>) ?? {},
 				runtime: {
 					node: process.version,
 					platform: process.platform,
@@ -188,11 +250,12 @@ class BugCapture {
 		this.capture({ source: resolveSource(payload), severity: payload.level, message, stack, context: data });
 	};
 
-	/** Test/maintenance hook: drop the store binding and all sinks. */
+	/** Test/maintenance hook: drop the store binding, sinks, and scope provider. */
 	reset(): void {
 		this.store = null;
 		this.sinks.clear();
 		this.lastPruneAt = 0;
+		this.scopeProvider = null;
 	}
 
 	private persist(event: BugEvent): void {

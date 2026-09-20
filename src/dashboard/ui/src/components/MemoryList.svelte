@@ -164,16 +164,26 @@
 							</td>
 							<td class="mem-td" style="max-width:300px;">
 								<div class="truncate font-semibold" style="font-size:0.82rem;color:var(--color-text);">{mem.title}</div>
-								{#if mem.tags?.length}
-									<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">
+								<div
+									class="mem-meta-line"
+									style="margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;"
+								>
+									{#if mem.owner || mem.scope?.owner}
+										<span class="owner-badge" title="Owner: {mem.owner || mem.scope?.owner}">
+											{mem.owner || mem.scope?.owner}
+										</span>
+									{:else}
+										<span class="owner-badge owner-unknown" title="owner unknown (repo-only view)"> unknown </span>
+									{/if}
+									{#if mem.tags?.length}
 										{#each mem.tags.slice(0, 3) as tag (tag)}
 											<span
 												style="font-size:0.6rem;background:rgba(99,102,241,0.1);color:#6366f1;padding:1px 5px;border-radius:9999px;"
 												>{tag}</span
 											>
 										{/each}
-									</div>
-								{/if}
+									{/if}
+								</div>
 							</td>
 							<td class="mem-td">
 								<span class="type-chip type-{mem.type}">{TYPE_LABELS[mem.type] || mem.type}</span>
@@ -253,5 +263,24 @@
 
 	.mem-error-slot {
 		margin-bottom: var(--space-3);
+	}
+
+	.owner-badge {
+		font-size: 0.6rem;
+		font-weight: 600;
+		padding: 1px 6px;
+		border-radius: 9999px;
+		background: rgba(148, 163, 184, 0.12);
+		color: var(--color-text-muted);
+		border: 1px solid rgba(148, 163, 184, 0.2);
+		font-family: "JetBrains Mono", monospace;
+		white-space: nowrap;
+		display: inline-flex;
+		align-items: center;
+	}
+
+	.owner-badge.owner-unknown {
+		opacity: 0.6;
+		font-style: italic;
 	}
 </style>

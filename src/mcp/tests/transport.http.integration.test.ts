@@ -37,7 +37,7 @@ async function startHarness(): Promise<Harness> {
 		path: "/mcp",
 		token: TOKEN,
 		allowInsecure: false,
-		factory: createServerFactory(store, vectors)
+		factory: createServerFactory(store, vectors, "http")
 	});
 	const harness = { store, handle };
 	active.push(harness);
@@ -64,7 +64,7 @@ describe("MCP HTTP transport — auth", () => {
 					path: "/mcp",
 					token: undefined,
 					allowInsecure: false,
-					factory: createServerFactory(store, vectors)
+					factory: createServerFactory(store, vectors, "http")
 				})
 			).rejects.toThrow(/requires a bearer token/i);
 		} finally {

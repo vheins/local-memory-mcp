@@ -13,6 +13,9 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import type { CombinedServerHandle } from "../cli/combined-server";
 
@@ -107,6 +110,61 @@ describe("combined server — MCP face", () => {
 		});
 		expect(res.status).toBe(200);
 	});
+
+	/**
+	 * DEBT-423: the daemon is the PRIMARY deployment, so its 2025-era traffic
+	 * must be served by a PER-SESSION stateful transport — not the SDK's
+	 * throwaway stateless fallback. A raw `initialize` POST must issue an
+	 * `Mcp-Session-Id` that is then REUSED; a `tools/list` on that id succeeds,
+	 * while the same call WITHOUT the id is refused ("Server not initialized").
+	 */
+	it("retains a legacy (2025-era) session across requests keyed by Mcp-Session-Id", async () => {
+		const jsonHeaders = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
+
+		const init = await fetch(`${handle.url}/mcp`, {
+			method: "POST",
+			headers: jsonHeaders,
+			body: JSON.stringify({
+				jsonrpc: "2.0",
+				id: 1,
+				method: "initialize",
+				params: {
+					protocolVersion: "2025-06-18",
+					capabilities: {},
+					clientInfo: { name: "daemon-legacy-raw", version: "1.0.0" }
+				}
+			})
+		});
+		expect(init.status).toBe(200);
+		const sessionId = init.headers.get("mcp-session-id");
+		expect(sessionId).toBeTruthy();
+		await init.text();
+
+		const notif = await fetch(`${handle.url}/mcp`, {
+			method: "POST",
+			headers: { ...jsonHeaders, "mcp-session-id": sessionId! },
+			body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })
+		});
+		expect(notif.status).toBe(202);
+		await notif.text();
+
+		const list = await fetch(`${handle.url}/mcp`, {
+			method: "POST",
+			headers: { ...jsonHeaders, "mcp-session-id": sessionId! },
+			body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
+		});
+		expect(list.status).toBe(200);
+		expect(list.headers.get("mcp-session-id")).toBe(sessionId);
+		expect(await list.text()).toContain('"tools"');
+
+		const noSession = await fetch(`${handle.url}/mcp`, {
+			method: "POST",
+			headers: jsonHeaders,
+			body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} })
+		});
+		expect(noSession.status).toBe(400);
+		expect(await noSession.text()).toContain("Server not initialized");
+	});
 });
 
 describe("runDaemonWorker — never resolves (no double-boot)", () => {
@@ -141,5 +199,43 @@ describe("runDaemonWorker — never resolves (no double-boot)", () => {
 		await new Promise((r) => setTimeout(r, 50));
 		expect(booted).toBe(true);
 		expect(settled).toBe(false);
+	});
+});
+
+describe("runDaemonWorker — EADDRINUSE (TASK-425)", () => {
+	it("prints an actionable message and exits once instead of crash-looping", async () => {
+		const { runDaemonWorker } = await import("../cli/combined-server");
+
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lmc-eaddrinuse-"));
+		const prevDir = process.env.LOCAL_MEMORY_DAEMON_DIR;
+		process.env.LOCAL_MEMORY_DAEMON_DIR = dir;
+		const lockFile = path.join(dir, "daemon.lock");
+		fs.writeFileSync(lockFile, "1234\n", "utf8");
+
+		const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+		const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+		try {
+			await runDaemonWorker({
+				installProcessHandlers: false,
+				port: 3456,
+				startServer: async () => {
+					throw Object.assign(new Error("listen EADDRINUSE"), { code: "EADDRINUSE" });
+				}
+			});
+
+			expect(exitSpy).toHaveBeenCalledWith(1);
+			const output = stderrSpy.mock.calls.map((call) => String(call[0])).join("");
+			expect(output).toContain("Daemon port 3456 is already in use");
+			expect(output).toContain('Run "daemon status"');
+			// The single-instance lock is released so the next start is not blocked.
+			expect(fs.existsSync(lockFile)).toBe(false);
+		} finally {
+			exitSpy.mockRestore();
+			stderrSpy.mockRestore();
+			if (prevDir === undefined) delete process.env.LOCAL_MEMORY_DAEMON_DIR;
+			else process.env.LOCAL_MEMORY_DAEMON_DIR = prevDir;
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });

@@ -198,6 +198,12 @@ function findGitignoreFiles(root: string): string[] {
 			dot: true,
 			absolute: false,
 			onlyFiles: true,
+			// A permission-denied child directory (e.g. a root-owned dir under a
+			// home tree) must be SKIPPED, not abort the whole walk. Without this,
+			// fast-glob rethrows EACCES from `scandir`, `discoverFiles` rejects,
+			// the index never completes, and `last_indexed_at` is never recorded —
+			// which made the watcher re-trigger the walk forever.
+			suppressErrors: true,
 			ignore: ["**/node_modules/**", "**/.git/**"]
 		});
 		// Sort by depth: root first, then shallow descendents, then deeper
@@ -340,6 +346,10 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 		onlyFiles: true,
 		stats: true,
 		followSymbolicLinks: false,
+		// Skip permission-denied directories instead of rejecting the walk (see
+		// findGitignoreFiles). The index must complete so `last_indexed_at` is
+		// recorded and the watcher stops retrying.
+		suppressErrors: true,
 		ignore: allExcludeGlobs
 	});
 
@@ -418,6 +428,7 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 			onlyFiles: true,
 			stats: true,
 			followSymbolicLinks: false,
+			suppressErrors: true,
 			ignore: allExcludeGlobs
 		});
 

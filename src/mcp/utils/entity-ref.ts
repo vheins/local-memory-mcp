@@ -59,6 +59,13 @@ export function resolveEntityRef(
 			break;
 	}
 
-	if (!id) throw new Error(`${opts?.label ?? ENTITY_LABELS[kind]} not found: ${value}`);
+	// TASK-426: include the search scope (owner/repo) in the not-found message so
+	// the failing namespace is obvious — a code is unique per (owner, repo), so
+	// the same code resolving differently per path (dashboard owner="" vs MCP
+	// session-inferred owner) previously produced a bare, confusing "not found".
+	// owner/repo are already parameters (no signature change); the suffix is
+	// emitted only when a repo is available so non-scoped callers are unchanged.
+	const scope = repo !== undefined ? ` (owner="${owner ?? ""}", repo="${repo}")` : "";
+	if (!id) throw new Error(`${opts?.label ?? ENTITY_LABELS[kind]} not found: ${value}${scope}`);
 	return id;
 }

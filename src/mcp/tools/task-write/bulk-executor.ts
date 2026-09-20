@@ -76,7 +76,7 @@ export async function executeBulkOperation(
 				if (!resolvedId) throw new Error("Cannot update: neither 'id' nor 'code' resolved to an existing task");
 
 				const existing = storage.tasks.getTaskById(resolvedId);
-				if (!existing) throw new Error(`Task not found: ${resolvedId}`);
+				if (!existing) throw new Error(`Task not found: ${resolvedId} (owner="${owner}", repo="${repo}")`);
 
 				// Build updates
 				const updatableFields = [
@@ -256,7 +256,7 @@ export async function executeBulkOperation(
 
 				if (!phase || !title || !description) {
 					throw new Error(
-						"Missing required fields for create (phase, title, description) — every tasks[] create item needs phase, title, and description; retry with tasks: [{ phase: \"...\", title: \"...\", description: \"...\" }]"
+						'Missing required fields for create (phase, title, description) — every tasks[] create item needs phase, title, and description; retry with tasks: [{ phase: "...", title: "...", description: "..." }]'
 					);
 				}
 

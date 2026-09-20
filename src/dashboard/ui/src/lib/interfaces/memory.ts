@@ -4,7 +4,8 @@ export interface Memory {
 	content: string;
 	type: string;
 	importance: number;
-	scope: { repo: string };
+	scope: { repo: string; owner?: string };
+	owner?: string;
 	tags?: string[];
 	created_at: string;
 	updated_at: string;
