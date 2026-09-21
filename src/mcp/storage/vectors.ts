@@ -2,8 +2,47 @@ import { VectorEntityKind, VectorStore, VectorResult } from "../types";
 import { SQLiteStore } from "./sqlite";
 import { logger } from "../utils/logger";
 import { cosineSimilarityArrays, decodeVector } from "../utils/vector";
+import { EMBEDDING_ONNX_THREADS } from "../utils/constants";
 
 type FeatureExtractionPipeline = import("@xenova/transformers").FeatureExtractionPipeline;
+
+/**
+ * Minimal structural view of the ONNX `env` object needed to cap its thread
+ * pools (PERF-002). `@xenova/transformers` exposes it as
+ * `env.backends.onnx` (typed as onnxruntime-common's `Env`), which carries
+ * `wasm.numThreads` for the wasm backend and the native-session
+ * `intraOpNumThreads` / `interOpNumThreads` knobs. The index signature keeps
+ * the helper tolerant of the native runtime, where `intraOpNumThreads` /
+ * `interOpNumThreads` are read straight off the env object (not declared on
+ * `Env`) — we touch only the fields that are actually present.
+ */
+export interface OnnxThreadEnv {
+	wasm?: { numThreads?: number };
+	intraOpNumThreads?: number;
+	interOpNumThreads?: number;
+	[name: string]: unknown;
+}
+
+/**
+ * Apply the ONNX thread cap to a transformers `env.backends.onnx` object.
+ *
+ * Thread count affects only ORT's scheduling, never embedding values, so this
+ * is output-neutral. Defensive by construction: it sets `wasm.numThreads` only
+ * when a `wasm` object is present and only touches `interOpNumThreads` when the
+ * native runtime already exposes that field, so it never throws on an env shape
+ * that lacks either. Exported (pure) so it is directly unit-testable without
+ * loading ONNX (see tests/vectors.threads.test.ts).
+ */
+export function applyOnnxThreadConfig(env: OnnxThreadEnv, threads: number): void {
+	const n = Math.max(1, Math.floor(threads));
+	if (env.wasm && typeof env.wasm === "object") {
+		env.wasm.numThreads = n;
+	}
+	env.intraOpNumThreads = n;
+	if ("interOpNumThreads" in env) {
+		env.interOpNumThreads = 1;
+	}
+}
 
 export class RealVectorStore implements VectorStore {
 	private db: SQLiteStore;
@@ -26,10 +65,20 @@ export class RealVectorStore implements VectorStore {
 
 	private async getTransformers(): Promise<typeof import("@xenova/transformers")> {
 		if (!this.transformersModule) {
+			// PERF-002: cap the native ONNX thread pool BEFORE the module is
+			// imported. onnxruntime-node loads its native binding (and reads
+			// OMP_NUM_THREADS) at import time, so setting it after the dynamic
+			// import below would be too late. Respect an operator-provided value.
+			if (!process.env.OMP_NUM_THREADS) {
+				process.env.OMP_NUM_THREADS = String(EMBEDDING_ONNX_THREADS);
+			}
 			this.transformersModule = await import("@xenova/transformers");
 			if (process.env.MCP_SERVER === "true") {
 				this.transformersModule.env.backends.onnx.logLevel = "error";
 			}
+			// Cover the wasm backend and the native session options too (the
+			// env var above only reaches the native OpenMP pool).
+			applyOnnxThreadConfig(this.transformersModule.env.backends.onnx, EMBEDDING_ONNX_THREADS);
 		}
 		return this.transformersModule;
 	}

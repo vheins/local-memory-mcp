@@ -196,6 +196,19 @@ export const INDEX_STALENESS_TTL_MS = envInt("INDEX_STALENESS_TTL_MS", 30_000);
 // Batch inference size K — jobs are claimed and embedded in batches of this
 // many rows (design per MEM-368).
 export const EMBEDDING_QUEUE_BATCH_SIZE = envInt("EMBEDDING_QUEUE_BATCH_SIZE", 32);
+
+// ONNX inference thread cap (PERF-002). `@xenova/transformers` drives ORT with
+// its defaults, so each embed wakes a full ORT thread pool sized to every core
+// (a ~2-3 core CPU burst per inference on a busy daemon). Pinning the pool to a
+// small fixed count bounds that burst WITHOUT changing embedding output — the
+// thread count only affects scheduling, never the values. Default 1 (single
+// thread, no worker pool) so the daemon stays quiet out of the box; operators
+// can raise it via `EMBEDDING_ONNX_THREADS` for faster bulk embedding on idle
+// hosts. Applied to BOTH the wasm backend (`wasm.numThreads`) and the native
+// backend (`intraOpNumThreads`, plus `OMP_NUM_THREADS` set before the dynamic
+// import in storage/vectors.ts). Clamped to >= 1: 0 means "auto/all cores" in
+// ORT, which is exactly the burst this caps.
+export const EMBEDDING_ONNX_THREADS = Math.max(1, envInt("EMBEDDING_ONNX_THREADS", 1));
 // Idle poll interval for the in-process lease worker.
 export const EMBEDDING_QUEUE_POLL_INTERVAL_MS = envInt("EMBEDDING_QUEUE_POLL_INTERVAL_MS", 500);
 // Idle backoff ceiling: when the queue is empty the poll interval grows

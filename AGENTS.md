@@ -143,7 +143,9 @@ codebase.service.ts`). The MCP server ignores it and indexes only its CWD.
   queue** (migration v9); worker startup follows the selected runtime profile.
 - **Semantic model** `Xenova/all-MiniLM-L6-v2` is downloaded at runtime via
   `@xenova/transformers` on first search/upsert — **needs network on first use**
-  unless cached.
+  unless cached. ONNX inference is capped to `EMBEDDING_ONNX_THREADS` threads
+  (default `1`) so a busy daemon does not wake a full all-core ORT pool per
+  embed; the cap is output-neutral (thread count never changes the vectors).
 - **Embeddings are OFFLOADED to an async queue** (migration v9): after a
   `memory-write`/`standard-write`/`task-write`, the vector is **not instant** — there
   is a brief searchability window (typically <1s) before the semantic score converges.
@@ -239,6 +241,7 @@ worker starts inline at startup).
 | Variable                                   | Default | Purpose                                                |
 | :----------------------------------------- | :------ | :----------------------------------------------------- |
 | `EMBEDDING_QUEUE_BATCH_SIZE`               | `32`    | Rows embedded per worker batch.                        |
+| `EMBEDDING_ONNX_THREADS`                   | `1`     | ONNX inference thread cap (both wasm + native).        |
 | `EMBEDDING_QUEUE_POLL_INTERVAL_MS`         | `500`   | Idle poll interval for the lease worker.               |
 | `EMBEDDING_QUEUE_MAX_POLL_INTERVAL_MS`     | `10000` | Idle backoff ceiling (exponential up to this).         |
 | `EMBEDDING_QUEUE_LEASE_MS`                 | `60000` | Lease length for claimed embedding jobs.               |
