@@ -101,17 +101,23 @@ export class EmbeddingWorker {
 		void runStartupMaintenance(this.outbox, this.opts);
 
 		// Warm the ONNX model in the background (shares the RealVectorStore
-		// extractor, so it is loaded once per process).
-		void this.vectors
-			.initialize()
-			.then(() => {
-				this.modelReady = true;
-			})
-			.catch((err) => {
-				logger.warn("[EmbeddingWorker] model warm-up failed — will retry on first batch", {
-					error: String(err)
+		// extractor, so it is loaded once per process). PERF-005: when
+		// lazyWarmup is enabled the model is NOT loaded here — the first
+		// claimed batch (vectors.embed → getExtractor) or the first semantic
+		// tool call loads it on demand, keeping an idle daemon lean. The
+		// maintenance/poll/purge loops below always run either way.
+		if (!this.opts.lazyWarmup) {
+			void this.vectors
+				.initialize()
+				.then(() => {
+					this.modelReady = true;
+				})
+				.catch((err) => {
+					logger.warn("[EmbeddingWorker] model warm-up failed — will retry on first batch", {
+						error: String(err)
+					});
 				});
-			});
+		}
 
 		this.schedule(this.opts.pollIntervalMs);
 		this.purgeTimer = setInterval(() => void runPurgeSweep(this.outbox, this.opts), this.opts.purgeIntervalMs);
@@ -121,7 +127,8 @@ export class EmbeddingWorker {
 			batchSize: this.opts.batchSize,
 			leaseMs: this.opts.leaseMs,
 			pollIntervalMs: this.opts.pollIntervalMs,
-			backfillCap: this.opts.backfillCap
+			backfillCap: this.opts.backfillCap,
+			lazyWarmup: this.opts.lazyWarmup
 		});
 	}
 

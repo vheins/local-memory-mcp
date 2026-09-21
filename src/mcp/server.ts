@@ -17,7 +17,7 @@ import { bugCapture } from "./utils/bug-capture";
 import { reuseTelemetry } from "./utils/reuse-telemetry";
 import { runStartupMaintenance } from "./services/maintenance-job";
 import { runStartupVacuum } from "./services/vacuum";
-import { VACUUM_ON_STARTUP } from "./utils/constants";
+import { EMBEDDING_LAZY_WARMUP, VACUUM_ON_STARTUP } from "./utils/constants";
 import { runCliIndex } from "./codebase-index/cli";
 import { autoIndexIfStale } from "./codebase-index/services/indexing-service";
 import { evaluateAutoIndexTarget } from "./codebase-index/services/project-detection";
@@ -229,14 +229,26 @@ logger.info("[Server] startup", {
 	profile: runtimeCapabilities.profile
 });
 
+// PERF-005: the `full` profile eagerly warms the semantic capability, which
+// loads the ONNX runtime + embedding model into RSS (~140-180 MB measured) even
+// on a daemon that only serves lexical traffic. With EMBEDDING_LAZY_WARMUP the
+// startup model load is skipped: the loader stays registered and the model
+// loads on the first semantic demand (router/tool pre-dispatch or the embedding
+// worker's first claimed batch). The worker ENGINE still starts so startup
+// reconcile/backfill/purge and the poll loop are unaffected. Default (false)
+// preserves eager warm-up.
 if (runtimeCapabilities.profile === "full") {
-	try {
-		await Promise.race([
-			runtimeCapabilities.ensure("semantic"),
-			new Promise((_, reject) => setTimeout(() => reject(new Error("Semantic warm-up timed out after 30s")), 30000))
-		]);
-	} catch (error) {
-		logger.warn("[Server] Semantic warm-up failed. Will retry on first use.", { error: String(error) });
+	if (EMBEDDING_LAZY_WARMUP) {
+		embeddingWorker.start();
+	} else {
+		try {
+			await Promise.race([
+				runtimeCapabilities.ensure("semantic"),
+				new Promise((_, reject) => setTimeout(() => reject(new Error("Semantic warm-up timed out after 30s")), 30000))
+			]);
+		} catch (error) {
+			logger.warn("[Server] Semantic warm-up failed. Will retry on first use.", { error: String(error) });
+		}
 	}
 	void runtimeCapabilities.ensure("maintenance");
 }

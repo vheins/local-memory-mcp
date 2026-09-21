@@ -209,6 +209,16 @@ export const EMBEDDING_QUEUE_BATCH_SIZE = envInt("EMBEDDING_QUEUE_BATCH_SIZE", 3
 // import in storage/vectors.ts). Clamped to >= 1: 0 means "auto/all cores" in
 // ORT, which is exactly the burst this caps.
 export const EMBEDDING_ONNX_THREADS = Math.max(1, envInt("EMBEDDING_ONNX_THREADS", 1));
+// Eager vs lazy ONNX warm-up (PERF-005). The `full` runtime profile eagerly
+// warms the semantic capability at startup, which loads the ONNX runtime + the
+// embedding model into the resident set (~140-180 MB measured) even on a
+// daemon that only serves lexical memory/task traffic. When enabled (default
+// off), the embedding worker still starts its maintenance/poll loop and the
+// semantic capability stays registered, but the model is loaded on FIRST USE —
+// the first semantic read/write (via the capability-aware vector store) or the
+// first claimed batch. Output-neutral: the same model, loaded later, so every
+// embedding/indexing behavior is preserved while an idle daemon stays lean.
+export const EMBEDDING_LAZY_WARMUP = envBool("EMBEDDING_LAZY_WARMUP", false);
 // Idle poll interval for the in-process lease worker.
 export const EMBEDDING_QUEUE_POLL_INTERVAL_MS = envInt("EMBEDDING_QUEUE_POLL_INTERVAL_MS", 500);
 // Idle backoff ceiling: when the queue is empty the poll interval grows

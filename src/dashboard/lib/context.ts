@@ -4,7 +4,7 @@ import { RealVectorStore } from "../../mcp/storage/vectors";
 import { CapabilityAwareVectorStore } from "../../mcp/storage/lazy-vectors";
 import { EmbeddingWorker } from "../../mcp/embedding-queue";
 import { RuntimeCapabilityRegistry, setRuntimeCapabilities } from "../../mcp/runtime-capabilities";
-import { EMBEDDING_QUEUE_BACKFILL_CAP } from "../../mcp/utils/constants";
+import { EMBEDDING_LAZY_WARMUP, EMBEDDING_QUEUE_BACKFILL_CAP } from "../../mcp/utils/constants";
 import { logger } from "../../mcp/utils/logger";
 
 export const db = await SQLiteStore.create();
@@ -30,12 +30,26 @@ export const vectors = new CapabilityAwareVectorStore(realVectors, runtimeCapabi
 // the queue-depth gate (EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE) prevents a deep
 // backlog being double-refilled. Set EMBEDDING_QUEUE_BACKFILL_CAP=0 to restore
 // single-owner (MCP-server-only) backfill.
-export const embeddingWorker = new EmbeddingWorker(db, realVectors, { backfillCap: EMBEDDING_QUEUE_BACKFILL_CAP });
+export const embeddingWorker = new EmbeddingWorker(db, realVectors, {
+	backfillCap: EMBEDDING_QUEUE_BACKFILL_CAP,
+	lazyWarmup: EMBEDDING_LAZY_WARMUP
+});
 runtimeCapabilities.register("semantic", async () => {
 	await realVectors.initialize();
 	embeddingWorker.start();
 });
 runtimeCapabilities.markReady("dashboard");
-if (runtimeCapabilities.profile === "full") void runtimeCapabilities.ensure("semantic");
+// PERF-005: the `full` profile eagerly warms the semantic capability, loading
+// the ONNX runtime + embedding model into RSS (~140-180 MB measured). With
+// EMBEDDING_LAZY_WARMUP the model loads on first semantic demand instead; the
+// worker ENGINE (maintenance/backfill/poll) still starts so queue draining is
+// unaffected. Default (false) preserves the historical eager warm-up.
+if (runtimeCapabilities.profile === "full") {
+	if (EMBEDDING_LAZY_WARMUP) {
+		embeddingWorker.start();
+	} else {
+		void runtimeCapabilities.ensure("semantic");
+	}
+}
 export const startTime = Date.now();
 export { logger };

@@ -169,6 +169,52 @@ describe("EmbeddingWorker — non-empty drain cadence (TASK-069/TASK-074)", () =
 	});
 });
 
+describe("EmbeddingWorker — lazy ONNX warm-up gate (PERF-005)", () => {
+	let db: SQLiteStore;
+
+	beforeEach(async () => {
+		db = await createTestStore();
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	it("eager (default): start() warms the model via vectors.initialize()", () => {
+		const vectors = makeStubVectors();
+		vectors.initialize = vi.fn().mockResolvedValue(undefined);
+		const worker = new EmbeddingWorker(db, vectors, {
+			pollIntervalMs: 3_600_000,
+			purgeIntervalMs: 3_600_000,
+			backfillCap: 0
+		});
+
+		worker.start();
+		expect(vectors.initialize).toHaveBeenCalledTimes(1);
+		worker.stop();
+	});
+
+	it("lazy: start() does NOT warm the model — the engine loop still starts", () => {
+		const vectors = makeStubVectors();
+		vectors.initialize = vi.fn().mockResolvedValue(undefined);
+		const worker = new EmbeddingWorker(db, vectors, {
+			pollIntervalMs: 3_600_000,
+			purgeIntervalMs: 3_600_000,
+			backfillCap: 0,
+			lazyWarmup: true
+		});
+
+		worker.start();
+		expect(vectors.initialize).not.toHaveBeenCalled();
+		// The worker is genuinely running (not a silent no-op): its stats
+		// report started=true and the model as not-yet-ready.
+		const stats = worker.getStats();
+		expect(stats.started).toBe(true);
+		expect(stats.modelReady).toBe(false);
+		worker.stop();
+	});
+});
+
 describe("EmbeddingWorker — codebase_symbol → KG auto-population (TASK-293)", () => {
 	let db: SQLiteStore;
 	let worker: EmbeddingWorker;

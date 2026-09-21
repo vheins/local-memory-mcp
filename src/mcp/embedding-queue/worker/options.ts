@@ -11,6 +11,7 @@
  */
 
 import {
+	EMBEDDING_LAZY_WARMUP,
 	EMBEDDING_QUEUE_BACKFILL_CAP,
 	EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE,
 	EMBEDDING_QUEUE_BACKOFF_BASE_MS,
@@ -45,6 +46,13 @@ export interface EmbeddingWorkerOptions {
 	 * EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK env constant (5).
 	 */
 	nonEmptyBackoffStreak?: number;
+	/**
+	 * When true, the worker does NOT eagerly warm the ONNX model on `start()`;
+	 * the model is loaded on first use (first claimed batch) instead. Defaults
+	 * to the EMBEDDING_LAZY_WARMUP env constant (false = eager, preserving the
+	 * historical `full`-profile startup warm-up).
+	 */
+	lazyWarmup?: boolean;
 }
 
 /**
@@ -69,6 +77,7 @@ export function resolveWorkerOptions(options: EmbeddingWorkerOptions): ResolvedW
 		doneTtlMs: options.doneTtlMs ?? EMBEDDING_QUEUE_DONE_TTL_MS,
 		poisonTtlMs: options.poisonTtlMs ?? EMBEDDING_QUEUE_POISON_TTL_MS,
 		purgeIntervalMs: options.purgeIntervalMs ?? EMBEDDING_QUEUE_PURGE_INTERVAL_MS,
-		nonEmptyBackoffStreak: options.nonEmptyBackoffStreak ?? EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK
+		nonEmptyBackoffStreak: options.nonEmptyBackoffStreak ?? EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK,
+		lazyWarmup: options.lazyWarmup ?? EMBEDDING_LAZY_WARMUP
 	};
 }
