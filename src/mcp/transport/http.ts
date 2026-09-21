@@ -35,9 +35,11 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import {
 	createMcpHandler,
 	hostHeaderValidationResponse,
+	isInitializeRequest,
 	isLegacyRequest,
 	originValidationResponse,
 	localhostAllowedHostnames,
+	parseJSONRPCMessage,
 	WebStandardStreamableHTTPServerTransport
 } from "@modelcontextprotocol/server";
 import type {
@@ -262,6 +264,62 @@ export function bufferStandaloneUntilSse(transport: WebStandardStreamableHTTPSer
 	return { bufferedCount: () => buffered.length, isSseOpen: () => sseOpen };
 }
 
+/**
+ * Whether a legacy request is an `initialize` exchange — the ONLY exchange that
+ * may open a fresh session. A `POST` body is parsed from a clone, so the
+ * original request stays readable for whichever handler it is routed to.
+ *
+ * Validation mirrors the SDK's own boundary (`JSONRPCMessageSchema`): a body
+ * that is not valid JSON, or that is JSON but not a valid JSON-RPC message,
+ * returns `null` so the SDK still owns the precise parse-error response. Only a
+ * valid JSON-RPC body without an `initialize` is classified `false` (and so
+ * answered with a session error rather than a freshly-minted dead server).
+ *
+ * @returns `true` when an `initialize` message is present, `false` for a valid
+ *   JSON-RPC body without one, and `null` when the SDK should handle parsing.
+ */
+async function isInitializeExchange(webRequest: Request): Promise<boolean | null> {
+	if (webRequest.method.toUpperCase() !== "POST") return false;
+	let body: unknown;
+	try {
+		body = await webRequest.clone().json();
+	} catch {
+		return null;
+	}
+	const candidates = Array.isArray(body) ? body : [body];
+	const messages: JSONRPCMessage[] = [];
+	for (const candidate of candidates) {
+		try {
+			messages.push(parseJSONRPCMessage(candidate));
+		} catch {
+			return null;
+		}
+	}
+	return messages.some((message) => isInitializeRequest(message));
+}
+
+/**
+ * Build a JSON-RPC error response in the SDK transport's shape
+ * (`{jsonrpc, error: {code, message}, id: null}`) so a client parses it exactly
+ * like any other transport-level error.
+ */
+function jsonRpcErrorResponse(status: number, code: number, message: string): Response {
+	return Response.json(
+		{ jsonrpc: "2.0", error: { code, message }, id: null },
+		{ status, headers: { "Content-Type": "application/json" } }
+	);
+}
+
+/** JSON-RPC error for an unknown `Mcp-Session-Id`: `404` (client re-initializes). */
+function sessionNotFoundResponse(): Response {
+	return jsonRpcErrorResponse(404, -32001, "Session not found");
+}
+
+/** JSON-RPC error for a non-initialize request with no session header: `400`. */
+function missingSessionIdResponse(): Response {
+	return jsonRpcErrorResponse(400, -32000, "Bad Request: Mcp-Session-Id header is required");
+}
+
 /** The web-standard face returned by {@link createDualHandler}. */
 export interface DualHandler {
 	/** Serve one HTTP request, routing by protocol era (modern vs legacy). */
@@ -354,10 +412,13 @@ export function createDualHandler(factory: McpServerFactory, onerror?: (error: E
 	idleSweepTimer.unref?.();
 
 	/**
-	 * Serve one legacy request. Requests carrying a known `Mcp-Session-Id` go
-	 * straight to that session's transport; anything else (an `initialize`, or
-	 * a stray/expired request) gets a fresh factory server + transport, which
-	 * is RETAINED only when the exchange actually opens a session.
+	 * Serve one legacy request. A request carrying a KNOWN `Mcp-Session-Id` goes
+	 * straight to that session's transport. An `initialize` (with or without a
+	 * session id) gets a fresh factory server + transport, retained once the
+	 * exchange opens a session. Any OTHER request with an unknown or absent
+	 * session id is answered with the clean session error (404 "Session not
+	 * found" / 400 "Mcp-Session-Id header is required") rather than a freshly
+	 * minted un-initialized server (PERF-006).
 	 */
 	async function serveLegacy(webRequest: Request): Promise<Response> {
 		// Lazy idle sweep: deterministic and testable, and it reclaims an
@@ -369,6 +430,27 @@ export function createDualHandler(factory: McpServerFactory, onerror?: (error: E
 		if (existing !== undefined) {
 			existing.lastSeen = Date.now();
 			return existing.transport.handleRequest(webRequest);
+		}
+
+		// Unknown (or absent) session id on a NON-initialize exchange. Minting a
+		// fresh server here would leave it un-initialized, so the SDK would
+		// answer `Bad Request: Server not initialized` (-32000) — a dead end the
+		// client cannot act on. Answer the SESSION error instead, which every
+		// streamable-HTTP client understands as "re-initialize": a 404 tells a
+		// recovering client (OpenCode's patched transport) to re-`initialize`
+		// and retry the same message, and a 400 tells one that simply omitted
+		// the header to send it. An `initialize` still mints a fresh session
+		// below, so re-initialization and first contact both work.
+		const isInitialize = await isInitializeExchange(webRequest);
+		if (isInitialize === false) {
+			// Preserve the observability the SDK provided: it reported these
+			// session rejections through `onerror` (the daemon logs them).
+			if (sessionId !== null) {
+				onerror?.(new Error("Session not found"));
+				return sessionNotFoundResponse();
+			}
+			onerror?.(new Error("Bad Request: Mcp-Session-Id header is required"));
+			return missingSessionIdResponse();
 		}
 
 		const product = await factory({ era: "legacy", requestInfo: webRequest });

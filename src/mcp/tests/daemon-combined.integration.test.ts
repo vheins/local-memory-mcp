@@ -79,7 +79,7 @@ describe("combined server — dashboard face", () => {
 });
 
 describe("combined server — MCP face", () => {
-	it("completes an initialize + tools/list round-trip over /mcp with no auth", async () => {
+	it("completes an initialize + tools/list + tools/call round-trip over /mcp with no auth", async () => {
 		const transport = new StreamableHTTPClientTransport(new URL(`${handle.url}/mcp`));
 		const client = new Client({ name: "daemon-test-client", version: "1.0.0" });
 
@@ -88,6 +88,15 @@ describe("combined server — MCP face", () => {
 			const tools = await client.listTools();
 			expect(Array.isArray(tools.tools)).toBe(true);
 			expect(tools.tools.length).toBeGreaterThan(0);
+
+			// PERF-006: the live failure was a `tools/call` on a session the daemon
+			// no longer recognized. On a healthy session it must reach the tool.
+			const call = await client.callTool({
+				name: "memory-read",
+				arguments: { owner: "perf006", repo: "daemon-handshake", query: "handshake" }
+			});
+			expect(call.isError).toBeFalsy();
+			expect(Array.isArray(call.content)).toBe(true);
 		} finally {
 			await client.close();
 		}
@@ -116,7 +125,9 @@ describe("combined server — MCP face", () => {
 	 * must be served by a PER-SESSION stateful transport — not the SDK's
 	 * throwaway stateless fallback. A raw `initialize` POST must issue an
 	 * `Mcp-Session-Id` that is then REUSED; a `tools/list` on that id succeeds,
-	 * while the same call WITHOUT the id is refused ("Server not initialized").
+	 * while the same call WITHOUT the id is refused with a clean
+	 * "Mcp-Session-Id header is required" instead of the un-actionable
+	 * "Server not initialized" dead end (PERF-006).
 	 */
 	it("retains a legacy (2025-era) session across requests keyed by Mcp-Session-Id", async () => {
 		const jsonHeaders = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
@@ -163,7 +174,90 @@ describe("combined server — MCP face", () => {
 			body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} })
 		});
 		expect(noSession.status).toBe(400);
-		expect(await noSession.text()).toContain("Server not initialized");
+		const noSessionBody = await noSession.text();
+		expect(noSessionBody).toContain("Mcp-Session-Id header is required");
+		expect(noSessionBody).not.toContain("Server not initialized");
+	});
+
+	/**
+	 * PERF-006: the live failure was a `tools/call` POSTed with a session id the
+	 * daemon no longer recognized, which the daemon answered by minting a fresh
+	 * un-initialized server and returning `Server not initialized` (-32000). The
+	 * fix answers the SESSION error (404 "Session not found") instead, which a
+	 * streamable-HTTP client treats as "re-initialize and retry" — so a normal
+	 * client recovers without a restart. This drives the full handshake first
+	 * (initialize → tools/list → tools/call) to prove the healthy path, then
+	 * sends the stale id.
+	 */
+	it("completes initialize → tools/list → tools/call, then answers an unknown session id cleanly", async () => {
+		const jsonHeaders = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
+
+		const init = await fetch(`${handle.url}/mcp`, {
+			method: "POST",
+			headers: jsonHeaders,
+			body: JSON.stringify({
+				jsonrpc: "2.0",
+				id: 1,
+				method: "initialize",
+				params: {
+					protocolVersion: "2025-06-18",
+					capabilities: {},
+					clientInfo: { name: "perf006-handshake", version: "1.0.0" }
+				}
+			})
+		});
+		expect(init.status).toBe(200);
+		const sessionId = init.headers.get("mcp-session-id");
+		expect(sessionId).toBeTruthy();
+		await init.text();
+
+		const sessionHeaders = { ...jsonHeaders, "mcp-session-id": sessionId! };
+
+		await fetch(`${handle.url}/mcp`, {
+			method: "POST",
+			headers: sessionHeaders,
+			body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })
+		}).then((res) => res.text());
+
+		const list = await fetch(`${handle.url}/mcp`, {
+			method: "POST",
+			headers: sessionHeaders,
+			body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
+		});
+		expect(list.status).toBe(200);
+		expect(await list.text()).toContain('"tools"');
+
+		// tools/call on the SAME retained session must succeed.
+		const call = await fetch(`${handle.url}/mcp`, {
+			method: "POST",
+			headers: sessionHeaders,
+			body: JSON.stringify({
+				jsonrpc: "2.0",
+				id: 3,
+				method: "tools/call",
+				params: {
+					name: "memory-read",
+					arguments: { owner: "perf006", repo: "daemon-handshake", query: "handshake" }
+				}
+			})
+		});
+		expect(call.status).toBe(200);
+		const callBody = await call.text();
+		// A tool-level failure is still a JSON-RPC `result` (with `isError:true`),
+		// so asserting `result` alone would be a false green — require success.
+		expect(callBody).toContain('"result"');
+		expect(callBody).not.toContain('"isError":true');
+
+		// A stale/unknown session id must get the clean, retryable session error.
+		const unknown = await fetch(`${handle.url}/mcp`, {
+			method: "POST",
+			headers: { ...jsonHeaders, "mcp-session-id": "00000000-0000-4000-8000-000000000000" },
+			body: JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "memory-read", arguments: {} } })
+		});
+		expect(unknown.status).toBe(404);
+		const unknownBody = await unknown.text();
+		expect(unknownBody).toContain("Session not found");
+		expect(unknownBody).not.toContain("Server not initialized");
 	});
 });
 

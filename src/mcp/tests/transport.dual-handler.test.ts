@@ -69,8 +69,8 @@ describe("createDualHandler — legacy session retention (DEBT-423)", () => {
 	 * transport, not a throwaway stateless instance: the `initialize` POST
 	 * returns an `Mcp-Session-Id` which is then REUSED, and a subsequent
 	 * `tools/list` on that id succeeds — while the SAME request without the id
-	 * is refused with "Server not initialized" (a stateless fallback would have
-	 * answered it).
+	 * is refused with a clean "Mcp-Session-Id header is required" (a stateless
+	 * fallback would have answered it).
 	 */
 	it("retains the initialized session across requests keyed by Mcp-Session-Id", async () => {
 		const { handler } = await startHarness();
@@ -121,8 +121,10 @@ describe("createDualHandler — legacy session retention (DEBT-423)", () => {
 		expect(list.headers.get("mcp-session-id")).toBe(sessionId);
 		expect(await list.text()).toContain('"tools"');
 
-		// 4. The same call WITHOUT the session id is refused — proving the
-		// session state is genuinely keyed and retained, not reconstructed.
+		// 4. The same call WITHOUT the session id is refused with a clean,
+		// actionable error — proving the session state is genuinely keyed and
+		// retained, not reconstructed, and that the client is told to send the
+		// header rather than being left with an un-actionable dead end.
 		const noSession = await handler.fetch(
 			new Request(ENDPOINT, {
 				method: "POST",
@@ -131,7 +133,9 @@ describe("createDualHandler — legacy session retention (DEBT-423)", () => {
 			})
 		);
 		expect(noSession.status).toBe(400);
-		expect(await noSession.text()).toContain("Server not initialized");
+		const noSessionBody = await noSession.text();
+		expect(noSessionBody).toContain("Mcp-Session-Id header is required");
+		expect(noSessionBody).not.toContain("Server not initialized");
 	});
 });
 
@@ -246,8 +250,10 @@ describe("createDualHandler — idle legacy session eviction", () => {
 	 * The SDK client's normal `close()` never sends a `DELETE`, so an abandoned
 	 * legacy session would pin its server + transport forever without an idle
 	 * sweep. Driving the sweep past the TTL must evict the session, and a
-	 * subsequent request on that id must fall back to a fresh/absent session
-	 * (400 "Server not initialized" — the id is no longer retained).
+	 * subsequent request on that id must get the clean "Session not found"
+	 * (404) that tells a recovering client to re-`initialize` — the id is no
+	 * longer retained, so the exchange must NOT be answered by a freshly-minted
+	 * un-initialized server.
 	 */
 	it("evicts a session idle past the TTL and a later request finds no session", async () => {
 		const { handler } = await startHarness();
@@ -259,11 +265,14 @@ describe("createDualHandler — idle legacy session eviction", () => {
 		// Drive the sweep just past the TTL using an injected clock.
 		handler.sweepIdleLegacySessions(Date.now() + MCP_HTTP_SESSION_IDLE_TTL_MS + 1);
 
-		// The id is gone: the request is served by a FRESH, un-initialized
-		// factory server, which refuses with "Server not initialized".
+		// The id is gone: the request must get the clean "Session not found"
+		// (404) that a recovering client acts on, NOT a fresh un-initialized
+		// server's "Server not initialized" dead end.
 		const afterEviction = await listOnSession(handler, sessionId);
-		expect(afterEviction.status).toBe(400);
-		expect(await afterEviction.text()).toContain("Server not initialized");
+		expect(afterEviction.status).toBe(404);
+		const afterEvictionBody = await afterEviction.text();
+		expect(afterEvictionBody).toContain("Session not found");
+		expect(afterEvictionBody).not.toContain("Server not initialized");
 	});
 
 	it("keeps a recently-used session alive", async () => {
