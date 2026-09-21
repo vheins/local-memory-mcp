@@ -248,6 +248,101 @@ describe("PERF-003 — backfill is idempotent across repeated restarts", () => {
 	});
 });
 
+describe("PERF-FIX-001 — terminal `done` queue rows cannot block a required re-embed", () => {
+	let db: SQLiteStore;
+	let outbox: Outbox;
+	const version = currentEmbeddingModelVersion();
+
+	beforeEach(async () => {
+		db = await createTestStore();
+		outbox = new Outbox(db);
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	it("post-drain + model_version mismatch → exactly 1 enqueue, and the row is revived to pending", () => {
+		const memory = makeMemory();
+		db.memories.insert(memory);
+		const hash = embedPayloadContentHash(memoryPayload(memory));
+		// The post-drain state: a vector stamped with the CURRENT hash but a
+		// STALE model_version, plus the terminal `done` row `Outbox.complete()`
+		// leaves behind (it marks done, it does not delete).
+		db.memoryVectors.upsertVectorEmbedding(memory.id, [0.1, 0.2], { contentHash: hash, modelVersion: version + 1 });
+		enqueueMemory(db, memory);
+		db.db.prepare("UPDATE queue_jobs SET status = 'done', attempts = 2 WHERE entity_id = ?").run(memory.id);
+
+		// Before PERF-FIX-001 this returned 0: the terminal row conflicted and
+		// the required re-enqueue was silently dropped for up to 6h.
+		expect(outbox.backfillMissingVectors(100)).toBe(1);
+
+		const row = getJob(db, "memory", memory.id)!;
+		expect(row.status).toBe("pending");
+		expect(row.attempts).toBe(0);
+		expect(row.content_hash).toBe(hash);
+
+		// Exactly once: a second pass is a no-op (the row is now live/pending).
+		expect(outbox.backfillMissingVectors(100)).toBe(0);
+	});
+
+	it("post-drain + content_hash mismatch → exactly 1 enqueue", () => {
+		const memory = makeMemory();
+		db.memories.insert(memory);
+		const currentHash = embedPayloadContentHash(memoryPayload(memory));
+		// Stale hash, current model_version, terminal `done` row.
+		db.memoryVectors.upsertVectorEmbedding(memory.id, [0.1, 0.2], {
+			contentHash: "stale-hash-does-not-match",
+			modelVersion: version
+		});
+		enqueueMemory(db, memory);
+		db.db.prepare("UPDATE queue_jobs SET status = 'done', attempts = 1 WHERE entity_id = ?").run(memory.id);
+
+		expect(outbox.backfillMissingVectors(100)).toBe(1);
+
+		const row = getJob(db, "memory", memory.id)!;
+		expect(row.status).toBe("pending");
+		expect(row.content_hash).toBe(currentHash);
+		expect(outbox.backfillMissingVectors(100)).toBe(0);
+	});
+
+	it("post-drain + unchanged content/version → 0 enqueues (idempotency preserved)", () => {
+		const memory = makeMemory();
+		db.memories.insert(memory);
+		const hash = embedPayloadContentHash(memoryPayload(memory));
+		db.memoryVectors.upsertVectorEmbedding(memory.id, [0.1, 0.2], { contentHash: hash, modelVersion: version });
+		enqueueMemory(db, memory);
+		db.db.prepare("UPDATE queue_jobs SET status = 'done', attempts = 3 WHERE entity_id = ?").run(memory.id);
+
+		// `needsReembed` is false, so the terminal row must stay untouched —
+		// the fix must not turn every drained row into a re-embed.
+		expect(outbox.backfillMissingVectors(100)).toBe(0);
+
+		const row = getJob(db, "memory", memory.id)!;
+		expect(row.status).toBe("done");
+		expect(row.attempts).toBe(3);
+	});
+
+	it("a poison row that still needs a re-embed is NOT reset by the backfill", () => {
+		const memory = makeMemory();
+		db.memories.insert(memory);
+		// No vector row → `needsReembed` is true, but the row is terminal
+		// `poison`: the backfill must never reset it (poison recovery is purge
+		// TTL + the write path's LWW reset, TASK-068/069).
+		enqueueMemory(db, memory);
+		db.db
+			.prepare("UPDATE queue_jobs SET status = 'poison', attempts = 5, last_error = 'FK failure' WHERE entity_id = ?")
+			.run(memory.id);
+
+		expect(outbox.backfillMissingVectors(100)).toBe(0);
+
+		const row = getJob(db, "memory", memory.id)!;
+		expect(row.status).toBe("poison");
+		expect(row.attempts).toBe(5);
+		expect(row.last_error).toBe("FK failure");
+	});
+});
+
 describe("PERF-003 — backfill preserves live job backoff", () => {
 	let db: SQLiteStore;
 	let outbox: Outbox;

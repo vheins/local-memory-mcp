@@ -146,11 +146,38 @@ export function enqueueEmbeddingJob(store: SQLiteStore, input: EmbeddingJobInput
 }
 
 /**
- * Insert ONLY IF the (entity_kind, entity_id) row does not exist yet — never
- * touches an existing row. Backfill uses this so a live queued row keeps its
- * attempts/backoff_until/last_error instead of being LWW-reset to
- * attempts=0/backoff=NULL (TASK-068 S1 / TASK-069): FK-poisoned jobs must
- * keep their exponential retry backoff, and a restart must not defeat it.
+ * Backfill enqueue: INSERT when the (entity_kind, entity_id) row is absent,
+ * and REVIVE a terminal `done` row to `pending` with the fresh payload +
+ * content_hash. Never touches a live or poisoned row.
+ *
+ * The caller (`backfillMissingVectors`) only passes inputs for which
+ * `needsReembed` returned true, so EVERY row reaching this function genuinely
+ * needs (re-)embedding. Semantics:
+ *   - row absent               → INSERT a fresh `pending` row.
+ *   - row `done` (terminal)    → revive to `pending`, attempts=0, lease/backoff/
+ *                                last_error cleared, payload + content_hash
+ *                                replaced by the current snapshot.
+ *   - row `pending`/`claimed`  → UNTOUCHED: a live job keeps its attempts /
+ *                                backoff_until / last_error (TASK-068 S1 /
+ *                                TASK-069), so a restart never defeats the
+ *                                exponential retry backoff of an FK-poisoned
+ *                                job.
+ *   - row `poison`             → UNTOUCHED: poison recovery is the purge TTL +
+ *                                the write path's LWW reset, never the backfill.
+ *
+ * Why the `done` revival exists (PERF-FIX-001): `Outbox.complete()` marks a
+ * drained row `done` instead of deleting it, and the UNIQUE
+ * `(entity_kind, entity_id)` index made the old `ON CONFLICT DO NOTHING` treat
+ * that terminal row as a conflict — silently DROPPING a required re-enqueue
+ * (model-version bump / content change) for up to `EMBEDDING_QUEUE_DONE_TTL_MS`
+ * (6h). Purging before the backfill does NOT fix this on its own: a version
+ * bump inside the 6h window would still be dropped. The
+ * `WHERE queue_jobs.status = 'done'` guard is what scopes the reset to
+ * terminal rows only.
+ *
+ * Single statement (INSERT … ON CONFLICT DO UPDATE … WHERE) — SNAPSHOT-immune
+ * and cheap, so the backfill's chunked BEGIN IMMEDIATE transactions keep their
+ * per-chunk write-lock hold at milliseconds.
  */
 export function enqueueIfAbsent(store: SQLiteStore, input: EmbeddingJobInput): boolean {
 	const now = new Date().toISOString();
@@ -158,7 +185,17 @@ export function enqueueIfAbsent(store: SQLiteStore, input: EmbeddingJobInput): b
 		.prepare(
 			`INSERT INTO queue_jobs (id, entity_kind, entity_id, entity_repo, payload, content_hash, status, attempts, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)
-			ON CONFLICT(entity_kind, entity_id) DO NOTHING`
+			ON CONFLICT(entity_kind, entity_id) DO UPDATE SET
+				payload = excluded.payload,
+				content_hash = excluded.content_hash,
+				status = 'pending',
+				attempts = 0,
+				lease_until = NULL,
+				locked_by = NULL,
+				backoff_until = NULL,
+				last_error = NULL,
+				updated_at = excluded.updated_at
+			WHERE queue_jobs.status = 'done'`
 		)
 		.run(
 			randomUUID(),
@@ -258,8 +295,12 @@ export function countByStatus(store: SQLiteStore): QueueCounts {
  *   (default EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE = 500), backfill returns 0
  *   immediately — a deep backlog is NOT double-refilled at restart; the
  *   worker drains the jobs it already has.
- * - Insert-only: rows ABSENT from queue_jobs are inserted fresh; rows that
- *   already exist (pending/claimed/backoff) are NEVER touched, so their
+ * - Insert-or-revive-terminal: rows ABSENT from queue_jobs are inserted
+ *   fresh; a terminal `done` row is revived to `pending` with the current
+ *   snapshot (PERF-FIX-001 — `Outbox.complete()` keeps drained rows, and the
+ *   old conflict check dropped a genuinely-required re-enqueue while that row
+ *   lived out its 6h `EMBEDDING_QUEUE_DONE_TTL_MS`). Live rows
+ *   (pending/claimed/backoff) and `poison` rows are NEVER touched, so their
  *   attempts/backoff_until survive. This preserves exponential retry backoff
  *   for FK-poisoned jobs instead of resetting them to retry immediately (the
  *   pre-fix CPU multiplier).

@@ -3,6 +3,7 @@ import { createTestStore, SQLiteStore } from "../storage/sqlite";
 import { Outbox, enqueueTask, enqueueMemory, enqueueStandard } from "../embedding-queue/outbox";
 import { taskJobPayload, memoryJobPayload, standardJobPayload } from "../embedding-queue/enqueue";
 import { embedPayloadContentHash } from "../embedding-queue/content-hash";
+import { currentEmbeddingModelVersion } from "../storage/embedding-model";
 import type { Task } from "../types";
 import { makeTask, makeMemory, makeStandard, getJob, REPO } from "./embedding-queue.helpers";
 
@@ -249,7 +250,7 @@ describe("OPT-FLOW-03 — content-hash dedup", () => {
 			expect(row.content_hash).not.toBeNull();
 		});
 
-		it("negative: an existing row with identical content is never touched (attempts/status preserved, not deduped away)", () => {
+		it("negative: an existing row whose vector is current is never touched (attempts/status preserved, not deduped away)", () => {
 			const absent = makeTask({ title: "Absent dedup task" });
 			const existing = makeTask({ title: "Existing dedup task" });
 			db.tasks.insertTask(absent);
@@ -266,6 +267,17 @@ describe("OPT-FLOW-03 — content-hash dedup", () => {
 			db.db
 				.prepare("UPDATE queue_jobs SET status = 'done', attempts = 4, last_error = 'FK failure' WHERE entity_id = ?")
 				.run(existing.id);
+
+			// Its vector is already stamped with the current content_hash +
+			// model_version, so `needsReembed` is false and the backfill must not
+			// revive the terminal row. (PERF-FIX-001: a terminal `done` row whose
+			// vector genuinely needs a re-embed IS revived to pending — see
+			// embedding-queue.backfill-idempotent.test.ts. This case stays a
+			// no-op because the vector is current.)
+			db.tasks.upsertTaskVectorEmbedding(existing.id, [0.1, 0.2], {
+				contentHash: embedPayloadContentHash(taskJobPayload(existing)),
+				modelVersion: currentEmbeddingModelVersion()
+			});
 
 			const enqueued = outbox.backfillMissingVectors(100);
 			// Only the absent task is inserted — the existing row is untouched.
