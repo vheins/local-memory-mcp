@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.49.0] — 2026-09-21
+
+### Added
+
+- **Daemon build identity + stale-build diagnostics (`PERF-009`):** `src/mcp/utils/build-info.ts` resolves a never-throwing build identity that prefers a generated `dist/daemon-build.json` stamp (version + git sha + builtAt, written by `scripts/gen-bins.mjs`) and falls back to the `package.json` version + `git rev-parse --short HEAD`. The daemon logs a `[Daemon] build identity` line at startup (including `entry`) and `GET /api/health` exposes the same identity, so a stale daemon (e.g. an `npx`-cached build serving a moved working tree) is detectable instead of surfacing as a bare `400`. The unknown-session `404` path now logs the offending session id plus a re-initialize hint; the response body is unchanged.
+- **`agent-context` memory refs render by short code (`TASK-431`):** the compiled context block labelled memory/decision references with a 36-char UUID. `ContextCandidate` gains a `reference` field (separate from `id`, which still drives dedup, telemetry, and tie-break ordering) set to the memory's short `code`, falling back to the UUID when absent. Tasks and standards were already code-first; handoffs/observations/code symbols keep their UUIDs. The `context[]` output shape is unchanged.
+
+### Changed
+
+- **ONNX inference thread pool capped (`PERF-002`):** added `EMBEDDING_ONNX_THREADS` (default `1`) and `applyOnnxThreadConfig` to bound the ORT pool for both wasm (`wasm.numThreads`) and native (`intraOpNumThreads` + `OMP_NUM_THREADS` set before the dynamic import). Thread count affects scheduling only, never embedding values.
+- **Idempotent embedding backfill via content hash + model version (`PERF-003`):** the derived `*_vectors` tables gain `content_hash` + `model_version` columns (idempotent `ensureDerivedVectorColumns` upgrade), stamped on every vector write. Backfill now re-embeds only when the vector is missing or the stored hash/model version differs from the current payload, so metadata-only bumps (soul-maintenance decay) no longer trigger mass re-embedding. Job backoff and `enqueueIfAbsent` insert-only semantics are preserved.
+- **Explicit embedding model version + auto re-embed on change (`PERF-004`):** added `EMBEDDING_MODEL_VERSION` in `src/mcp/storage/embedding-model.ts` (single source of truth for name + version). The startup backfill re-embeds every vector whose stored `model_version` differs, exactly once and capped by `EMBEDDING_QUEUE_BACKFILL_CAP`. Removes the duplicated model-name literal from `RealVectorStore` and documents the model-upgrade procedure.
+- **Opt-in lazy ONNX warm-up (`PERF-005`):** profiling showed the reported 2.6GB was `VmSize` (virtual address space), not resident memory; the daemon plateaus around 550MB `VmRSS`. The one attributable retainer was the eagerly-warmed ONNX model (~140–176MB measured). Added `EMBEDDING_LAZY_WARMUP` (default `false`) so the `full` profile defers the model load to first semantic demand while the worker engine (startup reconcile/backfill/purge + poll loop) still starts. Output-neutral: same model, loaded later. A/B idle RSS 316.3MB → 176.5MB.
+- **Redundant observations index dropped + named retention window (`PERF-007`):** migration v39 drops `idx_observations_entity`, a leftmost-prefix of the UNIQUE `idx_observations_dedup`, so it only added write cost and 13.8MB. The observation retention window is extracted into `KG_OBSERVATION_RETENTION_DAYS` (env-overridable, STD-005 rule 4). Evidence on a DB copy: file 2,762,518,528B → 1,717,231,616B (-997MB) after `VACUUM`; `integrity_check` ok; row counts unchanged. The relations leads needed no code change: `idx_relations_to` was already dropped by v36, and only 278 rows are parent-aware eligible (an age-only prune would have severed ~3.5M live edges). Operators need a one-off `VACUUM_ON_STARTUP=true` run to reclaim the freelist.
+
+### Fixed
+
+- **Recoverable session error for an unknown session id (`PERF-006`):** a non-initialize request carrying an unknown/absent `Mcp-Session-Id` minted a fresh un-initialized transport, so the SDK rejected it with `400 "Server not initialized"` instead of a recoverable session error. `serveLegacy` now guards before the factory mint: unknown session id → `404 Session not found`, absent → `400 Mcp-Session-Id required`; `initialize` still mints a session. The OpenCode SDK patch auto-recovers on `404`. Host/Origin validation, the `DEBT-423` bounded buffer, and idle expiry are preserved.
+- **Terminal `done` queue row no longer blocks a required re-embed (`PERF-FIX-001`):** `Outbox.complete()` leaves drained rows `status='done'` (6h TTL) and `enqueueIfAbsent` used `ON CONFLICT DO NOTHING`, so a `model_version` or content change inside the TTL window was silently dropped by the startup backfill (which also runs before purge). Replaced with a conditional `DO UPDATE … WHERE status='done'` that revives the row to `pending` with the current payload/hash and clears lease/backoff/`last_error`; rows that are pending, claimed, backoff or poison are untouched. One statement, so the chunked write-lock hold is unchanged. Probe: post-drain state `backfillWithDoneRowPresent` 0 → 1 without a purge, second pass 0 (exactly-once), unchanged corpus enqueues 0.
+
+### Docs
+
+- **Daemon wedge runbook (`PERF-009`):** AGENTS.md gains a "Daemon wedge — stale session / stale build" section covering the build-identity check and the restart recovery.
+- **Embedding model-upgrade procedure (`PERF-004`):** AGENTS.md documents bumping `EMBEDDING_MODEL_VERSION` (and `EMBEDDING_MODEL_NAME` on a rename) and the capped backfill drain across restarts.
+- **Thread-cap notes (`PERF-002`):** AGENTS.md env table + semantic-model note for `EMBEDDING_ONNX_THREADS`.
+- **Daemon lightness benchmark docs (`PERF-008`):** benchmarks README, `lightness-perf-gate.md`, and a generated report.
+
+### Tests
+
+- **Daemon lightness benchmark + semantic recall guard (`PERF-008`):** a reproducible harness (`src/mcp/bench/`) samples `/proc/<pid>/stat`, `/proc/<pid>/status` and `/proc/<pid>/task` to record CPU, native thread count, `VmRSS`, `VmHWM` and `VmSize` per scenario (clean-startup, repeated-restart, write-read-burst, idle, idle-eager, engines-active), plus a semantic recall regression guard with zero-degradation tolerance. `VmRSS` and `VmSize` are reported separately on purpose: the original "2.6GB RSS" trigger was a `VmSize` misread. Measured: idle lazy 266.6MiB vs eager 371.6MiB `VmRSS` (+105.0MiB, +39%), 11 vs 14 threads; backfill 200 rows on first boot then 0,0 on restarts; ONNX recall mean 1.000 / min 1.000.
+- New/updated suites: `vectors.threads`, `embedding-model.version`, `embedding-queue.backfill-idempotent` (incl. post-drain version/content-mismatch, unchanged and poison cases), `embedding-queue.worker` lazy warm-up gate, `build-info`, `agent-context` (+3), `dual-handler`/`daemon-combined`/`multisession`, and the v39 migration + observation/retention tests.
+
 ## [0.48.0] — 2026-09-20
 
 ### Added
