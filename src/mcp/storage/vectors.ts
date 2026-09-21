@@ -3,6 +3,7 @@ import { SQLiteStore } from "./sqlite";
 import { logger } from "../utils/logger";
 import { cosineSimilarityArrays, decodeVector } from "../utils/vector";
 import { EMBEDDING_ONNX_THREADS } from "../utils/constants";
+import { currentEmbeddingModelVersion } from "./embedding-model";
 
 type FeatureExtractionPipeline = import("@xenova/transformers").FeatureExtractionPipeline;
 
@@ -128,12 +129,23 @@ export class RealVectorStore implements VectorStore {
 			const output = await extractor(text, { pooling: "mean", normalize: true });
 			const vector = Array.from(output.data as Float32Array);
 
+			// PERF-003: stamp the embedding-model identity so the startup backfill
+			// re-embeds when the model changes. `content_hash` is deliberately NOT
+			// written here: this method only receives the embed `text`, while the
+			// enqueue-time hash covers the whole payload (title/content/parentId/
+			// decisionRefs/context/stack) — a text-only hash would NOT be
+			// comparable and would wrongly suppress a needed re-embed. The
+			// authoritative producer of BOTH columns is the worker path
+			// (`writeVector` in embedding-queue/worker-jobs.ts), which has the
+			// payload. A row written here keeps `content_hash` NULL, so the next
+			// backfill re-embeds it ONCE through the worker and stamps the hash.
+			const meta = { modelVersion: currentEmbeddingModelVersion() };
 			if (kind === "standard") {
-				this.db.standards.upsertVectorEmbedding(id, vector);
+				this.db.standards.upsertVectorEmbedding(id, vector, meta);
 			} else if (kind === "task") {
-				this.db.tasks.upsertTaskVectorEmbedding(id, vector);
+				this.db.tasks.upsertTaskVectorEmbedding(id, vector, meta);
 			} else {
-				this.db.memoryVectors.upsertVectorEmbedding(id, vector);
+				this.db.memoryVectors.upsertVectorEmbedding(id, vector, meta);
 			}
 		} catch (error) {
 			logger.error("[Vectors] Error during upsert", { id, kind, error: String(error) });

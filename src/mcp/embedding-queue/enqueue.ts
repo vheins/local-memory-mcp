@@ -35,7 +35,8 @@ import {
 	TASK_STATUS_CANCELED
 } from "../types";
 import { embedPayloadContentHash } from "./content-hash";
-import { EmbeddingJobInput, QueueCounts, QueueJobStatus, QueueJobRow } from "./types";
+import { currentEmbeddingModelVersion } from "../storage/embedding-model";
+import { EmbeddingJobInput, EmbeddingJobPayload, QueueCounts, QueueJobStatus, QueueJobRow } from "./types";
 import {
 	memoryJobPayload,
 	standardJobPayload,
@@ -224,11 +225,35 @@ export function countByStatus(store: SQLiteStore): QueueCounts {
 }
 
 /**
- * Startup backfill: enqueue rows whose vector is missing or stale (entity
- * updated_at newer than the vector row). Runs once per process start,
- * bounded by `cap`.
+ * Startup backfill: enqueue an entity for (re-)embedding when its vector is
+ * MISSING, or its stored `content_hash` no longer matches the entity's current
+ * embed/KG payload, or its stored `model_version` differs from the current
+ * embedding model (PERF-003).
  *
- * Backpressure (TASK-068 S1 / TASK-069):
+ * Idempotency (PERF-003): the pre-fix predicate (`vector.updated_at <
+ * entity.updated_at`) treated ANY metadata-only `updated_at` bump — e.g. the
+ * soul-maintenance importance decay that rewrites `importance`/`updated_at` on
+ * thousands of memories — as staleness, so every restart re-embedded the whole
+ * corpus. The re-embed decision is now made SOLELY by comparing the vector's
+ * stored `content_hash` + `model_version` against the entity's CURRENT payload:
+ * a metadata-only bump leaves the payload hash unchanged, so nothing is
+ * enqueued. After the first pass every vector carries a matching hash +
+ * version, so subsequent restarts enqueue ~0.
+ *
+ * Candidate selection (bounded): the SQL only narrows by entity STATUS and
+ * `LIMIT cap`; the EXACT re-embed decision is then made in JS by rebuilding the
+ * SAME payload the enqueue path builds and comparing `content_hash` +
+ * `model_version`. The entity `updated_at` is NOT consulted at all (neither as
+ * a decision nor as a candidate filter): a metadata-only `updated_at` bump
+ * (soul-maintenance importance decay) leaves the payload hash unchanged, so it
+ * can never cause an enqueue and the mass-re-embed regression cannot recur.
+ * Genuine content changes are enqueued by the write path at change time; the
+ * backfill is the crash-recovery safety net that catches missing/incomplete
+ * provenance and model-version drift. Computing hashes for up to `cap`
+ * candidates per phase is cheap (no ONNX); the expensive work only happens for
+ * rows that genuinely need it.
+ *
+ * Backpressure (TASK-068 S1 / TASK-069) is preserved verbatim:
  * - Gated: when pending + claimed already reach `minPendingClaimed`
  *   (default EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE = 500), backfill returns 0
  *   immediately — a deep backlog is NOT double-refilled at restart; the
@@ -238,8 +263,6 @@ export function countByStatus(store: SQLiteStore): QueueCounts {
  *   attempts/backoff_until survive. This preserves exponential retry backoff
  *   for FK-poisoned jobs instead of resetting them to retry immediately (the
  *   pre-fix CPU multiplier).
- * - Rows another worker just embedded are skipped by the freshness
- *   comparison (vector updated_at >= entity updated_at).
  *
  * Runs in chunked BEGIN IMMEDIATE transactions (TASK-064 / MEM-475 +
  * TASK-457): the read-then-write sequence grabs the SQLite write lock upfront
@@ -265,6 +288,26 @@ export function backfillMissingVectors(
 		return 0;
 	}
 
+	const currentVersion = currentEmbeddingModelVersion();
+
+	/**
+	 * PERF-003 re-embed decision. `vectorPresent` false (no row) always
+	 * re-embeds; otherwise the stored `model_version` must equal the current
+	 * one AND the stored `content_hash` must equal the freshly-computed hash of
+	 * the entity's current payload. A NULL stored hash (pre-PERF-003 row) is
+	 * "unknown" and re-embeds exactly once to stamp it.
+	 */
+	const needsReembed = (
+		vectorPresent: boolean,
+		storedHash: string | null,
+		storedModelVersion: number | null,
+		payload: EmbeddingJobPayload
+	): boolean => {
+		if (!vectorPresent) return true;
+		if (storedModelVersion !== currentVersion) return true;
+		return storedHash === null || storedHash !== embedPayloadContentHash(payload);
+	};
+
 	let enqueued = 0;
 
 	// Chunked backfill write transactions (TASK-457): the old single
@@ -278,9 +321,7 @@ export function backfillMissingVectors(
 	// OUTSIDE any write transaction (plain reads hold no write lock), and each
 	// chunked INSERT is a single `INSERT ... ON CONFLICT DO NOTHING`
 	// (enqueueIfAbsent) — SNAPSHOT-immune — so the reads-before-writes split
-	// cannot hit SQLITE_BUSY_SNAPSHOT. Candidate selection per phase (memory →
-	// standards → tasks, each bounded by the original LIMIT against the shared
-	// `cap` budget) and the returned insert count are unchanged.
+	// cannot hit SQLITE_BUSY_SNAPSHOT.
 	const BACKFILL_TXN_CHUNK = 200;
 	const enqueueInChunks = (inputs: EmbeddingJobInput[]): number => {
 		let inserted = 0;
@@ -297,107 +338,125 @@ export function backfillMissingVectors(
 		return inserted;
 	};
 
-	// Phase 1 — memories (up to `cap` candidates, same SELECT as before).
+	// Phase 1 — memories (up to `cap` candidates).
 	{
 		const memories = store.db
 			.prepare(
-				`SELECT m.id, m.repo, m.owner, m.title, m.content, m.updated_at
+				`SELECT m.id, m.repo, m.owner, m.title, m.content, m.updated_at,
+					mv.memory_id AS vector_id, mv.content_hash AS stored_hash, mv.model_version AS stored_version
              FROM ${TABLE_MEMORIES} m LEFT JOIN derived.memory_vectors mv ON mv.memory_id = m.id
-             WHERE m.status = '${MEMORY_STATUS_ACTIVE}' AND (mv.memory_id IS NULL OR mv.updated_at < m.updated_at)
+             WHERE m.status = '${MEMORY_STATUS_ACTIVE}'
+             ORDER BY (mv.memory_id IS NULL) DESC,
+				(mv.content_hash IS NULL OR mv.model_version IS NULL OR mv.model_version <> ?) DESC,
+				m.updated_at DESC
              LIMIT ?`
 			)
-			.all(cap) as Array<{
+			.all(currentVersion, cap) as Array<{
 			id: string;
 			repo: string;
 			owner: string;
 			title: string | null;
 			content: string;
 			updated_at: string;
+			vector_id: string | null;
+			stored_hash: string | null;
+			stored_version: number | null;
 		}>;
 
-		enqueued += enqueueInChunks(
-			memories.map((m) => ({
-				kind: "memory" as const,
-				id: m.id,
-				repo: m.repo,
+		const inputs: EmbeddingJobInput[] = [];
+		for (const m of memories) {
+			const payload = memoryJobPayload({
+				title: m.title,
+				content: m.content,
 				owner: m.owner,
-				payload: memoryJobPayload({
-					title: m.title,
-					content: m.content,
-					owner: m.owner,
-					repo: m.repo,
-					updatedAt: m.updated_at
-				})
-			}))
-		);
+				repo: m.repo,
+				updatedAt: m.updated_at
+			});
+			if (!needsReembed(m.vector_id !== null, m.stored_hash, m.stored_version, payload)) continue;
+			inputs.push({ kind: "memory", id: m.id, repo: m.repo, owner: m.owner, payload });
+		}
+		enqueued += enqueueInChunks(inputs);
 	}
 
-	// Phase 2 — standards fill the remaining budget (same cap - enqueued limit).
+	// Phase 2 — standards fill the remaining budget (cap - enqueued limit).
 	if (enqueued < cap) {
 		const standards = store.db
 			.prepare(
-				`SELECT s.id, s.repo, s.owner, s.title, s.content, s.context, s.stack, s.parent_id, s.updated_at
+				`SELECT s.id, s.repo, s.owner, s.title, s.content, s.context, s.version, s.language,
+					s.stack, s.tags, s.metadata, s.parent_id, s.updated_at,
+					sv.standard_id AS vector_id, sv.content_hash AS stored_hash, sv.model_version AS stored_version
              FROM coding_standards s LEFT JOIN derived.standard_vectors sv ON sv.standard_id = s.id
-             WHERE sv.standard_id IS NULL OR sv.updated_at < s.updated_at
+             ORDER BY (sv.standard_id IS NULL) DESC,
+				(sv.content_hash IS NULL OR sv.model_version IS NULL OR sv.model_version <> ?) DESC,
+				s.updated_at DESC
              LIMIT ?`
 			)
-			.all(cap - enqueued) as Array<{
+			.all(currentVersion, cap - enqueued) as Array<{
 			id: string;
 			repo: string | null;
 			owner: string;
 			title: string;
 			content: string;
 			context: string;
+			version: string | null;
+			language: string | null;
 			stack: string | null;
+			tags: string | null;
+			metadata: string | null;
 			parent_id: string | null;
 			updated_at: string;
+			vector_id: string | null;
+			stored_hash: string | null;
+			stored_version: number | null;
 		}>;
 
-		enqueued += enqueueInChunks(
-			standards.map((s) => {
-				const standard: CodingStandardEntry = {
-					id: s.id,
-					code: undefined,
-					title: s.title,
-					content: s.content,
-					parent_id: s.parent_id,
-					context: s.context,
-					version: "",
-					language: null,
-					stack: parseStringArray(s.stack),
-					is_global: false,
-					owner: s.owner,
-					repo: s.repo,
-					tags: [],
-					metadata: {},
-					created_at: s.updated_at,
-					updated_at: s.updated_at,
-					hit_count: 0,
-					last_used_at: null,
-					agent: "backfill",
-					model: "backfill"
-				};
-				return {
-					kind: "standard" as const,
-					id: s.id,
-					repo: s.repo ?? "",
-					owner: s.owner,
-					payload: standardJobPayload(standard)
-				};
-			})
-		);
+		const inputs: EmbeddingJobInput[] = [];
+		for (const s of standards) {
+			// Rebuild the SAME entry shape the enqueue path sees so
+			// `standardJobPayload`/`buildStandardVectorText` hash identically.
+			const standard: CodingStandardEntry = {
+				id: s.id,
+				code: undefined,
+				title: s.title,
+				content: s.content,
+				parent_id: s.parent_id,
+				context: s.context,
+				version: s.version ?? "",
+				language: s.language ?? null,
+				stack: parseStringArray(s.stack),
+				is_global: false,
+				owner: s.owner,
+				repo: s.repo,
+				tags: parseStringArray(s.tags),
+				metadata: safeJson(s.metadata),
+				created_at: s.updated_at,
+				updated_at: s.updated_at,
+				hit_count: 0,
+				last_used_at: null,
+				agent: "backfill",
+				model: "backfill"
+			};
+			const payload = standardJobPayload(standard);
+			if (!needsReembed(s.vector_id !== null, s.stored_hash, s.stored_version, payload)) continue;
+			inputs.push({ kind: "standard", id: s.id, repo: s.repo ?? "", owner: s.owner, payload });
+		}
+		enqueued += enqueueInChunks(inputs);
 	}
 
-	// Phase 3 — tasks fill the remaining budget (same cap - enqueued limit).
+	// Phase 3 — tasks fill the remaining budget (cap - enqueued limit).
 	if (enqueued < cap) {
 		const tasks = store.db
 			.prepare(
-				`SELECT t.id, t.repo, t.owner, t.phase, t.title, t.description, t.parent_id, t.metadata, t.updated_at
+				`SELECT t.id, t.repo, t.owner, t.phase, t.title, t.description, t.parent_id, t.metadata, t.updated_at,
+					tv.task_id AS vector_id, tv.content_hash AS stored_hash, tv.model_version AS stored_version
              FROM ${TABLE_TASKS} t LEFT JOIN derived.task_vectors tv ON tv.task_id = t.id
-              WHERE t.status != '${TASK_STATUS_CANCELED}' AND (tv.task_id IS NULL OR tv.updated_at < t.updated_at)
+              WHERE t.status != '${TASK_STATUS_CANCELED}'
+              ORDER BY (tv.task_id IS NULL) DESC,
+				(tv.content_hash IS NULL OR tv.model_version IS NULL OR tv.model_version <> ?) DESC,
+				t.updated_at DESC
              LIMIT ?`
 			)
-			.all(cap - enqueued) as Array<{
+			.all(currentVersion, cap - enqueued) as Array<{
 			id: string;
 			repo: string;
 			owner: string;
@@ -407,46 +466,45 @@ export function backfillMissingVectors(
 			parent_id: string | null;
 			metadata: string | null;
 			updated_at: string;
+			vector_id: string | null;
+			stored_hash: string | null;
+			stored_version: number | null;
 		}>;
 
-		enqueued += enqueueInChunks(
-			tasks.map((t) => {
-				const task: Task = {
-					id: t.id,
-					owner: t.owner,
-					repo: t.repo,
-					task_code: "",
-					phase: t.phase,
-					title: t.title,
-					description: t.description,
-					status: "backlog",
-					priority: 3,
-					agent: "backfill",
-					role: "backfill",
-					doc_path: null,
-					created_at: t.updated_at,
-					updated_at: t.updated_at,
-					in_progress_at: null,
-					finished_at: null,
-					canceled_at: null,
-					est_tokens: 0,
-					tags: [],
-					suggested_skills: [],
-					commit_id: null,
-					changed_files: [],
-					metadata: safeJson(t.metadata),
-					parent_id: t.parent_id,
-					depends_on: null
-				};
-				return {
-					kind: "task" as const,
-					id: t.id,
-					repo: t.repo,
-					owner: t.owner,
-					payload: taskJobPayload(task)
-				};
-			})
-		);
+		const inputs: EmbeddingJobInput[] = [];
+		for (const t of tasks) {
+			const task: Task = {
+				id: t.id,
+				owner: t.owner,
+				repo: t.repo,
+				task_code: "",
+				phase: t.phase,
+				title: t.title,
+				description: t.description,
+				status: "backlog",
+				priority: 3,
+				agent: "backfill",
+				role: "backfill",
+				doc_path: null,
+				created_at: t.updated_at,
+				updated_at: t.updated_at,
+				in_progress_at: null,
+				finished_at: null,
+				canceled_at: null,
+				est_tokens: 0,
+				tags: [],
+				suggested_skills: [],
+				commit_id: null,
+				changed_files: [],
+				metadata: safeJson(t.metadata),
+				parent_id: t.parent_id,
+				depends_on: null
+			};
+			const payload = taskJobPayload(task);
+			if (!needsReembed(t.vector_id !== null, t.stored_hash, t.stored_version, payload)) continue;
+			inputs.push({ kind: "task", id: t.id, repo: t.repo, owner: t.owner, payload });
+		}
+		enqueued += enqueueInChunks(inputs);
 	}
 
 	return enqueued;

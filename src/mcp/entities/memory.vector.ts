@@ -4,6 +4,7 @@ import {
 	MemoryRow,
 	VectorStore,
 	MemoryIdVector,
+	VectorWriteMeta,
 	MEMORY_STATUS_ACTIVE,
 	MEMORY_STATUS_ARCHIVED
 } from "../types";
@@ -63,13 +64,20 @@ export class MemoryVectorEntity extends BaseEntity {
 		return this.all<MemoryIdVector>(sql, params);
 	}
 
-	upsertVectorEmbedding(memoryId: string, vector: unknown): void {
+	upsertVectorEmbedding(memoryId: string, vector: unknown, meta?: VectorWriteMeta): void {
 		// Dense embeddings are stored as a float32 BLOB, sparse TF maps as JSON
 		// TEXT — see encodeVector (TASK-038).
+		//
+		// PERF-003: persist the embed/KG `content_hash` + `model_version` when
+		// supplied so the startup backfill can skip re-embedding unchanged
+		// content. COALESCE keeps a previously-stored value when a caller (e.g.
+		// the TF stub) does not provide one — a NULL write never erases it.
 		this.run(
-			`INSERT INTO derived.memory_vectors (memory_id, vector, updated_at) VALUES (?, ?, ?)
-			ON CONFLICT(memory_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,
-			[memoryId, encodeVector(vector), new Date().toISOString()]
+			`INSERT INTO derived.memory_vectors (memory_id, vector, updated_at, content_hash, model_version) VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(memory_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at,
+				content_hash = COALESCE(excluded.content_hash, content_hash),
+				model_version = COALESCE(excluded.model_version, model_version)`,
+			[memoryId, encodeVector(vector), new Date().toISOString(), meta?.contentHash ?? null, meta?.modelVersion ?? null]
 		);
 	}
 

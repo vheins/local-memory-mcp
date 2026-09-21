@@ -8,6 +8,7 @@
  */
 import type { SQLiteStore } from "../storage/sqlite";
 import type { RealVectorStore } from "../storage/vectors";
+import { currentEmbeddingModelVersion } from "../storage/embedding-model";
 import {
 	saveCodebaseRelations,
 	saveExtractions,
@@ -15,6 +16,7 @@ import {
 	saveTaskRelations
 } from "../tools/kg-archivist";
 import { codebaseEntityId, codebaseEntityParts } from "./enqueue";
+import { embedPayloadContentHash } from "./content-hash";
 import type { EmbeddingJobPayload, QueueJobKind, QueueJobRow } from "./types";
 
 /**
@@ -151,16 +153,31 @@ export async function applyJob(
 		});
 	}
 
-	writeVector(store, job.entity_kind, job.entity_id, vector);
+	writeVector(store, job.entity_kind, job.entity_id, vector, payload);
 }
 
-export function writeVector(store: SQLiteStore, kind: QueueJobKind, id: string, vector: number[]): void {
+export function writeVector(
+	store: SQLiteStore,
+	kind: QueueJobKind,
+	id: string,
+	vector: number[],
+	payload: EmbeddingJobPayload
+): void {
+	// PERF-003: stamp the vector row with the SAME embed/KG content hash the
+	// enqueue path computed plus the current model version, so the startup
+	// backfill can decide idempotently whether a re-embed is needed. The hash
+	// is derived from the queue payload (the exact snapshot the worker
+	// embedded), making it directly comparable to a later backfill hash.
+	const meta = {
+		contentHash: embedPayloadContentHash(payload),
+		modelVersion: currentEmbeddingModelVersion()
+	};
 	if (kind === "memory") {
-		store.memoryVectors.upsertVectorEmbedding(id, vector);
+		store.memoryVectors.upsertVectorEmbedding(id, vector, meta);
 	} else if (kind === "standard") {
-		store.standards.upsertVectorEmbedding(id, vector);
+		store.standards.upsertVectorEmbedding(id, vector, meta);
 	} else if (kind === "task") {
-		store.tasks.upsertTaskVectorEmbedding(id, vector);
+		store.tasks.upsertTaskVectorEmbedding(id, vector, meta);
 	} else {
 		// codebase_symbol — intentionally NO-OP (TASK-293): symbols keep
 		// their OWN vector lifecycle. No production path persists symbol

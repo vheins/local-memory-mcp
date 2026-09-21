@@ -19,6 +19,7 @@ import { SQLiteStore, createTestStore } from "../storage/sqlite";
 import {
 	DERIVED_TABLES,
 	ensureDerivedReady,
+	ensureDerivedVectorColumns,
 	rebuildDerivedFts,
 	resolveDerivedDbPath,
 	runDerivedMigration
@@ -67,6 +68,12 @@ function makeMemory(id: string, repo: string): MemoryEntry {
 		metadata: {},
 		is_global: false
 	};
+}
+
+/** Column names of a derived table. */
+function columnsIn(store: SQLiteStore, table: string): Set<string> {
+	const rows = store.db.prepare(`PRAGMA derived.table_info(${table})`).all() as Array<{ name: string }>;
+	return new Set(rows.map((r) => r.name));
 }
 
 afterEach(() => {
@@ -230,6 +237,81 @@ describe("ensureDerivedReady", () => {
 			expect(ensureDerivedReady(store.db, ":memory:")).toBeNull();
 			// Main table preserved for a later retry.
 			expect(tablesIn(store, "main").has("task_vectors")).toBe(true);
+		} finally {
+			store.close();
+		}
+	});
+});
+
+describe("ensureDerivedVectorColumns (PERF-003)", () => {
+	it("adds content_hash + model_version to all three vector tables on a fresh DB", async () => {
+		const store = await createTestStore();
+		try {
+			for (const table of ["memory_vectors", "task_vectors", "standard_vectors"]) {
+				const cols = columnsIn(store, table);
+				expect(cols.has("content_hash")).toBe(true);
+				expect(cols.has("model_version")).toBe(true);
+			}
+		} finally {
+			store.close();
+		}
+	});
+
+	it("is idempotent — a second apply is a no-op and the columns still exist", async () => {
+		const store = await createTestStore();
+		try {
+			// Simulate a pre-PERF-003 derived DB: drop the two columns by
+			// recreating a table without them, then run the upgrade twice.
+			for (const [table, pk] of [
+				["memory_vectors", "memory_id"],
+				["task_vectors", "task_id"],
+				["standard_vectors", "standard_id"]
+			] as const) {
+				store.db.exec(`DROP TABLE derived.${table}`);
+				store.db.exec(
+					`CREATE TABLE derived.${table} (${pk} TEXT PRIMARY KEY, vector TEXT NOT NULL, updated_at TEXT NOT NULL)`
+				);
+				expect(columnsIn(store, table).has("content_hash")).toBe(false);
+			}
+
+			ensureDerivedVectorColumns(store.db);
+			for (const table of ["memory_vectors", "task_vectors", "standard_vectors"]) {
+				expect(columnsIn(store, table).has("content_hash")).toBe(true);
+				expect(columnsIn(store, table).has("model_version")).toBe(true);
+			}
+
+			// Second run: every column already present → no-op, never throws.
+			expect(() => ensureDerivedVectorColumns(store.db)).not.toThrow();
+			for (const table of ["memory_vectors", "task_vectors", "standard_vectors"]) {
+				expect(columnsIn(store, table).has("content_hash")).toBe(true);
+			}
+		} finally {
+			store.close();
+		}
+	});
+
+	it("preserves existing vector rows when adding the columns (metadata-only ALTER)", async () => {
+		const store = await createTestStore();
+		try {
+			store.memories.insert(makeMemory("mem-perf-003", "acme/widget"));
+			store.db.exec(`DROP TABLE derived.memory_vectors`);
+			store.db.exec(
+				`CREATE TABLE derived.memory_vectors (memory_id TEXT PRIMARY KEY, vector TEXT NOT NULL, updated_at TEXT NOT NULL)`
+			);
+			store.db
+				.prepare("INSERT INTO derived.memory_vectors (memory_id, vector, updated_at) VALUES (?, ?, ?)")
+				.run("mem-perf-003", "v", "2020-01-01T00:00:00.000Z");
+
+			ensureDerivedVectorColumns(store.db);
+
+			const row = store.db
+				.prepare("SELECT content_hash, model_version FROM derived.memory_vectors WHERE memory_id = ?")
+				.get("mem-perf-003") as { content_hash: string | null; model_version: number | null };
+			expect(row).toBeDefined();
+			// The pre-existing row survives; the new columns default to NULL
+			// (= "unknown" → one re-embed to stamp them).
+			expect(row.content_hash).toBeNull();
+			expect(row.model_version).toBeNull();
 		} finally {
 			store.close();
 		}

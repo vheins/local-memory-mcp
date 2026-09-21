@@ -184,20 +184,26 @@ export function initDerivedSchema(db: Database.Database): void {
 			memory_id TEXT PRIMARY KEY,
 			vector TEXT NOT NULL,
 			updated_at TEXT NOT NULL,
-			vector_version INTEGER NOT NULL DEFAULT 1
+			vector_version INTEGER NOT NULL DEFAULT 1,
+			content_hash TEXT,
+			model_version INTEGER
 		);
 
 		CREATE TABLE IF NOT EXISTS ${DERIVED_SCHEMA}.task_vectors (
 			task_id TEXT PRIMARY KEY,
 			vector TEXT NOT NULL,
-			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+			updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+			content_hash TEXT,
+			model_version INTEGER
 		);
 
 		CREATE TABLE IF NOT EXISTS ${DERIVED_SCHEMA}.standard_vectors (
 			standard_id TEXT PRIMARY KEY,
 			vector TEXT NOT NULL,
 			updated_at TEXT NOT NULL,
-			vector_version INTEGER NOT NULL DEFAULT 1
+			vector_version INTEGER NOT NULL DEFAULT 1,
+			content_hash TEXT,
+			model_version INTEGER
 		);
 
 		CREATE UNIQUE INDEX IF NOT EXISTS ${DERIVED_SCHEMA}.idx_codebase_files_repo_path ON codebase_files(repo, file_path);
@@ -218,6 +224,59 @@ export function initDerivedSchema(db: Database.Database): void {
 			content='codebase_symbols', content_rowid='rowid'
 		);
 	`);
+}
+
+/** Vector tables that carry the PERF-003 idempotency columns. */
+const VECTOR_TABLES = ["memory_vectors", "task_vectors", "standard_vectors"] as const;
+
+/**
+ * PERF-003 — idempotently add `content_hash` + `model_version` to the three
+ * derived vector tables.
+ *
+ * `initDerivedSchema` only creates tables (`IF NOT EXISTS`), so on an EXISTING
+ * database the new columns are never added by the DDL. SQLite has no
+ * `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, so we probe
+ * `PRAGMA derived.table_info(<table>)` and add only the missing columns.
+ *
+ * Why a `content_hash` column (not `vector_version`): the vector tables
+ * already had a dead `vector_version` column (always 1) — reusing it would
+ * conflate "embedding format version" with the model identity PERF-004 will
+ * promote, and `task_vectors` never had it at all. Adding two nullable columns
+ * is the least-invasive correct choice and keeps `vector_version` untouched for
+ * its original (future) purpose. `content_hash` stores the SAME
+ * `embedPayloadContentHash` the enqueue path computes, so backfill can compare
+ * a vector's embedded content against the entity's current payload; a NULL
+ * (pre-PERF-003 row) is treated as "unknown" and forces one re-embed to
+ * stamp it, after which restarts are idempotent.
+ *
+ * Cost/safety: `ALTER TABLE ADD COLUMN` is O(1) metadata-only in SQLite — it
+ * does NOT rewrite the table, so it is safe on the 2.6 GB memory.db / 516 MB
+ * derived store. Each ALTER is wrapped so a failure is logged and retried on
+ * the next startup instead of aborting derived setup (never-throw style,
+ * mirroring the move in {@link runDerivedMigration}); the DDL is atomic so a
+ * partial failure can never corrupt the table.
+ */
+export function ensureDerivedVectorColumns(db: Database.Database): void {
+	const wanted = [
+		{ name: "content_hash", type: "TEXT" },
+		{ name: "model_version", type: "INTEGER" }
+	] as const;
+	for (const table of VECTOR_TABLES) {
+		const existing = new Set(tableColumns(db, DERIVED_SCHEMA, table));
+		for (const col of wanted) {
+			if (existing.has(col.name)) continue;
+			try {
+				db.exec(`ALTER TABLE ${DERIVED_SCHEMA}.${table} ADD COLUMN ${col.name} ${col.type}`);
+				logger.info("[DerivedDb] Added vector column (PERF-003)", { table, column: col.name });
+			} catch (err) {
+				logger.warn("[DerivedDb] Failed to add vector column; will retry next startup", {
+					table,
+					column: col.name,
+					error: String(err)
+				});
+			}
+		}
+	}
 }
 
 /**
@@ -383,6 +442,10 @@ export function runDerivedMigration(db: Database.Database): DerivedMigrationResu
 export function ensureDerivedReady(db: Database.Database, memoryDbPath: string): DerivedMigrationResult | null {
 	attachDerivedDb(db, memoryDbPath);
 	initDerivedSchema(db);
+	// PERF-003: evolve the vector tables on an EXISTING derived DB (the
+	// CREATE TABLE IF NOT EXISTS above is a no-op there). Runs before the move
+	// so a legacy main-side copy lands in an already-upgraded schema.
+	ensureDerivedVectorColumns(db);
 
 	let migration: DerivedMigrationResult | null = null;
 	try {

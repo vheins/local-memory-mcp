@@ -1,5 +1,5 @@
 import { BaseEntity } from "../../storage/base";
-import { Task, TaskRow, TaskChild, TaskComment } from "../../types";
+import { Task, TaskRow, TaskChild, TaskComment, VectorWriteMeta } from "../../types";
 import { handleDuplicateTaskCode } from "./validation";
 import {
 	buildCoordinationSelect,
@@ -411,14 +411,20 @@ export class TaskEntity extends BaseEntity {
 		return result;
 	}
 
-	upsertTaskVectorEmbedding(taskId: string, vector: unknown): void {
+	upsertTaskVectorEmbedding(taskId: string, vector: unknown, meta?: VectorWriteMeta): void {
 		// Dense embeddings are stored as a float32 BLOB, sparse TF maps as JSON
 		// TEXT — see encodeVector (TASK-038).
+		//
+		// PERF-003: task_vectors had NEITHER provenance column; both are added
+		// here. COALESCE keeps an existing value on a NULL write (see
+		// memory.vector.ts).
 		this.run(
-			`INSERT INTO derived.task_vectors (task_id, vector, updated_at)
-			VALUES (?, ?, ?)
-			ON CONFLICT(task_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,
-			[taskId, encodeVector(vector), new Date().toISOString()]
+			`INSERT INTO derived.task_vectors (task_id, vector, updated_at, content_hash, model_version)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(task_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at,
+				content_hash = COALESCE(excluded.content_hash, content_hash),
+				model_version = COALESCE(excluded.model_version, model_version)`,
+			[taskId, encodeVector(vector), new Date().toISOString(), meta?.contentHash ?? null, meta?.modelVersion ?? null]
 		);
 	}
 

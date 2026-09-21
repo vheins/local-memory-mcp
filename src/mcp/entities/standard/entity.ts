@@ -1,5 +1,5 @@
 import { BaseEntity } from "../../storage/base";
-import { CodingStandardEntry, CodingStandardRow } from "../../types";
+import { CodingStandardEntry, CodingStandardRow, VectorWriteMeta } from "../../types";
 import { computeVector, cosineSimilarity, createTfVectorCache, encodeVector } from "../../utils/vector";
 import { buildUpdateClause } from "../../utils/sql-builder";
 import { chunksOf } from "../../utils/chunk";
@@ -429,14 +429,25 @@ export class StandardEntity extends BaseEntity {
 		return this.all<{ standard_id: string; vector: string | Uint8Array }>(sql, params);
 	}
 
-	upsertVectorEmbedding(standardId: string, vector: unknown): void {
+	upsertVectorEmbedding(standardId: string, vector: unknown, meta?: VectorWriteMeta): void {
 		// Dense embeddings are stored as a float32 BLOB, sparse TF maps as JSON
 		// TEXT — see encodeVector (TASK-038).
+		//
+		// PERF-003: persist content_hash + model_version when supplied (COALESCE
+		// keeps an existing value on a NULL write) — see memory.vector.ts.
 		this.run(
-			`INSERT INTO derived.standard_vectors (standard_id, vector, updated_at)
-			VALUES (?, ?, ?)
-			ON CONFLICT(standard_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,
-			[standardId, encodeVector(vector), new Date().toISOString()]
+			`INSERT INTO derived.standard_vectors (standard_id, vector, updated_at, content_hash, model_version)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(standard_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at,
+				content_hash = COALESCE(excluded.content_hash, content_hash),
+				model_version = COALESCE(excluded.model_version, model_version)`,
+			[
+				standardId,
+				encodeVector(vector),
+				new Date().toISOString(),
+				meta?.contentHash ?? null,
+				meta?.modelVersion ?? null
+			]
 		);
 	}
 }
