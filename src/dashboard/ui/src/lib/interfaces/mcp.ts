@@ -46,4 +46,6 @@ export interface HealthData {
 	memoryCount: number;
 	dbPath: string;
 	repoCount: number;
+	/** Running build identity (PERF-009): version+git SHA+source. */
+	build?: string;
 }

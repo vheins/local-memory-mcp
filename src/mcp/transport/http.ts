@@ -315,6 +315,23 @@ function sessionNotFoundResponse(): Response {
 	return jsonRpcErrorResponse(404, -32001, "Session not found");
 }
 
+/**
+ * Build the reporting error for a recoverable session rejection. The message
+ * carries the offending session id and the expected recovery so the daemon log
+ * explains the event instead of showing a bare "Session not found" (PERF-009).
+ * The HTTP response body stays the canonical JSON-RPC error (see
+ * {@link sessionNotFoundResponse} / {@link missingSessionIdResponse}).
+ */
+function sessionRecoveryError(reason: "unknown_session" | "missing_session_id", sessionId: string | null): Error {
+	if (reason === "unknown_session") {
+		return new Error(
+			`Session not found (mcp-session-id=${sessionId ?? "?"}); the client will re-initialize and retry. ` +
+				"If this repeats, the client is holding an evicted id — restart the client, or restart the daemon on the current build."
+		);
+	}
+	return new Error("Bad Request: Mcp-Session-Id header is required (the client sends one on initialize).");
+}
+
 /** JSON-RPC error for a non-initialize request with no session header: `400`. */
 function missingSessionIdResponse(): Response {
 	return jsonRpcErrorResponse(400, -32000, "Bad Request: Mcp-Session-Id header is required");
@@ -444,12 +461,15 @@ export function createDualHandler(factory: McpServerFactory, onerror?: (error: E
 		const isInitialize = await isInitializeExchange(webRequest);
 		if (isInitialize === false) {
 			// Preserve the observability the SDK provided: it reported these
-			// session rejections through `onerror` (the daemon logs them).
+			// session rejections through `onerror` (the daemon logs them). The
+			// message names the offending id + the recovery path so the daemon
+			// log explains the wedge instead of showing a bare session error
+			// (PERF-009).
 			if (sessionId !== null) {
-				onerror?.(new Error("Session not found"));
+				onerror?.(sessionRecoveryError("unknown_session", sessionId));
 				return sessionNotFoundResponse();
 			}
-			onerror?.(new Error("Bad Request: Mcp-Session-Id header is required"));
+			onerror?.(sessionRecoveryError("missing_session_id", null));
 			return missingSessionIdResponse();
 		}
 

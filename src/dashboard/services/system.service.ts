@@ -12,6 +12,7 @@ import { listResources } from "../../mcp/resources";
 import { PROMPTS } from "../../mcp/prompts/registry";
 import { getRuntimeCapabilities, type RuntimeCapabilitySnapshot } from "../../mcp/runtime-capabilities";
 import { reuseTelemetry } from "../../mcp/utils/reuse-telemetry";
+import { formatBuildInfo, getBuildInfo } from "../../mcp/utils/build-info";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -57,6 +58,13 @@ export interface SystemHealth {
 	repoCount: number;
 	pendingRequests: number;
 	dbPath: string;
+	/**
+	 * Running build identity (PERF-009), e.g. `0.48.1+d8dd97a [stamp built …]`.
+	 * Distinct from {@link version} (the package version only): this also
+	 * carries the git SHA + resolution source, so an operator comparing the
+	 * daemon against the expected build sees a mismatch directly.
+	 */
+	build: string;
 }
 
 export interface RecentActionsResult {
@@ -81,7 +89,10 @@ export const SystemService = {
 			memoryCount: stats.totalMemories,
 			repoCount: stats.totalRepos,
 			pendingRequests: mcpClient.getPendingCount(),
-			dbPath: db.getDbPath()
+			dbPath: db.getDbPath(),
+			// PERF-009: expose the running build identity so a stale daemon is
+			// detectable from `/api/health` without reading the log file.
+			build: formatBuildInfo(getBuildInfo())
 		};
 	},
 

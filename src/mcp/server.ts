@@ -12,6 +12,7 @@ import { CapabilityAwareVectorStore } from "./storage/lazy-vectors";
 import { EmbeddingWorker } from "./embedding-queue";
 import { RuntimeCapabilityRegistry, setRuntimeCapabilities } from "./runtime-capabilities";
 import { CAPABILITIES } from "./capabilities";
+import { formatBuildInfo, getBuildInfo } from "./utils/build-info";
 import { addLogSink, createFileSink, logger } from "./utils/logger";
 import { bugCapture } from "./utils/bug-capture";
 import { reuseTelemetry } from "./utils/reuse-telemetry";
@@ -225,6 +226,7 @@ runtimeCapabilities.register("maintenance", async () => {
 logger.info("[Server] startup", {
 	pid: process.pid,
 	version: CAPABILITIES.serverInfo.version,
+	build: formatBuildInfo(getBuildInfo()),
 	db: db.getDbPath(),
 	profile: runtimeCapabilities.profile
 });

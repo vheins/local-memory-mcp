@@ -33,6 +33,56 @@ is newer than the built assets. In a fresh checkout this is a no-op; in an
 can't build, the bin **throws on launch** — rebuild first with
 `npm run dashboard:build`.
 
+### Daemon wedge — stale session / stale build (PERF-009)
+
+The MCP daemon is a **detached process that does NOT restart with the client**.
+It is a single long-lived combined dashboard + MCP HTTP server (default port
+`3456`), launched once via `local-memory-mcp daemon` (or `npx … --daemon-worker`).
+Two failure modes share one symptom: **every MCP tool call fails** with
+`{"code":-32000,"message":"Bad Request: Server not initialized"}`.
+
+**Cause 1 — the daemon is not the build you think it is.** If the daemon was
+started from an installed/cached package (e.g. an `npx` cache copy) while the
+working tree has moved on, every fix on `main` is invisible: the process serves
+old code. Confirm from the daemon log, which logs a build identity at startup:
+
+```bash
+grep "build identity\|DAEMON_READY" ~/.config/local-memory-mcp/daemon.log | tail -2
+# → [Daemon] build identity {"build":"0.48.0+d8dd97a [stamp built …]","entry":"/…/bin/mcp-memory-server.js"}
+```
+
+`entry` is the decisive field — it tells you whether the process runs the repo
+build (`/…/Projects/local-memory-mcp/bin/mcp-memory-server.js`) or an
+`npx`/global cache path. `GET /api/health` carries the same identity as `build`.
+
+**Cause 2 — stale session id (pre-PERF-006 builds).** The client caches an
+`Mcp-Session-Id`; the daemon's idle sweep (`MCP_HTTP_SESSION_IDLE_TTL_MS`,
+default 30 min) evicts it. On a build WITHOUT the PERF-006 guard, a non-initialize
+POST with an unknown id gets `400/-32000 "Server not initialized"` — a dead end
+with no client recovery. On a build WITH the guard (main, `d0aa941`+) the same
+request gets `404/-32001 "Session not found"`, which the client's transport
+auto-recovers from by re-initializing and retrying the call. The daemon log
+names the offending id and the recovery (PERF-009).
+
+**Recovery** (in order):
+
+```bash
+# 1. Build the working tree (artifacts are generated — never hand-edit dist/ or bin/).
+npm run build        # writes dist/ + bin/ + dist/daemon-build.json (build stamp)
+
+# 2. Restart the daemon on the repo build (stops the stale process, starts fresh).
+local-memory-mcp daemon stop
+local-memory-mcp daemon start      # resolves to the repo build via the dev symlink
+
+# 3. Verify the running build matches the tree.
+local-memory-mcp daemon status
+grep "build identity" ~/.config/local-memory-mcp/daemon.log | tail -1
+```
+
+If the client still holds an evicted id after a guarded restart it self-heals on
+the first `404`; if it does not, restart the client once. Do not delete
+`memory.db` — the wedge is a process/build problem, never a data problem.
+
 ## Install
 
 ```bash

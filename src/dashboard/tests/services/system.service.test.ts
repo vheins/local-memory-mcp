@@ -123,7 +123,9 @@ describe("SystemService.getHealth", () => {
 			memoryCount: 3,
 			repoCount: 2,
 			pendingRequests: 4,
-			dbPath: "/tmp/storage/test.db"
+			dbPath: "/tmp/storage/test.db",
+			// PERF-009: the running build identity is surfaced on health.
+			build: expect.any(String)
 		});
 		expect(mocks.db.system.getGlobalStats).toHaveBeenCalledTimes(1);
 	});

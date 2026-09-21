@@ -288,3 +288,56 @@ describe("createDualHandler — idle legacy session eviction", () => {
 		expect((await listOnSession(handler, sessionId)).status).toBe(200);
 	});
 });
+
+describe("createDualHandler — session-rejection reporting (PERF-009)", () => {
+	/**
+	 * An unknown session id must still return the canonical 404 body, but the
+	 * `onerror` report must name the offending id and the recovery so the daemon
+	 * log explains the wedge instead of showing a bare "Session not found".
+	 */
+	it("reports the unknown session id + re-initialize hint on the 404 path", async () => {
+		const store = await createTestStore();
+		const vectors = new StubVectorStore(store);
+		const reported: Error[] = [];
+		const handler = createDualHandler(createServerFactory(store, vectors, "http"), (error) => reported.push(error));
+		active.push({ store, handler });
+
+		const response = await handler.fetch(
+			new Request(ENDPOINT, {
+				method: "POST",
+				headers: { ...JSON_HEADERS, "mcp-session-id": "evicted-session-id" },
+				body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} })
+			})
+		);
+
+		// The response body stays the canonical JSON-RPC session error.
+		expect(response.status).toBe(404);
+		expect(await response.text()).toContain("Session not found");
+
+		// The report carries the id + recovery, so the log is actionable.
+		expect(reported).toHaveLength(1);
+		expect(reported[0].message).toContain("evicted-session-id");
+		expect(reported[0].message).toMatch(/re-initialize/i);
+	});
+
+	it("reports the missing-header case with a re-initialize hint", async () => {
+		const store = await createTestStore();
+		const vectors = new StubVectorStore(store);
+		const reported: Error[] = [];
+		const handler = createDualHandler(createServerFactory(store, vectors, "http"), (error) => reported.push(error));
+		active.push({ store, handler });
+
+		const response = await handler.fetch(
+			new Request(ENDPOINT, {
+				method: "POST",
+				headers: JSON_HEADERS,
+				body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} })
+			})
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.text()).toContain("Mcp-Session-Id header is required");
+		expect(reported).toHaveLength(1);
+		expect(reported[0].message).toContain("Mcp-Session-Id header is required");
+	});
+});

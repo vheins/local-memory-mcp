@@ -14,10 +14,12 @@
  */
 import fs from "fs";
 import path from "path";
+import { execFileSync } from "child_process";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const binDir = path.resolve(__dirname, "../bin");
+const rootDir = path.resolve(__dirname, "..");
+const binDir = path.join(rootDir, "bin");
 
 const SHEBANG = "#!/usr/bin/env node\n";
 
@@ -61,6 +63,47 @@ function writeBin(filename, content) {
 	console.log(`[gen-bins] wrote ${path.relative(process.cwd(), target)}`);
 }
 
+/**
+ * Read `git rev-parse --short HEAD` in the repo root, or null when git is
+ * unavailable (no binary, not a repo, detached CI checkout). Never throws so a
+ * missing git can never break the build.
+ */
+function readGitSha() {
+	try {
+		return (
+			execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+				cwd: rootDir,
+				encoding: "utf8",
+				stdio: ["ignore", "pipe", "ignore"]
+			}).trim() || null
+		);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Write the build-identity stamp into `dist/daemon-build.json`. The running
+ * daemon reads this (see `src/mcp/utils/build-info.ts`) so an operator can tell
+ * exactly which build a process is serving — the PERF-009 stale-daemon guard.
+ */
+function writeBuildStamp() {
+	const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
+	const stamp = {
+		version: pkg.version,
+		gitSha: readGitSha(),
+		builtAt: new Date().toISOString()
+	};
+	const distDir = path.join(rootDir, "dist");
+	fs.mkdirSync(distDir, { recursive: true });
+	const target = path.join(distDir, "daemon-build.json");
+	fs.writeFileSync(target, `${JSON.stringify(stamp, null, 2)}\n`, "utf8");
+	console.log(
+		`[gen-bins] wrote ${path.relative(process.cwd(), target)} (v${stamp.version}${stamp.gitSha ? `+${stamp.gitSha}` : ""})`
+	);
+}
+
 fs.mkdirSync(binDir, { recursive: true });
 writeBin("mcp-memory-server.js", SERVER_BIN);
 writeBin("mcp-memory-dashboard.js", DASHBOARD_BIN);
+writeBuildStamp();

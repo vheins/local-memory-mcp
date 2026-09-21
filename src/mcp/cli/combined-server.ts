@@ -37,6 +37,7 @@ import {
 } from "../transport/http";
 import { CAPABILITIES } from "../capabilities";
 import { resolveDaemonPaths, removeLock } from "./daemon";
+import { formatBuildInfo, getBuildInfo } from "../utils/build-info";
 import { logger } from "../utils/logger";
 import { bugCapture } from "../utils/bug-capture";
 import { reuseTelemetry } from "../utils/reuse-telemetry";
@@ -229,9 +230,26 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
 
 	const stopEngines = enableEngines ? registerEngines(db, runtimeCapabilities) : () => {};
 
+	// Build identity (PERF-009): the daemon is a DETACHED process that does NOT
+	// restart with the client, so it can silently keep serving an old build (the
+	// wedge that motivated this task: an npx-cached 0.48.0 process while the
+	// repo on disk was newer). Log the resolved identity AND the entry path so
+	// "the daemon is not the build I think it is" is a one-line log check.
+	// `entry` is what actually disambiguates an npx-cache install from the
+	// working tree; version/SHA alone cannot.
+	const build = getBuildInfo();
+	logger.info("[Daemon] build identity", {
+		build: formatBuildInfo(build),
+		gitSha: build.gitSha,
+		source: build.source,
+		entry: process.argv[1] ?? "unknown",
+		pid: process.pid
+	});
+
 	logger.info("[Daemon] startup", {
 		pid: process.pid,
 		version: CAPABILITIES.serverInfo.version,
+		build: formatBuildInfo(build),
 		db: db.getDbPath(),
 		profile: runtimeCapabilities.profile
 	});
@@ -423,7 +441,11 @@ export async function runDaemonWorker(options: RunDaemonWorkerOptions = {}): Pro
 	serverStarted = true;
 
 	// Ready signal → daemon.log (the parent already printed "Daemon started").
-	process.stdout.write(`${new Date().toISOString()} DAEMON_READY ${handle.url} (pid ${process.pid})\n`);
+	// The build identity is repeated here so the most recent DAEMON_READY line
+	// alone answers "which build is serving right now?" (PERF-009).
+	process.stdout.write(
+		`${new Date().toISOString()} DAEMON_READY ${handle.url} (pid ${process.pid}, build ${formatBuildInfo()})\n`
+	);
 
 	let shuttingDown = false;
 	const shutdown = async (signal: string): Promise<void> => {
