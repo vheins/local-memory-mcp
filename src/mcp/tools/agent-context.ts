@@ -277,7 +277,7 @@ export async function handleAgentContext(
 	sections.push("", "== Compiled Context ==");
 	sections.push(
 		...(packed.included.length
-			? packed.included.map((item) => `- [${item.source}/${item.id}] ${item.title}: ${item.text.slice(0, 180)}`)
+			? packed.included.map((item) => `- [${item.source}/${item.reference}] ${item.title}: ${item.text.slice(0, 180)}`)
 			: ["(No candidates fit the requested budget)"])
 	);
 	sections.push(
@@ -334,7 +334,9 @@ export async function handleAgentContext(
 			status: task.status,
 			priority: task.priority
 		})),
-		context: packed.included.map(({ priority: _priority, critical: _critical, ...item }) => item),
+		context: packed.included.map(
+			({ priority: _priority, critical: _critical, reference: _reference, ...item }) => item
+		),
 		estimated_tokens: packed.estimatedTokens,
 		budget: validated.budget,
 		allocation: {

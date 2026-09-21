@@ -15,6 +15,15 @@ export type AgentContextSource = (typeof AGENT_CONTEXT_SOURCE_ORDER)[number];
 export interface ContextCandidate {
 	source: AgentContextSource;
 	id: string;
+	/**
+	 * Compact, human-facing reference rendered in the compiled context block
+	 * (TASK-431), e.g. `MEM-189`. Defaults to `id`; entity types that expose a
+	 * stable short `code` (memories/decisions) set it to that code so every
+	 * pack does not repeat a 36-char UUID. Kept SEPARATE from `id` on purpose:
+	 * `id` stays the canonical UUID because it drives dedup, telemetry, and
+	 * tie-break ordering, which must not change.
+	 */
+	reference: string;
 	title: string;
 	text: string;
 	provenance: Record<string, unknown>;
@@ -103,11 +112,13 @@ function candidate(
 	text: string,
 	priority: number,
 	critical: boolean,
-	provenance: Record<string, unknown>
+	provenance: Record<string, unknown>,
+	reference?: string
 ): ContextCandidate {
 	return {
 		source,
 		id,
+		reference: reference ?? id,
 		title,
 		text,
 		priority,
@@ -189,11 +200,22 @@ export function memoryCandidate(memory: MemoryEntry, source: "memories" | "decis
 	// TASK-026: decisions are NOT unconditionally critical. Criticality is
 	// decided in rankAndPackContext from lexical relevance to the objective
 	// (see DECISION_CRITICAL_MIN_SCORE), so the builder stays neutral here.
-	return candidate(source, memory.id, memory.title, memory.content.slice(0, 600), memory.importance, false, {
-		code: memory.code ?? null,
-		type: memory.type,
-		updated_at: memory.updated_at
-	});
+	// TASK-431: render the stable short `code` in the pack label, falling back
+	// to the UUID when the row has none (empty string counts as none).
+	return candidate(
+		source,
+		memory.id,
+		memory.title,
+		memory.content.slice(0, 600),
+		memory.importance,
+		false,
+		{
+			code: memory.code ?? null,
+			type: memory.type,
+			updated_at: memory.updated_at
+		},
+		memory.code || undefined
+	);
 }
 
 export function taskCandidate(task: Task, requestedTaskCode?: string): ContextCandidate {

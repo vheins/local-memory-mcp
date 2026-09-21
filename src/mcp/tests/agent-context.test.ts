@@ -898,6 +898,86 @@ describe("Agent Context - handleAgentContext", () => {
 		expect(text).toContain("(No candidates fit the requested budget)");
 		expect(text).toContain("Legacy memory block: ~0 tokens (0 items).");
 	});
+
+	// ─── TASK-431: code-first reference labels in the compiled block ─────
+
+	it("renders the short memory code (not the UUID) in the compiled reference label", async () => {
+		const memory = seedMemory({
+			code: "MEM-189",
+			title: "Compiled code label memory",
+			content: "Compiled code label content used to prove token-saving labels."
+		});
+
+		const res = await handleAgentContext(
+			{
+				owner: OWNER,
+				repo: REPO,
+				objective: "compiled code label",
+				sources: ["memories"],
+				json: true
+			},
+			db,
+			vectors
+		);
+
+		// The memory still wins a slot (retrieval/ranking unchanged).
+		expect(getStructured(res).context.map((item) => item.id)).toContain(memory.id);
+
+		const text = textOf(res);
+		expect(text).toContain("[memories/MEM-189]");
+		expect(text).not.toContain(memory.id);
+	});
+
+	it("falls back to the UUID reference label when a memory has no code (TASK-431)", async () => {
+		const memory = seedMemory({
+			title: "Codeless label memory",
+			content: "Codeless label content used to prove the UUID fallback path."
+		});
+
+		const res = await handleAgentContext(
+			{
+				owner: OWNER,
+				repo: REPO,
+				objective: "codeless label",
+				sources: ["memories"],
+				json: true
+			},
+			db,
+			vectors
+		);
+
+		expect(getStructured(res).context.map((item) => item.id)).toContain(memory.id);
+
+		const text = textOf(res);
+		expect(text).toContain(`[memories/${memory.id}]`);
+	});
+
+	it("renders the short decision code in the compiled reference label (TASK-431)", async () => {
+		const decision = seedMemory({
+			type: "decision",
+			code: "DEC-042",
+			title: "Decision code label",
+			content: "Decision code label content for the compiled decisions block."
+		});
+
+		const res = await handleAgentContext(
+			{
+				owner: OWNER,
+				repo: REPO,
+				objective: "decision code label",
+				sources: ["decisions"],
+				json: true
+			},
+			db,
+			vectors
+		);
+
+		expect(getStructured(res).context.map((item) => item.id)).toContain(decision.id);
+
+		const text = textOf(res);
+		expect(text).toContain("[decisions/DEC-042]");
+		expect(text).not.toContain(decision.id);
+	});
 });
 
 // ─── pure compiler ranking (TASK-025 / TASK-026) ─────────────────────────
@@ -913,6 +993,7 @@ describe("Agent Context - rankAndPackContext relevance + criticality", () => {
 		return {
 			source,
 			id,
+			reference: id,
 			title,
 			text,
 			provenance: {},
