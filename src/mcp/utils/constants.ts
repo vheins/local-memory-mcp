@@ -360,6 +360,20 @@ export const KG_MAX_TASK_RELATION_ENTITIES = envInt("KG_MAX_TASK_RELATION_ENTITI
 // lower the audit window without code changes.
 export const ACTION_LOG_MAX_ROWS = envInt("ACTION_LOG_MAX_ROWS", 10_000);
 
+// Age window (days) for the `observations` retention pass (STD-005 rule 4:
+// caps live here and are env-overridable, never inlined at the call site). An
+// observation older than this is eligible ONLY when its parent document is
+// gone or it has no contract anchor (parent-aware — see
+// `KnowledgeGraphRetentionEntity.deleteStaleObservations`); the window never
+// age-only deletes a row a read path can still reach.
+//
+// Keep this EQUAL to `KG_RELATION_RETENTION_DAYS` below: the two halves of the
+// graph share one lifecycle story (an orphaned observation is collected at N
+// days, and an edge with no observed endpoint at N days), so the relation
+// writer's age guard is safe against a fresh edge whose target observation has
+// not landed yet.
+export const KG_OBSERVATION_RETENTION_DAYS = envInt("KG_OBSERVATION_RETENTION_DAYS", 7);
+
 // ── KG retention (audit F1) ───────────────────────────────────────────────
 // `relations` had NO retention pass while `observations` was pruned at 7 days.
 // Because entity-name resolution goes exclusively through `observations`, an

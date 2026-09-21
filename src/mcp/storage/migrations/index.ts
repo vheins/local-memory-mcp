@@ -39,8 +39,9 @@ import { migration as v35 } from "./v35-drop-codebase-symbol-vectors";
 import { migration as v36 } from "./v36-relations-index-consolidation";
 import { migration as v37 } from "./v37-vector-blob-format";
 import { migration as v38 } from "./v38-bug-reports";
+import { migration as v39 } from "./v39-observations-index-consolidation";
 
-export const SCHEMA_VERSION = 38;
+export const SCHEMA_VERSION = 39;
 
 /**
  * A single versioned schema migration. `up` runs inside the migration runner's
@@ -94,7 +95,8 @@ const MIGRATIONS: Migration[] = [
 	v35,
 	v36,
 	v37,
-	v38
+	v38,
+	v39
 ];
 
 // ──────────────────────────────────────────────

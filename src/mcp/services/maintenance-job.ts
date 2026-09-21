@@ -159,7 +159,9 @@ export async function runStartupMaintenance(
 		//    previous age-only prune severed live documents from their graph).
 		//    Windowed + yielding so the correlated scan never freezes the event
 		//    loop past the exclusive lock's heartbeat (TASK-041 follow-up).
-		const prunedObservationsResult = await pruneObservations(db.knowledgeGraph, 7);
+		//    Retention window defaults to KG_OBSERVATION_RETENTION_DAYS
+		//    (STD-005 rule 4) — not inlined here.
+		const prunedObservationsResult = await pruneObservations(db.knowledgeGraph);
 
 		// 6. Prune relations no read path can reach again, then sweep the
 		//    entities that only those edges kept alive (audit F1). Bounded per

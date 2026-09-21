@@ -5,6 +5,7 @@ import {
 	TABLE_ACTION_LOG,
 	TTL_MS_PER_DAY,
 	ACTION_LOG_MAX_ROWS,
+	KG_OBSERVATION_RETENTION_DAYS,
 	KG_RELATION_RETENTION_DAYS,
 	KG_RELATION_PRUNE_MAX_ROWS,
 	KG_RELATION_PRUNE_CHUNK,
@@ -249,7 +250,7 @@ export function pruneActionLog(
  */
 export async function pruneObservations(
 	knowledgeGraph: KnowledgeGraphEntity,
-	retentionDays = 7
+	retentionDays = KG_OBSERVATION_RETENTION_DAYS
 ): Promise<PruneObservationsResult> {
 	const cutoff = new Date(Date.now() - retentionDays * TTL_MS_PER_DAY).toISOString();
 
