@@ -1,49 +1,67 @@
 /**
- * Embedding-model identity (PERF-003).
+ * Embedding-model identity (PERF-003, PERF-004).
  *
- * The startup backfill must re-embed a vector when the embedding MODEL
- * changed, not only when the entity content changed. This module is the single
- * source of truth for the model name AND a stable integer `model_version`
- * stamped onto every `*_vectors` row, so the backfill can compare a vector's
- * stored version against the current one.
+ * Single source of truth for the embedding MODEL NAME and the integer
+ * `model_version` stamped onto every `*_vectors` row. `RealVectorStore` loads
+ * its feature-extraction pipeline from `EMBEDDING_MODEL_NAME`; the startup
+ * backfill compares a vector's stored `model_version` against
+ * `currentEmbeddingModelVersion()` and re-embeds every mismatched row, so a
+ * model change can never leave semantic search silently serving vectors from
+ * the previous model.
  *
- * `RealVectorStore` embeds with `EMBEDDING_MODEL_NAME` (Xenova/all-MiniLM-L6-v2,
- * 384-dim). The version is a deterministic 32-bit FNV-1a hash of that name, so
- * it is:
- *   - STABLE across restarts (same name → same integer), and
- *   - automatically bumped when the model name changes, which is exactly the
- *     signal that forces a full re-embed.
+ * ## Upgrading the embedding model
  *
- * PERF-004: promote `EMBEDDING_MODEL_NAME` / `currentEmbeddingModelVersion()`
- * to a shared, versioned constant and define the explicit model-upgrade
- * procedure (e.g. bump on any weight/tokenizer change even at an unchanged
- * name). Until then this derived value is the canonical version.
+ * ANY change to the model's output MUST bump `EMBEDDING_MODEL_VERSION`:
+ * a new checkpoint (also change `EMBEDDING_MODEL_NAME`), retrained weights
+ * behind the same name, a tokenizer/pooling change, or an output-dimension
+ * change. The name alone cannot detect a weight/tokenizer swap at an unchanged
+ * name, so the explicit version is the authoritative signal. Procedure:
+ *
+ *   1. Change `EMBEDDING_MODEL_NAME` and/or increment `EMBEDDING_MODEL_VERSION`.
+ *   2. On the next startup, `backfillMissingVectors` (embedding-queue/enqueue.ts)
+ *      detects `stored model_version !== currentEmbeddingModelVersion()` and
+ *      enqueues EVERY affected row for re-embedding — exactly once.
+ *   3. Subsequent restarts enqueue 0: every row now carries the new version.
+ *
+ * The refresh is bounded and does not flood: the backfill honors
+ * `EMBEDDING_QUEUE_BACKFILL_CAP` (default 2000 rows per startup) and is gated
+ * by `EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE`, so a full refresh drains in capped
+ * batches across restarts. ONNX inference stays capped by
+ * `EMBEDDING_ONNX_THREADS` (PERF-002).
+ *
+ * ## Dimension changes
+ *
+ * The current model emits 384-dim vectors. A future model with a different
+ * dimension requires the SAME `EMBEDDING_MODEL_VERSION` bump; no extra column
+ * is needed. The version bump already forces every row to be re-embedded with
+ * the new dimension, and `cosineSimilarityArrays` returns 0 (never a wrong
+ * score) when a stale vector's length differs from the query vector, so a
+ * partially-refreshed corpus degrades to "no semantic match" instead of
+ * mismatched math.
+ *
+ * The pre-PERF-004 FNV-1a-of-name derivation was removed: it could not detect
+ * a weight/tokenizer change at an unchanged name and added a collision surface
+ * for no benefit. The explicit constant supersedes it.
  */
 
-/** Canonical embedding-model name (matches `RealVectorStore`'s pipeline id). */
+/** Canonical embedding-model name — the ONE definition `RealVectorStore` uses. */
 export const EMBEDDING_MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
 
 /**
- * Deterministic 32-bit FNV-1a hash of a string, coerced to a positive int.
- * Pure + allocation-free; collisions are irrelevant here (a collision only
- * means a model swap with an identical 32-bit hash would be missed, which is
- * astronomically unlikely and corrected by PERF-004's explicit constant).
+ * Canonical embedding-model version. Bump on ANY change to the model's output
+ * (new checkpoint, retrained weights, tokenizer/pooling change, or
+ * output-dimension change) even when `EMBEDDING_MODEL_NAME` is unchanged.
+ * Persisted as `model_version` on every vector row; the startup backfill
+ * re-embeds exactly the rows whose stored value differs. See the upgrade
+ * procedure in the module header.
  */
-function fnv1a32(value: string): number {
-	let hash = 0x811c9dc5;
-	for (let i = 0; i < value.length; i++) {
-		hash ^= value.charCodeAt(i);
-		// 32-bit FNV prime multiply via shifts to stay in int32 range.
-		hash = Math.imul(hash, 0x01000193);
-	}
-	return hash >>> 0;
-}
+export const EMBEDDING_MODEL_VERSION = 1;
 
 /**
- * Stable integer version of the current embedding model. Persisted as
- * `model_version` on every vector row; the backfill re-embeds when a stored
- * value differs.
+ * Stable integer version of the current embedding model. The single public
+ * accessor callers use, so the storage detail (constant today, derivation
+ * possible later) stays encapsulated and every call site is bump-safe.
  */
 export function currentEmbeddingModelVersion(): number {
-	return fnv1a32(EMBEDDING_MODEL_NAME);
+	return EMBEDDING_MODEL_VERSION;
 }

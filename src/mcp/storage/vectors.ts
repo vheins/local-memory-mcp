@@ -3,7 +3,7 @@ import { SQLiteStore } from "./sqlite";
 import { logger } from "../utils/logger";
 import { cosineSimilarityArrays, decodeVector } from "../utils/vector";
 import { EMBEDDING_ONNX_THREADS } from "../utils/constants";
-import { currentEmbeddingModelVersion } from "./embedding-model";
+import { currentEmbeddingModelVersion, EMBEDDING_MODEL_NAME } from "./embedding-model";
 
 type FeatureExtractionPipeline = import("@xenova/transformers").FeatureExtractionPipeline;
 
@@ -49,7 +49,6 @@ export class RealVectorStore implements VectorStore {
 	private db: SQLiteStore;
 	private extractor: FeatureExtractionPipeline | null = null;
 	private extractorPromise: Promise<FeatureExtractionPipeline> | null = null;
-	private modelName = "Xenova/all-MiniLM-L6-v2";
 	private transformersModule: typeof import("@xenova/transformers") | null = null;
 
 	constructor(db: SQLiteStore) {
@@ -88,8 +87,10 @@ export class RealVectorStore implements VectorStore {
 		if (this.extractor) return this.extractor;
 		if (this.extractorPromise) return this.extractorPromise;
 
+		// PERF-004: load the pipeline from the shared model constant — this file
+		// no longer carries its own copy of the model name.
 		this.extractorPromise = this.getTransformers()
-			.then((tf) => tf.pipeline("feature-extraction", this.modelName))
+			.then((tf) => tf.pipeline("feature-extraction", EMBEDDING_MODEL_NAME))
 			.then((extractor) => {
 				this.extractor = extractor;
 				return extractor;

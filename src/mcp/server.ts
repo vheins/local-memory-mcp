@@ -7,6 +7,7 @@ import { createServerFactory } from "./transport/factory";
 import { resolveTransportMode, resolveHttpTransportConfig, startHttpTransport } from "./transport/http";
 import { SQLiteStore } from "./storage/sqlite";
 import { RealVectorStore } from "./storage/vectors";
+import { EMBEDDING_MODEL_NAME } from "./storage/embedding-model";
 import { CapabilityAwareVectorStore } from "./storage/lazy-vectors";
 import { EmbeddingWorker } from "./embedding-queue";
 import { RuntimeCapabilityRegistry, setRuntimeCapabilities } from "./runtime-capabilities";
@@ -63,7 +64,7 @@ if (process.argv.includes("doctor")) {
 		process.stderr.write(`❌ SQLite Connection: Failed (${String(err)})\n`);
 	}
 
-	process.stderr.write(`🤖 AI Model: Xenova/all-MiniLM-L6-v2\n`);
+	process.stderr.write(`🤖 AI Model: ${EMBEDDING_MODEL_NAME}\n`);
 	process.stderr.write(`⚙️  Mode: Local-First (ONNX Runtime)\n`);
 
 	const isAutoArchive = process.env.ENABLE_AUTO_ARCHIVE === "true";

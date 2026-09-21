@@ -146,6 +146,13 @@ codebase.service.ts`). The MCP server ignores it and indexes only its CWD.
   unless cached. ONNX inference is capped to `EMBEDDING_ONNX_THREADS` threads
   (default `1`) so a busy daemon does not wake a full all-core ORT pool per
   embed; the cap is output-neutral (thread count never changes the vectors).
+- **Upgrading the embedding model**: the model name + version live ONLY in
+  `src/mcp/storage/embedding-model.ts`. On any output-changing model change
+  (new checkpoint, retrained weights at the same name, tokenizer/pooling, or
+  dimension change), bump `EMBEDDING_MODEL_VERSION` (and `EMBEDDING_MODEL_NAME`
+  when the name changes). The next startup's backfill re-embeds every affected
+  vector exactly once — capped by `EMBEDDING_QUEUE_BACKFILL_CAP` (2000/startup),
+  so a full refresh drains across restarts; subsequent restarts enqueue 0.
 - **Embeddings are OFFLOADED to an async queue** (migration v9): after a
   `memory-write`/`standard-write`/`task-write`, the vector is **not instant** — there
   is a brief searchability window (typically <1s) before the semantic score converges.
