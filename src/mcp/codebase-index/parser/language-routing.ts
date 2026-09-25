@@ -357,15 +357,16 @@ export function buildGenericCatchAll(registry: LanguageConfig[]): LanguageConfig
 		// Protocol
 		".proto",
 		".thrift",
-		// Extensionless named files (detected via basename in _doParse)
-		// handled separately in detectLanguage; included here for completeness
+		// Extensionless named files (detected via basename in _doParse).
+		// Canonical LOWERCASE tokens only: the basename lookup lowercases the
+		// file's basename before the map lookup, so listing both "Dockerfile"
+		// and "dockerfile" previously produced a spurious
+		// `[ParserPool] Duplicate basename mapping` warning on EVERY pool
+		// construction (FIX-030 — ~66 log lines of pure noise).
 		"dockerfile",
-		"Dockerfile",
 		"makefile",
-		"Makefile",
 		"justfile",
-		"Justfile",
-		"Containerfile"
+		"containerfile"
 	];
 
 	return {
@@ -382,12 +383,34 @@ export function buildGenericCatchAll(registry: LanguageConfig[]): LanguageConfig
 export interface RegistryMaps {
 	/** Extension → LanguageConfig (e.g. ".ts" → config). */
 	extToConfig: Map<string, LanguageConfig>;
-	/** Basename → LanguageConfig for extensionless files (e.g. "dockerfile" → config). */
+	/** Canonical lowercase basename → LanguageConfig for extensionless files. */
 	basenameToConfig: Map<string, LanguageConfig>;
 }
 
 /**
+ * Canonical lookup key for an extensionless file: its lowercased basename.
+ *
+ * The ParserPool resolves an extensionless file (`Dockerfile`, `Makefile`, …)
+ * by basename, NOT by full path — every `**​/Dockerfile` anywhere in the tree
+ * maps to the SAME generic config, which is intended. Normalizing through this
+ * single helper keeps the registry keys and the runtime lookup identical, so
+ * two files sharing a basename across directories can never disagree about
+ * their config (FIX-030).
+ */
+export function extensionlessLookupKey(filePath: string): string {
+	return path.basename(filePath).toLowerCase();
+}
+
+/**
  * Build the O(1) extension → config and basename → config maps from a registry.
+ *
+ * The basename map is keyed by the canonical lowercase basename
+ * ({@link extensionlessLookupKey}). A registry entry that maps to the SAME
+ * config as an existing key is NOT a collision — it is the same language
+ * registered twice (e.g. the generic catch-all listing both a display-cased
+ * and a lowercase token). Only a genuine conflict (two DIFFERENT configs
+ * claiming one basename) is warned, which keeps pool construction quiet
+ * (FIX-030 — the spurious `Duplicate basename mapping` noise).
  */
 export function buildRegistryMaps(registry: LanguageConfig[]): RegistryMaps {
 	const extToConfig = new Map<string, LanguageConfig>();
@@ -401,9 +424,11 @@ export function buildRegistryMaps(registry: LanguageConfig[]): RegistryMaps {
 				}
 				extToConfig.set(ext, config);
 			} else {
-				// Extensionless entries (e.g. "dockerfile", "Makefile") go to basename map
-				const key = ext.toLowerCase();
-				if (basenameToConfig.has(key)) {
+				// Extensionless entries (e.g. "Dockerfile", "Makefile") go to the
+				// basename map, keyed by canonical lowercase basename.
+				const key = extensionlessLookupKey(ext);
+				const existing = basenameToConfig.get(key);
+				if (existing && existing !== config) {
 					logger.warn(`[ParserPool] Duplicate basename mapping: ${key}`);
 				}
 				basenameToConfig.set(key, config);

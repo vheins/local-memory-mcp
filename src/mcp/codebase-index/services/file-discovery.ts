@@ -212,6 +212,24 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = Object.freeze({
 	".lock": "lockfile"
 });
 
+// ── Non-source extension exclusion (FIX-030) ──────────────────────────
+
+/**
+ * Extensions that are NOT indexable source and are never parseable by the
+ * tree-sitter pool (`.sql`/`.lock`/`.env`/`.dockerfile`). They are excluded
+ * at discovery time so the parser never sees them — previously discovery
+ * admitted them (the language map below still NAMES them for the dashboard's
+ * non-indexed file view), and every one produced an
+ * `Unsupported extension: .sql` parse failure. Excluded files are counted in
+ * `skippedByExtension`, the same counter used for unknown extensions.
+ */
+export const EXCLUDED_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set([".sql", ".lock", ".env", ".dockerfile"]);
+
+/** True when the path carries a known non-source extension (FIX-030). */
+export function isExcludedSourceFile(filePath: string): boolean {
+	return EXCLUDED_SOURCE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+}
+
 /**
  * Map a file extension to a language identifier.
  * Returns `null` for unsupported extensions (file should be skipped).
@@ -219,6 +237,10 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = Object.freeze({
  * Exported (TASK-324): the dashboard file-content endpoint reuses this for
  * NON-indexed files (no codebase_files row to carry `language`); indexed
  * files keep the row's stored language as the authoritative value.
+ *
+ * NOTE (FIX-030): this is a pure NAMING map — it does not decide indexability.
+ * Discovery additionally applies {@link EXCLUDED_SOURCE_EXTENSIONS} so
+ * non-source extensions are skipped rather than handed to the parser.
  */
 export function detectLanguage(filePath: string): string | null {
 	const ext = path.extname(filePath).toLowerCase();
@@ -462,7 +484,16 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 				continue;
 			}
 
-			// 3. Detect language — skip unsupported extensions
+			// 3. Skip known non-source extensions (.sql/.lock/.env/.dockerfile)
+			//    before language detection so the parser never receives them
+			//    (FIX-030). Counted as extension skips.
+			if (isExcludedSourceFile(relativePath)) {
+				skippedFiles++;
+				skippedByExtension++;
+				continue;
+			}
+
+			// 4. Detect language — skip unsupported extensions
 			const language = detectLanguage(relativePath);
 			if (language === null) {
 				skippedFiles++;
@@ -479,7 +510,7 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 			});
 			supportedFiles++;
 
-			// 4. Early exit if maxFiles limit reached
+			// 5. Early exit if maxFiles limit reached
 			if (maxFiles !== undefined && discovered.length >= maxFiles) {
 				break;
 			}
@@ -533,6 +564,14 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 				if (gitignoreFilter && gitignoreFilter.ignores(relativePath)) {
 					skippedFiles++;
 					skippedByGitignore++;
+					continue;
+				}
+
+				// Non-source extensions (.sql/.lock/.env/.dockerfile) are skipped
+				// here too — the dot-directory stream shares the filter (FIX-030).
+				if (isExcludedSourceFile(relativePath)) {
+					skippedFiles++;
+					skippedByExtension++;
 					continue;
 				}
 

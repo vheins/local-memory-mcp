@@ -111,6 +111,12 @@ export interface ParsePipelineResult {
 	timeoutErrors: number;
 	permissionErrors: number;
 	dbWriteErrors: number;
+	/**
+	 * Count of EXPECTED partial-parse errors that were downgraded to debug
+	 * instead of counted as failures (JSX-in-plain-JS, generated/minified
+	 * artifacts — FIX-030). Not part of `failedFiles`; informational.
+	 */
+	expectedParseErrors: number;
 	/** Count of symbols that received a semantic signature from the optional TS enrichment pass (issue #89). */
 	semanticEnriched: number;
 	errors: IndexFileError[];
@@ -160,6 +166,8 @@ export interface PipelineRun {
 	timeoutErrors: number;
 	permissionErrors: number;
 	dbWriteErrors: number;
+	/** Expected partial-parse errors downgraded to debug (FIX-030). */
+	expectedParseErrors: number;
 	semanticEnriched: number;
 	errors: IndexFileError[];
 }

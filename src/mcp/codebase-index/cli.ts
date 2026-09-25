@@ -138,6 +138,9 @@ export async function runCliIndex(): Promise<void> {
 		log(`  Parsed:        ${result.parsedFiles}`);
 		log(`  Skipped:       ${result.skippedFiles}`);
 		log(`  Failed:        ${result.failedFiles}`);
+		if (result.expectedParseErrors > 0) {
+			log(`  Expected parse errors (downgraded): ${result.expectedParseErrors}`);
+		}
 		log(`  Total symbols: ${result.totalSymbols}`);
 		log(`  Duration:      ${durationSec}s`);
 

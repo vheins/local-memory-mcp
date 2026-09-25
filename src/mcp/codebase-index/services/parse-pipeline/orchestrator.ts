@@ -131,6 +131,7 @@ export async function runParsePipeline(
 		timeoutErrors: run.timeoutErrors,
 		permissionErrors: run.permissionErrors,
 		dbWriteErrors: run.dbWriteErrors,
+		expectedParseErrors: run.expectedParseErrors,
 		semanticEnriched: run.semanticEnriched,
 		errors: run.errors
 	};
@@ -151,6 +152,7 @@ function createRun(): PipelineRun {
 		timeoutErrors: 0,
 		permissionErrors: 0,
 		dbWriteErrors: 0,
+		expectedParseErrors: 0,
 		semanticEnriched: 0,
 		errors: []
 	};

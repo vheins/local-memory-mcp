@@ -24,6 +24,7 @@ import { isPermissionError, isTimeoutError } from "../indexing-cache";
 import { DEFAULT_BATCH_SIZE } from "../../../utils/constants";
 import { writeParseBatch } from "../indexing-writer";
 import { PARSE_NO_RESULT_ERROR } from "./constants";
+import { isExpectedParseError, TREE_SITTER_PARSE_ERROR } from "../../parser/parse-error-classifier";
 import type { PipelineContext, ParseCandidate, PipelineRun, InsertBatch } from "./types";
 import { enrichParsedOutcome } from "./enrich-parse";
 
@@ -98,21 +99,37 @@ export async function persistParseBatch(
 
 		const parseError = outcome.parseResult.error;
 		if (parseError) {
-			run.failedFiles++;
-			run.errors.push({ filePath: outcome.plan.filePath, error: parseError });
-			if (/timeout/i.test(parseError)) {
-				run.timeoutErrors++;
-				logger.warn("[IndexingService] Parse timeout — skipped", {
+			// Expected partial-parse noise (JSX in a plain-JS file, generated or
+			// minified artifacts) is downgraded to debug and NOT counted as a
+			// failure: the visitor already extracted partial symbols and the
+			// error is a deterministic extension/grammar mismatch, not a data
+			// problem (FIX-030). Only the canonical tree-sitter partial-results
+			// sentinel is eligible — timeouts, permission failures and
+			// unsupported-extension rejections always stay real.
+			if (parseError === TREE_SITTER_PARSE_ERROR && isExpectedParseError(outcome.plan.filePath, outcome.content)) {
+				run.expectedParseErrors++;
+				logger.debug("[IndexingService] Expected parse error — partial results indexed", {
 					repo: ctx.repo,
 					filePath: outcome.plan.filePath,
 					error: parseError
 				});
 			} else {
-				logger.warn("[IndexingService] Parse error", {
-					repo: ctx.repo,
-					filePath: outcome.plan.filePath,
-					error: parseError
-				});
+				run.failedFiles++;
+				run.errors.push({ filePath: outcome.plan.filePath, error: parseError });
+				if (/timeout/i.test(parseError)) {
+					run.timeoutErrors++;
+					logger.warn("[IndexingService] Parse timeout — skipped", {
+						repo: ctx.repo,
+						filePath: outcome.plan.filePath,
+						error: parseError
+					});
+				} else {
+					logger.warn("[IndexingService] Parse error", {
+						repo: ctx.repo,
+						filePath: outcome.plan.filePath,
+						error: parseError
+					});
+				}
 			}
 			// Fall through: the visitor may have captured partial symbols
 			// before erroring — persist what was produced (matches the

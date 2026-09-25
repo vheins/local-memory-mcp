@@ -27,11 +27,13 @@ import {
 	createRegistry,
 	buildGenericCatchAll,
 	buildRegistryMaps,
-	removeConfigsForWasm
+	removeConfigsForWasm,
+	extensionlessLookupKey
 } from "./language-routing";
 import { Semaphore, resolveParseTimeoutMs, resolveConcurrency } from "./worker-pool";
 import { logger } from "../../utils/logger";
 import { FatalError } from "../types/errors";
+import { TREE_SITTER_PARSE_ERROR } from "./parse-error-classifier";
 
 // ── Pool options ─────────────────────────────────────────────────────
 
@@ -206,8 +208,7 @@ export class TreeSitterParserPool implements ParserPool {
 
 		// Fallback: extensionless files (Dockerfile, Makefile, Justfile, Containerfile)
 		if (!config && ext === "") {
-			const basename = path.basename(filePath).toLowerCase();
-			config = this.basenameToConfig.get(basename);
+			config = this.basenameToConfig.get(extensionlessLookupKey(filePath));
 		}
 
 		if (!config) {
@@ -285,7 +286,7 @@ export class TreeSitterParserPool implements ParserPool {
 			return {
 				symbols,
 				references,
-				error: hasErrors ? "Parse errors detected (partial results returned)" : null,
+				error: hasErrors ? TREE_SITTER_PARSE_ERROR : null,
 				durationMs: 0
 			};
 		} finally {

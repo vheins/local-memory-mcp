@@ -7,7 +7,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { discoverFiles } from "../../codebase-index/services/file-discovery";
+import { discoverFiles, detectLanguage, isExcludedSourceFile } from "../../codebase-index/services/file-discovery";
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -537,6 +537,65 @@ describe("FileDiscoveryService", () => {
 			expect(result.skippedDirectories).toEqual([]);
 			expect(result.errors).toEqual([]);
 			expect(result.supportedFiles).toBe(2);
+		});
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// FIX-030: non-source extensions (.sql/.lock/.env/.dockerfile) are
+	// skipped by discovery, never handed to the parser.
+	// ══════════════════════════════════════════════════════════════════
+
+	describe("non-source extension exclusion (FIX-030)", () => {
+		it("isExcludedSourceFile: true for .sql/.lock/.env/.dockerfile (positive)", () => {
+			expect(isExcludedSourceFile("schema.sql")).toBe(true);
+			expect(isExcludedSourceFile("db/yarn.lock")).toBe(true);
+			expect(isExcludedSourceFile("config/app.env")).toBe(true);
+			expect(isExcludedSourceFile("build/app.dockerfile")).toBe(true);
+			// Case-insensitive — fast-glob yields mixed-case paths.
+			expect(isExcludedSourceFile("SCHEMA.SQL")).toBe(true);
+		});
+
+		it("isExcludedSourceFile: false for indexable source (negative)", () => {
+			expect(isExcludedSourceFile("src/index.ts")).toBe(false);
+			expect(isExcludedSourceFile("styles/app.css")).toBe(false);
+			expect(isExcludedSourceFile("data/config.json")).toBe(false);
+			// detectLanguage still NAMES .sql/.lock for the dashboard's
+			// non-indexed file view — naming and indexability are separate.
+			expect(detectLanguage("schema.sql")).toBe("sql");
+			expect(detectLanguage("yarn.lock")).toBe("lockfile");
+		});
+
+		it("skips .sql/.lock files by extension instead of discovering them", async () => {
+			const root = path.join(tempDir, "nonsource-skip");
+			touch(path.join(root, "app.ts"));
+			touch(path.join(root, "schema.sql"), "CREATE TABLE t (id INT);\n");
+			touch(path.join(root, "yarn.lock"), "# yarn lockfile v1\n");
+			touch(path.join(root, "app.env"), "KEY=value\n");
+			touch(path.join(root, "server.dockerfile"), "FROM node:22\n");
+
+			const result = await discoverFiles({ projectPath: root });
+
+			const names = relativePaths(result);
+			expect(names).toEqual(["app.ts"]);
+			// All four non-source files are counted as extension skips...
+			expect(result.skippedByExtension).toBe(4);
+			expect(result.supportedFiles).toBe(1);
+			// ...and never surface as parseable files.
+			expect(names).not.toContain("schema.sql");
+			expect(names).not.toContain("yarn.lock");
+		});
+
+		it("still discovers ordinary supported extensions alongside skipped non-source (negative control)", async () => {
+			const root = path.join(tempDir, "nonsource-mixed");
+			touch(path.join(root, "a.ts"));
+			touch(path.join(root, "b.json"), "{}");
+			touch(path.join(root, "c.sql"), "SELECT 1;\n");
+
+			const result = await discoverFiles({ projectPath: root });
+
+			const names = relativePaths(result);
+			expect(names).toEqual(["a.ts", "b.json"]);
+			expect(result.skippedByExtension).toBe(1);
 		});
 	});
 });

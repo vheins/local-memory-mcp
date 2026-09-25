@@ -97,6 +97,13 @@ export interface IndexResult {
 	skippedDirectories: string[];
 	/** Number of files detected as renames (old path → new path, same content). */
 	renamedFiles: number;
+	/**
+	 * Count of EXPECTED partial-parse errors downgraded to debug rather than
+	 * counted as failures (JSX-in-plain-JS, generated/minified artifacts —
+	 * FIX-030). Included in `parsedFiles` (partial symbols persisted), NOT in
+	 * `failedFiles`. Informational for the index summary.
+	 */
+	expectedParseErrors: number;
 	/** Structured error classification summary. */
 	errorSummary: ErrorSummary;
 }
@@ -229,6 +236,7 @@ export async function performIndexRepository(
 			parsedFiles: pipeline.parsedFiles,
 			skippedFiles,
 			failedFiles: pipeline.failedFiles,
+			expectedParseErrors: pipeline.expectedParseErrors,
 			totalSymbols: pipeline.totalSymbols,
 			renamedFiles: pipeline.renamedFiles,
 			skippedByChecksum,
@@ -251,6 +259,7 @@ export async function performIndexRepository(
 			skippedByGitignore: discoverResult.skippedByGitignore,
 			skippedDirectories: discoverResult.skippedDirectories,
 			renamedFiles: pipeline.renamedFiles,
+			expectedParseErrors: pipeline.expectedParseErrors,
 			errorSummary: {
 				total: errors.length,
 				recoverable: errors.length,
