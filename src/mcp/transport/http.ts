@@ -49,7 +49,13 @@ import type {
 	McpServerFactory,
 	Server
 } from "@modelcontextprotocol/server";
-import { MCP_HTTP_ALLOW_INSECURE, MCP_HTTP_PORT, MCP_HTTP_SESSION_IDLE_TTL_MS } from "../utils/constants";
+import {
+	MCP_HTTP_ALLOW_INSECURE,
+	MCP_HTTP_PORT,
+	MCP_HTTP_SESSION_IDLE_TTL_MS,
+	MCP_HTTP_SSE_IDLE_TIMEOUT_MS,
+	MCP_HTTP_SSE_KEEPALIVE_INTERVAL_MS
+} from "../utils/constants";
 import { logger } from "../utils/logger";
 
 /** The two supported MCP transports. */
@@ -137,6 +143,53 @@ interface LegacySession {
 	product: McpServer | Server;
 	/** Epoch ms of the last request served for this session (idle-sweep clock). */
 	lastSeen: number;
+	/**
+	 * Count of OPEN standalone SSE (`GET`) streams for this session. While
+	 * `> 0` the idle sweep MUST NOT evict the session (FIX-028): the stream is
+	 * live even if no NEW request has arrived, and the pre-fix sweep closed
+	 * still-open streams, producing the `Session not found` (404) storm. The
+	 * SSE-lifetime wrapper decrements this on stream close, so the session
+	 * becomes sweepable again once it is genuinely idle.
+	 */
+	openStreams: number;
+}
+
+/**
+ * Track a legacy session's open SSE stream (FIX-028). For a `GET` that opened a
+ * `200 text/event-stream` response, this bumps the session's `openStreams`
+ * (exempting it from the idle sweep), refreshes `lastSeen` on every real
+ * server→client chunk, and bounds the stream's lifetime with
+ * {@link withSseIdleTimeout}. Non-stream responses pass through untouched.
+ *
+ * @returns The (possibly wrapped) response to hand back to the caller.
+ */
+function trackOpenSseStream(session: LegacySession, webRequest: Request, response: Response): Response {
+	if (webRequest.method.toUpperCase() !== "GET" || response.status !== 200) return response;
+	if (!isStreamingResponse(response)) return response;
+
+	session.openStreams += 1;
+	session.lastSeen = Date.now();
+	return withSseIdleTimeout(response, {
+		onActivity: () => {
+			session.lastSeen = Date.now();
+		},
+		onIdle: () => {
+			logger.info("[MCP HTTP] closed idle SSE stream", {
+				sessionId: session.transport.sessionId,
+				idleTimeoutMs: MCP_HTTP_SSE_IDLE_TIMEOUT_MS
+			});
+		},
+		onClose: () => {
+			session.openStreams = Math.max(0, session.openStreams - 1);
+			session.lastSeen = Date.now();
+		}
+	});
+}
+
+/** Whether a response's `Content-Type` marks it as a streaming response. */
+function isStreamingResponse(response: Response): boolean {
+	const contentType = response.headers.get("content-type");
+	return contentType !== null && contentType.toLowerCase().includes("text/event-stream");
 }
 
 /**
@@ -187,6 +240,136 @@ function onResponseStreamClose(response: Response, onClose: () => void): Respons
 			return reader.cancel(reason);
 		}
 	});
+	return new Response(wrapped, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: response.headers
+	});
+}
+
+/** Callbacks/limits for {@link withSseIdleTimeout}. */
+export interface SseIdleTimeoutOptions {
+	/** Idle window (ms) with no server→client data before the stream is closed. */
+	idleTimeoutMs?: number;
+	/** Interval (ms) between SSE keep-alive comment frames (`0` disables). */
+	keepAliveIntervalMs?: number;
+	/** Fired once when the stream is opened (constructed). */
+	onOpen?: () => void;
+	/** Fired once when the stream ends/cancels/idles out. */
+	onClose?: () => void;
+	/** Fired once specifically when the idle timeout closed the stream. */
+	onIdle?: () => void;
+	/** Fired whenever a real (non-ping) server→client chunk flows. */
+	onActivity?: () => void;
+}
+
+/**
+ * Bound a streaming (`text/event-stream`) `Response`'s lifetime (FIX-028).
+ *
+ * The SDK transport serves the legacy standalone SSE (`GET`) stream with NO
+ * idle/keep-alive/timeout, so an open stream is held for the client's ENTIRE
+ * session lifetime. On the long-lived daemon this pinned `pipeline(source, res)`
+ * for HOURS (`GET /mcp ms:27971702` ≈ 7.8h), polluted the dashboard's request
+ * duration metric with the stream's whole lifetime, and let the idle session
+ * sweep close a stream that was still live.
+ *
+ * This wrapper closes the stream once NO real server→client data has flowed for
+ * `idleTimeoutMs` (`0` disables the bound), and optionally emits `: keep-alive`
+ * comment frames every `keepAliveIntervalMs` so an idle-but-live stream is not
+ * dropped by an intermediary. Keep-alive frames are transport-only and do NOT
+ * reset the idle window, so the stream is still bounded. On idle the stream is
+ * closed CLEANLY (`controller.close()`) so `pipeline` finishes normally — no
+ * error, no uncaught rejection — and the underlying SDK stream is cancelled to
+ * free its standalone-stream slot; the SDK client then reconnects on its own.
+ */
+export function withSseIdleTimeout(response: Response, options: SseIdleTimeoutOptions = {}): Response {
+	const body = response.body;
+	if (body === null) return response;
+	const idleTimeoutMs = options.idleTimeoutMs ?? MCP_HTTP_SSE_IDLE_TIMEOUT_MS;
+	const keepAliveIntervalMs = options.keepAliveIntervalMs ?? MCP_HTTP_SSE_KEEPALIVE_INTERVAL_MS;
+
+	const reader = body.getReader();
+	const encoder = new TextEncoder();
+	let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+	let idleTimer: NodeJS.Timeout | undefined;
+	let keepAliveTimer: NodeJS.Timeout | undefined;
+	let settled = false;
+
+	const clearTimers = (): void => {
+		if (idleTimer !== undefined) clearTimeout(idleTimer);
+		if (keepAliveTimer !== undefined) clearInterval(keepAliveTimer);
+		idleTimer = undefined;
+		keepAliveTimer = undefined;
+	};
+
+	const finish = (reason: "idle" | "close" | "error" | "cancel"): void => {
+		if (settled) return;
+		settled = true;
+		clearTimers();
+		if (reason === "idle") options.onIdle?.();
+		options.onClose?.();
+	};
+
+	/** (Re)arm the idle timer. Real data resets it; keep-alive pings do NOT. */
+	const armIdle = (): void => {
+		if (idleTimeoutMs <= 0) return;
+		if (idleTimer !== undefined) clearTimeout(idleTimer);
+		idleTimer = setTimeout(() => {
+			// Clean close: the consumer's `pipeline` finishes normally and the
+			// SDK stream slot is released. The client reconnects on its own.
+			finish("idle");
+			try {
+				controller?.close();
+			} catch {
+				/* already closed */
+			}
+			void reader.cancel().catch(() => {});
+		}, idleTimeoutMs);
+		idleTimer.unref?.();
+	};
+
+	const wrapped = new ReadableStream<Uint8Array>({
+		start(streamController) {
+			controller = streamController;
+			options.onOpen?.();
+			armIdle();
+			if (keepAliveIntervalMs > 0) {
+				keepAliveTimer = setInterval(() => {
+					try {
+						controller?.enqueue(encoder.encode(": keep-alive\n\n"));
+					} catch {
+						/* stream closed between ticks */
+					}
+				}, keepAliveIntervalMs);
+				keepAliveTimer.unref?.();
+			}
+		},
+		async pull(streamController) {
+			try {
+				const { done, value } = await reader.read();
+				// The idle timer may have closed the stream while this read was
+				// pending; do not touch an already-settled controller.
+				if (settled) return;
+				if (done) {
+					finish("close");
+					streamController.close();
+					return;
+				}
+				options.onActivity?.();
+				armIdle();
+				streamController.enqueue(value);
+			} catch (error) {
+				if (settled) return;
+				finish("error");
+				streamController.error(error);
+			}
+		},
+		cancel(reason) {
+			finish("cancel");
+			return reader.cancel(reason);
+		}
+	});
+
 	return new Response(wrapped, {
 		status: response.status,
 		statusText: response.statusText,
@@ -406,6 +589,12 @@ export function createDualHandler(factory: McpServerFactory, onerror?: (error: E
 	 */
 	function sweepIdleLegacySessions(now: number = Date.now()): void {
 		for (const [id, session] of legacySessions) {
+			// FIX-028: NEVER evict a session with an open SSE stream — the
+			// stream is live even when no new request has arrived, and the
+			// pre-fix sweep closed it mid-stream (the `Session not found` 404
+			// storm). `lastSeen` is also refreshed on every stream chunk, so a
+			// busy stream keeps the session warm regardless.
+			if (session.openStreams > 0) continue;
 			if (now - session.lastSeen > MCP_HTTP_SESSION_IDLE_TTL_MS) {
 				legacySessions.delete(id);
 				try {
@@ -446,7 +635,10 @@ export function createDualHandler(factory: McpServerFactory, onerror?: (error: E
 		const existing = sessionId !== null ? legacySessions.get(sessionId) : undefined;
 		if (existing !== undefined) {
 			existing.lastSeen = Date.now();
-			return existing.transport.handleRequest(webRequest);
+			const response = await existing.transport.handleRequest(webRequest);
+			// FIX-028: bound a standalone SSE stream's lifetime and exempt the
+			// session from the idle sweep while it is open.
+			return trackOpenSseStream(existing, webRequest, response);
 		}
 
 		// Unknown (or absent) session id on a NON-initialize exchange. Minting a
@@ -477,7 +669,7 @@ export function createDualHandler(factory: McpServerFactory, onerror?: (error: E
 		const transport = new WebStandardStreamableHTTPServerTransport({
 			sessionIdGenerator: () => randomUUID(),
 			onsessioninitialized: (id) => {
-				legacySessions.set(id, { transport, product, lastSeen: Date.now() });
+				legacySessions.set(id, { transport, product, lastSeen: Date.now(), openStreams: 0 });
 			}
 		});
 		// Assign BEFORE connect(): `Protocol.connect` captures the transport's

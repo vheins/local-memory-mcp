@@ -680,6 +680,27 @@ export const MCP_HTTP_ALLOW_INSECURE = envBool("MCP_HTTP_ALLOW_INSECURE", false)
 // overridable so operators can tune the window without a code change.
 export const MCP_HTTP_SESSION_IDLE_TTL_MS = envInt("MCP_HTTP_SESSION_IDLE_TTL_MS", 30 * 60 * 1000);
 
+// Idle timeout for a legacy session's standalone SSE (`GET`) stream (FIX-028).
+// The SDK transport serves the GET stream with NO idle/keep-alive/timeout at
+// all, so an open stream is held for the client's ENTIRE session lifetime. On a
+// long-lived daemon that pinned `pipeline(source, res)` for HOURS (observed:
+// `GET /mcp ms:27971702` ≈ 7.8h), polluted the dashboard's request-duration
+// metric with the stream's whole lifetime, and let the idle session sweep close
+// a stream that was still live. The repo-side wrapper (`withSseIdleTimeout` in
+// transport/http.ts) closes the stream once NO server→client data has flowed
+// for this long, with a clean log; a live client reconnects (the SDK transport's
+// normal behavior). Default 10 min — well under the 30-min session TTL so a
+// quiet stream is bounded BEFORE the session sweep would race it. Env-
+// overridable; `0` disables the bound (stream lives until the client leaves).
+export const MCP_HTTP_SSE_IDLE_TIMEOUT_MS = envInt("MCP_HTTP_SSE_IDLE_TIMEOUT_MS", 10 * 60 * 1000);
+
+// Keep-alive interval for an open SSE stream (FIX-028): a comment frame
+// (`: keep-alive`) is written every this often so an idle-but-live stream is not
+// dropped by an intermediary (proxy/NAT) between real server→client messages.
+// Purely a transport keep-alive — it does NOT reset the idle timeout above, so
+// the stream is still bounded. Env-overridable; `0` disables the pings.
+export const MCP_HTTP_SSE_KEEPALIVE_INTERVAL_MS = envInt("MCP_HTTP_SSE_KEEPALIVE_INTERVAL_MS", 25 * 1000);
+
 // ── Local bug telemetry ───────────────────────────────────────────────────
 // Automatic capture of runtime errors (uncaught/unhandled, error-level logs,
 // tool failures, dashboard 5xx) into the local `bug_reports` table. Local-only

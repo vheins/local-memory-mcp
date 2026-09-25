@@ -16,7 +16,7 @@
 import { describe, it, expect } from "vitest";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
 import type { JSONRPCMessage } from "@modelcontextprotocol/server";
-import { bufferStandaloneUntilSse, MCP_HTTP_STANDALONE_BUFFER_MAX } from "../transport/http";
+import { bufferStandaloneUntilSse, withSseIdleTimeout, MCP_HTTP_STANDALONE_BUFFER_MAX } from "../transport/http";
 
 const ENDPOINT = "http://localhost/mcp";
 
@@ -125,5 +125,123 @@ describe("bufferStandaloneUntilSse — bounded buffer + sseOpen reset", () => {
 		await transport.send(standalone(1), { relatedRequestId: 42 });
 		expect(handle.bufferedCount()).toBe(0);
 		expect(forwarded).toHaveLength(1);
+	});
+});
+
+/**
+ * A controllable SSE body: the test decides when (and whether) chunks flow, so
+ * the idle timeout can be exercised deterministically.
+ */
+function controllableSseBody(): {
+	body: ReadableStream<Uint8Array>;
+	push: (text: string) => void;
+	close: () => void;
+} {
+	let controller!: ReadableStreamDefaultController<Uint8Array>;
+	const encoder = new TextEncoder();
+	const body = new ReadableStream<Uint8Array>({
+		start(c) {
+			controller = c;
+		}
+	});
+	return {
+		body,
+		push: (text: string) => controller.enqueue(encoder.encode(text)),
+		close: () => controller.close()
+	};
+}
+
+function sseResponse(body: ReadableStream<Uint8Array>): Response {
+	return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+}
+
+describe("withSseIdleTimeout — bounded SSE stream lifetime (FIX-028)", () => {
+	it("closes a silent stream after the idle timeout with a clean (non-error) end", async () => {
+		const source = controllableSseBody();
+		let opened = 0;
+		let closed = 0;
+		let idled = 0;
+		const wrapped = withSseIdleTimeout(sseResponse(source.body), {
+			idleTimeoutMs: 40,
+			keepAliveIntervalMs: 0,
+			onOpen: () => (opened += 1),
+			onClose: () => (closed += 1),
+			onIdle: () => (idled += 1)
+		});
+
+		const reader = wrapped.body!.getReader();
+		// No data is ever pushed: the idle timer must close the stream CLEANLY.
+		const { done } = await reader.read();
+		expect(done).toBe(true);
+
+		expect(opened).toBe(1);
+		expect(idled).toBe(1);
+		expect(closed).toBe(1);
+	});
+
+	it("keeps the stream open while real data keeps flowing (activity resets the idle window)", async () => {
+		const source = controllableSseBody();
+		let idled = 0;
+		const wrapped = withSseIdleTimeout(sseResponse(source.body), {
+			idleTimeoutMs: 60,
+			keepAliveIntervalMs: 0,
+			onIdle: () => (idled += 1)
+		});
+		const reader = wrapped.body!.getReader();
+
+		// Push a chunk every 20ms (well under the 60ms idle window) three times.
+		for (let i = 0; i < 3; i++) {
+			source.push(`data: tick-${i}\n\n`);
+			const { value } = await reader.read();
+			expect(new TextDecoder().decode(value)).toContain(`tick-${i}`);
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		// Data kept the stream alive: no idle close fired.
+		expect(idled).toBe(0);
+
+		// Stop feeding — now the idle window elapses and it closes cleanly.
+		const { done } = await reader.read();
+		expect(done).toBe(true);
+		expect(idled).toBe(1);
+	});
+
+	it("emits keep-alive comment frames on an otherwise-idle stream", async () => {
+		const source = controllableSseBody();
+		const wrapped = withSseIdleTimeout(sseResponse(source.body), {
+			// Idle window well beyond the keep-alive interval so a ping is
+			// observed before the idle close.
+			idleTimeoutMs: 5_000,
+			keepAliveIntervalMs: 25
+		});
+		const reader = wrapped.body!.getReader();
+		const { value } = await reader.read();
+		expect(new TextDecoder().decode(value)).toContain(": keep-alive");
+
+		// Clean up: cancel so the timers are cleared.
+		await reader.cancel().catch(() => {});
+	});
+
+	it("disables the idle bound when idleTimeoutMs is 0 (stream lives until cancelled)", async () => {
+		const source = controllableSseBody();
+		let idled = 0;
+		const wrapped = withSseIdleTimeout(sseResponse(source.body), {
+			idleTimeoutMs: 0,
+			keepAliveIntervalMs: 0,
+			onIdle: () => (idled += 1)
+		});
+		const reader = wrapped.body!.getReader();
+
+		// Wait well past any plausible idle window; the stream must stay open.
+		await new Promise((resolve) => setTimeout(resolve, 80));
+		expect(idled).toBe(0);
+
+		// Cancelling the consumer ends it without an idle event.
+		await reader.cancel().catch(() => {});
+		expect(idled).toBe(0);
+	});
+
+	it("passes a body-less response through unchanged", () => {
+		const response = new Response(null, { status: 204 });
+		expect(withSseIdleTimeout(response)).toBe(response);
 	});
 });

@@ -23,6 +23,7 @@ import { bugCapture } from "../mcp/utils/bug-capture";
 import type { SQLiteStore } from "../mcp/storage/sqlite";
 import type { VectorStore } from "../mcp/types";
 import routes from "./routes";
+import { createRequestLogger } from "./request-logging";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -132,22 +133,10 @@ export function createExpressApp(options: CreateExpressAppOptions): DashboardApp
 	app.locals.vectors = vectors;
 
 	// --- Request logging (first, so every route — including pre-routes — is logged) ---
-	app.use((req, res, next) => {
-		const start = Date.now();
-		res.on("finish", () => {
-			const duration = Date.now() - start;
-			logger.info("[Dashboard] request", {
-				method: req.method,
-				path: req.path,
-				status: res.statusCode,
-				ms: duration
-			});
-			if (duration > 1000) {
-				logger.warn("[Dashboard] slow request", { method: req.method, path: req.path, ms: duration });
-			}
-		});
-		next();
-	});
+	// FIX-028: the logger measures time-to-first-byte for streaming responses
+	// (see ./request-logging) so an SSE stream's whole lifetime is never logged
+	// as the request's latency. See createRequestLogger for the rationale.
+	app.use(createRequestLogger());
 
 	// --- Pre-routes (MCP /mcp in the combined server) ---
 	// Registered before express.json(): these handlers consume the raw stream

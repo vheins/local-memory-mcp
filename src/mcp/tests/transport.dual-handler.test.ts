@@ -289,6 +289,68 @@ describe("createDualHandler — idle legacy session eviction", () => {
 	});
 });
 
+describe("createDualHandler — SSE stream lifetime + sweep exemption (FIX-028)", () => {
+	/**
+	 * A live standalone SSE (`GET`) stream keeps its session pinned even when no
+	 * new request arrives. Pre-FIX-028 the 30-min idle sweep closed the still-open
+	 * stream (`Session not found` 404 storm); the session must now be EXEMPT from
+	 * eviction while its stream is open.
+	 */
+	it("does NOT sweep a session whose standalone SSE stream is open", async () => {
+		const { handler } = await startHarness();
+		const sessionId = await openLegacySession(handler);
+
+		// Open the standalone SSE GET stream and keep it open (do not drain it).
+		const sse = await handler.fetch(
+			new Request(ENDPOINT, {
+				method: "GET",
+				headers: { Accept: "text/event-stream", "mcp-session-id": sessionId }
+			})
+		);
+		expect(sse.status).toBe(200);
+		expect(sse.headers.get("content-type")).toContain("text/event-stream");
+
+		// Sweep FAR past the idle TTL: the open stream must exempt the session
+		// from eviction, so a subsequent request still finds the retained server.
+		handler.sweepIdleLegacySessions(Date.now() + MCP_HTTP_SESSION_IDLE_TTL_MS * 10);
+
+		const list = await listOnSession(handler, sessionId);
+		expect(list.status).toBe(200);
+		expect(await list.text()).toContain('"tools"');
+
+		// Clean up the stream so afterEach teardown is prompt.
+		await sse.body?.cancel().catch(() => {});
+	});
+
+	/**
+	 * The exemption is released once the stream closes: an idle session is then
+	 * swept normally and a later request gets the clean 404 (the negative case
+	 * proving the exemption is scoped to the open stream, not permanent).
+	 */
+	it("sweeps the session again once its SSE stream is closed", async () => {
+		const { handler } = await startHarness();
+		const sessionId = await openLegacySession(handler);
+
+		const sse = await handler.fetch(
+			new Request(ENDPOINT, {
+				method: "GET",
+				headers: { Accept: "text/event-stream", "mcp-session-id": sessionId }
+			})
+		);
+		expect(sse.status).toBe(200);
+
+		// Closing the stream releases the exemption.
+		await sse.body?.cancel();
+
+		// Now the sweep past the TTL evicts the session.
+		handler.sweepIdleLegacySessions(Date.now() + MCP_HTTP_SESSION_IDLE_TTL_MS + 1);
+
+		const after = await listOnSession(handler, sessionId);
+		expect(after.status).toBe(404);
+		expect(await after.text()).toContain("Session not found");
+	});
+});
+
 describe("createDualHandler — session-rejection reporting (PERF-009)", () => {
 	/**
 	 * An unknown session id must still return the canonical 404 body, but the
