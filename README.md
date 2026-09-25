@@ -304,7 +304,7 @@ The dashboard can auto-start when you open a project in VS Code, Cursor, Windsur
 
 ## ⚖️ License
 
-MIT © Muhammad Rheza Alfin — see the full text in [LICENSE.md](LICENSE.md).
+MIT © Muhammad Rheza Alfin — see the full text in [LICENSE](LICENSE).
 
 ## 🙏 Acknowledgements
 

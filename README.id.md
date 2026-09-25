@@ -302,7 +302,7 @@ Dasbor bisa otomatis menyala saat Anda membuka project di VS Code, Cursor, Winds
 
 ## ⚖️ Lisensi
 
-MIT © Muhammad Rheza Alfin — lihat teks lengkap di [LICENSE.md](LICENSE.md).
+MIT © Muhammad Rheza Alfin — lihat teks lengkap di [LICENSE](LICENSE).
 
 ## 🙏 Ucapan Terima Kasih
 
