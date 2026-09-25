@@ -83,6 +83,14 @@ function buildClaimListSummary(
 
 /**
  * DETAIL: Fetch a single handoff by id.
+ *
+ * FIX-023 — display/lookup consistency: the list view renders the 8-char
+ * prefix `[${id.slice(0, 8)}]` (kept: it is compact and matches the short-code
+ * convention used across the other read tools). The entity now resolves a
+ * unique short prefix back to the full UUID, so an id copied from the list is
+ * directly usable here. The detail summary is rendered from the RESOLVED
+ * `handoff.id` (not the raw input) so the prefix shown always corresponds to
+ * the canonical row, even when a longer prefix or the full UUID was supplied.
  */
 function coreDetail(id: string, json: boolean, storage: SQLiteStore): McpResponse {
 	const handoff = storage.handoffs.getHandoffById(id);
@@ -91,7 +99,7 @@ function coreDetail(id: string, json: boolean, storage: SQLiteStore): McpRespons
 	}
 
 	const excerpt = handoff.summary.length > 60 ? handoff.summary.slice(0, 60) + "..." : handoff.summary;
-	const contentSummary = `Handoff [${id.slice(0, 8)}] "${excerpt}" — ${handoff.from_agent}→${handoff.to_agent || "unassigned"} (${handoff.status})`;
+	const contentSummary = `Handoff [${handoff.id.slice(0, 8)}] "${excerpt}" — ${handoff.from_agent}→${handoff.to_agent || "unassigned"} (${handoff.status})`;
 
 	return createMcpResponse(withEnvelope("handoff-read", "detail", handoff), contentSummary, {
 		contentSummary,

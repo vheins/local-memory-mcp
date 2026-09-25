@@ -169,20 +169,27 @@ async function coreUpdate(
 	}
 	const status = statusResult.data;
 
-	const existing = storage.handoffs.getHandoffById(params.id);
+	// FIX-023: resolve a short-id prefix (as displayed by handoff-read's list
+	// view) to the full UUID once, then use the canonical id for the existence
+	// check, the UPDATE, and the follow-up read. An ambiguous prefix throws
+	// AmbiguousHandoffError (ToolError) from the entity — the transport
+	// surfaces it verbatim instead of silently picking one match.
+	const resolvedId = storage.handoffs.resolveHandoffId(params.id);
+
+	const existing = storage.handoffs.getHandoffById(resolvedId);
 	if (!existing) {
 		throw new Error(`Handoff not found: ${params.id}`);
 	}
 
-	const success = storage.handoffs.updateHandoffStatus(params.id, status);
+	const success = storage.handoffs.updateHandoffStatus(resolvedId, status);
 	if (!success) {
 		throw new Error(`Failed to update handoff: ${params.id}`);
 	}
 
-	const updated = storage.handoffs.getHandoffById(params.id);
+	const updated = storage.handoffs.getHandoffById(resolvedId);
 	const result = {
 		success,
-		id: params.id,
+		id: resolvedId,
 		status,
 		handoff: updated
 	};
@@ -193,12 +200,12 @@ async function coreUpdate(
 		let comment: string;
 		if (status === "accepted") {
 			const steps = extractNextSteps(existing.context as Record<string, unknown>);
-			comment = `Handoff [${params.id.slice(0, 8)}] accepted by ${updated.to_agent || existing.from_agent}.`;
+			comment = `Handoff [${resolvedId.slice(0, 8)}] accepted by ${updated.to_agent || existing.from_agent}.`;
 			if (steps) {
 				comment += ` Next steps: ${steps}`;
 			}
 		} else {
-			comment = `Handoff [${params.id.slice(0, 8)}] ${status}`;
+			comment = `Handoff [${resolvedId.slice(0, 8)}] ${status}`;
 		}
 		try {
 			storage.taskComments.insertTaskComment({
@@ -217,18 +224,18 @@ async function coreUpdate(
 		} catch (e) {
 			logger.error("[Tool] handoff.write — task comment failed (handoff already committed)", {
 				repo: updated.repo,
-				handoffId: params.id,
+				handoffId: resolvedId,
 				status,
 				error: String(e)
 			});
 			storage.actions.logAction("handoff-comment-fail", updated.owner, updated.repo, {
-				query: `handoff ${params.id.slice(0, 8)} — status-change comment failed`
+				query: `handoff ${resolvedId.slice(0, 8)} — status-change comment failed`
 			});
 		}
 	}
 
 	const excerpt = existing.summary.length > 50 ? existing.summary.slice(0, 50) + "..." : existing.summary;
-	const contentSummary = `Updated [${params.id.slice(0, 8)}] "${excerpt}" in "${existing.repo}" — ${existing.status} → ${status}.`;
+	const contentSummary = `Updated [${resolvedId.slice(0, 8)}] "${excerpt}" in "${existing.repo}" — ${existing.status} → ${status}.`;
 
 	return { result, contentSummary };
 }

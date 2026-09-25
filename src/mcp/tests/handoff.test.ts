@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { SQLiteStore, createTestStore } from "../storage/sqlite";
-import { HandoffEntity } from "../entities/handoff";
+import { HandoffEntity, AmbiguousHandoffError } from "../entities/handoff";
 
 describe("Handoff and Claim Storage", () => {
 	let store: SQLiteStore;
@@ -56,6 +56,123 @@ describe("Handoff and Claim Storage", () => {
 
 			const updated = handoffs.getHandoffById(handoff.id);
 			expect(updated?.status).toBe("accepted");
+		});
+
+		// FIX-023: short-id prefix resolution — the list view renders an 8-char
+		// prefix, so lookup by that prefix must resolve the same row.
+		describe("short-id prefix resolution (FIX-023)", () => {
+			const NOW = "2024-01-01T00:00:00.000Z";
+
+			/** Insert a handoff row with an explicit id (createHandoff uses randomUUID). */
+			function insertWithId(id: string, summary = "seeded"): void {
+				store.db
+					.prepare(
+						`INSERT INTO handoffs (id, owner, repo, from_agent, to_agent, task_id, summary, context, status, created_at, updated_at, expires_at)
+						 VALUES (?, 'test', 'test-repo', 'agent-a', NULL, NULL, ?, '{}', 'pending', ?, ?, NULL)`
+					)
+					.run(id, summary, NOW, NOW);
+			}
+
+			it("positive: a unique 8-char prefix resolves to the handoff", () => {
+				const handoff = handoffs.createHandoff({
+					owner: "test",
+					repo: "test-repo",
+					from_agent: "agent-a",
+					summary: "prefix resolution"
+				});
+				const prefix = handoff.id.slice(0, 8);
+
+				const resolved = handoffs.getHandoffById(prefix);
+				expect(resolved).not.toBeNull();
+				expect(resolved?.id).toBe(handoff.id);
+				expect(resolved?.summary).toBe("prefix resolution");
+			});
+
+			it("positive: resolveHandoffId returns the full id for a unique prefix", () => {
+				const handoff = handoffs.createHandoff({
+					owner: "test",
+					repo: "test-repo",
+					from_agent: "agent-a",
+					summary: "resolve id"
+				});
+				expect(handoffs.resolveHandoffId(handoff.id.slice(0, 8))).toBe(handoff.id);
+			});
+
+			it("positive: full UUID lookup is unchanged", () => {
+				const handoff = handoffs.createHandoff({
+					owner: "test",
+					repo: "test-repo",
+					from_agent: "agent-a",
+					summary: "full uuid"
+				});
+				expect(handoffs.resolveHandoffId(handoff.id)).toBe(handoff.id);
+				expect(handoffs.getHandoffById(handoff.id)?.id).toBe(handoff.id);
+			});
+
+			it("negative: an ambiguous prefix throws AmbiguousHandoffError listing candidates", () => {
+				const a = "abcdef01-1111-4111-8111-111111111111";
+				const b = "abcdef01-2222-4222-8222-222222222222";
+				insertWithId(a, "first");
+				insertWithId(b, "second");
+
+				expect(() => handoffs.getHandoffById("abcdef01")).toThrowError(AmbiguousHandoffError);
+				try {
+					handoffs.getHandoffById("abcdef01");
+					throw new Error("expected AmbiguousHandoffError");
+				} catch (err) {
+					expect(err).toBeInstanceOf(AmbiguousHandoffError);
+					const ambiguous = err as AmbiguousHandoffError;
+					expect(ambiguous.code).toBe("AMBIGUOUS_ID");
+					expect(ambiguous.matches).toEqual([a, b]);
+					expect(ambiguous.message).toContain(a);
+					expect(ambiguous.message).toContain(b);
+				}
+			});
+
+			it("negative: an unknown prefix returns null (not-found)", () => {
+				handoffs.createHandoff({
+					owner: "test",
+					repo: "test-repo",
+					from_agent: "agent-a",
+					summary: "only one"
+				});
+				expect(handoffs.getHandoffById("deadbeef")).toBeNull();
+				expect(handoffs.resolveHandoffId("deadbeef")).toBe("deadbeef");
+			});
+
+			it("positive: updateHandoffStatus accepts a unique short-id prefix", () => {
+				const handoff = handoffs.createHandoff({
+					owner: "test",
+					repo: "test-repo",
+					from_agent: "agent-a",
+					summary: "update by prefix"
+				});
+				const success = handoffs.updateHandoffStatus(handoff.id.slice(0, 8), "accepted");
+				expect(success).toBe(true);
+				expect(handoffs.getHandoffById(handoff.id)?.status).toBe("accepted");
+			});
+
+			it("negative: updateHandoffStatus on an ambiguous prefix throws before writing", () => {
+				const a = "fade0001-1111-4111-8111-111111111111";
+				const b = "fade0001-2222-4222-8222-222222222222";
+				insertWithId(a);
+				insertWithId(b);
+
+				expect(() => handoffs.updateHandoffStatus("fade0001", "accepted")).toThrowError(AmbiguousHandoffError);
+				expect(handoffs.getHandoffById(a)?.status).toBe("pending");
+				expect(handoffs.getHandoffById(b)?.status).toBe("pending");
+			});
+
+			it("negative: a non-hex string is not prefix-resolved (exact miss → null)", () => {
+				handoffs.createHandoff({
+					owner: "test",
+					repo: "test-repo",
+					from_agent: "agent-a",
+					summary: "wildcard guard"
+				});
+				// A '%' wildcard must not broaden into a match.
+				expect(handoffs.getHandoffById("%")).toBeNull();
+			});
 		});
 	});
 

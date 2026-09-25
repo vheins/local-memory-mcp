@@ -123,6 +123,148 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 		expect(updateRes.structuredContent.status).toBe("expired");
 	});
 
+	// FIX-023: handoff-read displays an 8-char id prefix in list output; a
+	// client copying that prefix back into handoff-read/handoff-write must
+	// resolve it rather than failing with "Handoff not found".
+	describe("short-id prefix resolution (FIX-023)", () => {
+		it("positive: handoff-read detail resolves the 8-char prefix shown in the list", async () => {
+			const createRes = await router("tools/call", {
+				name: "handoff-write",
+				arguments: {
+					repo: REPO,
+					owner: "test",
+					from_agent: "agent-a",
+					to_agent: "agent-b",
+					summary: "Detail by short id prefix",
+					context: { next_steps: ["Resolve the prefix"] }
+				}
+			});
+			const fullId = createRes.structuredContent.id as string;
+			const prefix = fullId.slice(0, 8);
+
+			const detailRes = await router("tools/call", {
+				name: "handoff-read",
+				arguments: { repo: REPO, owner: "test", id: prefix }
+			});
+
+			expect(detailRes.isError).toBeFalsy();
+			expect(detailRes.structuredContent.schema).toBe("handoff-read");
+			expect(detailRes.structuredContent.mode).toBe("detail");
+			expect(detailRes.structuredContent.id).toBe(fullId);
+			expect(detailRes.structuredContent.summary).toBe("Detail by short id prefix");
+			// The rendered summary uses the canonical id prefix.
+			expect(getPrimaryTextContent(detailRes)).toContain(`[${prefix}]`);
+		});
+
+		it("positive: full-UUID detail lookup is unchanged", async () => {
+			const createRes = await router("tools/call", {
+				name: "handoff-write",
+				arguments: {
+					repo: REPO,
+					owner: "test",
+					from_agent: "agent-a",
+					summary: "Detail by full uuid",
+					context: { blockers: ["none"] }
+				}
+			});
+			const fullId = createRes.structuredContent.id as string;
+
+			const detailRes = await router("tools/call", {
+				name: "handoff-read",
+				arguments: { repo: REPO, owner: "test", id: fullId }
+			});
+			expect(detailRes.isError).toBeFalsy();
+			expect(detailRes.structuredContent.id).toBe(fullId);
+		});
+
+		it("positive: handoff-write accepts/updates status by the short id prefix", async () => {
+			const createRes = await router("tools/call", {
+				name: "handoff-write",
+				arguments: {
+					repo: REPO,
+					owner: "test",
+					from_agent: "agent-a",
+					to_agent: "agent-b",
+					summary: "Accept by short id prefix",
+					context: { next_steps: ["Ship it"] }
+				}
+			});
+			const fullId = createRes.structuredContent.id as string;
+			const prefix = fullId.slice(0, 8);
+
+			const updateRes = await router("tools/call", {
+				name: "handoff-write",
+				arguments: { id: prefix, status: "accepted" }
+			});
+
+			expect(updateRes.isError).toBeFalsy();
+			expect(updateRes.structuredContent.success).toBe(true);
+			expect(updateRes.structuredContent.status).toBe("accepted");
+			expect(updateRes.structuredContent.id).toBe(fullId);
+			expect(db.handoffs.getHandoffById(fullId)?.status).toBe("accepted");
+		});
+
+		it("negative: an unknown prefix returns a not-found error", async () => {
+			const res = await router("tools/call", {
+				name: "handoff-read",
+				arguments: { repo: REPO, owner: "test", id: "deadbeef" }
+			});
+			expect(res.isError).toBe(true);
+			expect(getPrimaryTextContent(res)).toContain("Handoff not found: deadbeef");
+		});
+
+		it("negative: an ambiguous prefix returns a clear ambiguity error naming matches", async () => {
+			const a = "feed0001-1111-4111-8111-111111111111";
+			const b = "feed0001-2222-4222-8222-222222222222";
+			const NOW = "2024-01-01T00:00:00.000Z";
+			for (const id of [a, b]) {
+				db.db
+					.prepare(
+						`INSERT INTO handoffs (id, owner, repo, from_agent, to_agent, task_id, summary, context, status, created_at, updated_at, expires_at)
+						 VALUES (?, 'test', ?, 'agent-a', NULL, NULL, 'seeded', '{}', 'pending', ?, ?, NULL)`
+					)
+					.run(id, REPO, NOW, NOW);
+			}
+
+			const res = await router("tools/call", {
+				name: "handoff-read",
+				arguments: { repo: REPO, owner: "test", id: "feed0001" }
+			});
+
+			expect(res.isError).toBe(true);
+			const text = getPrimaryTextContent(res);
+			expect(text).toContain("Ambiguous handoff id");
+			expect(text).toContain(a);
+			expect(text).toContain(b);
+			expect(res.structuredContent.code).toBe("AMBIGUOUS_ID");
+		});
+
+		it("negative: an ambiguous prefix blocks handoff-write status updates", async () => {
+			const a = "beef0001-1111-4111-8111-111111111111";
+			const b = "beef0001-2222-4222-8222-222222222222";
+			const NOW = "2024-01-01T00:00:00.000Z";
+			for (const id of [a, b]) {
+				db.db
+					.prepare(
+						`INSERT INTO handoffs (id, owner, repo, from_agent, to_agent, task_id, summary, context, status, created_at, updated_at, expires_at)
+						 VALUES (?, 'test', ?, 'agent-a', NULL, NULL, 'seeded', '{}', 'pending', ?, ?, NULL)`
+					)
+					.run(id, REPO, NOW, NOW);
+			}
+
+			const res = await router("tools/call", {
+				name: "handoff-write",
+				arguments: { id: "beef0001", status: "accepted" }
+			});
+
+			expect(res.isError).toBe(true);
+			expect(getPrimaryTextContent(res)).toContain("Ambiguous handoff id");
+			// No row was mutated by the ambiguous update.
+			expect(db.handoffs.getHandoffById(a)?.status).toBe("pending");
+			expect(db.handoffs.getHandoffById(b)?.status).toBe("pending");
+		});
+	});
+
 	it("claims a task by task_code via MCP tool", async () => {
 		await router("tools/call", {
 			name: "task-write",
