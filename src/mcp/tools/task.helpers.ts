@@ -6,6 +6,67 @@ import { TASK_ARCHIVE_AGGREGATE_MAX_CHARS, TASK_ARCHIVE_TTL_DAYS } from "../util
 import { handleMemoryWrite } from "./memory-write";
 
 /**
+ * Builds the caller-actionable VALIDATION_ERROR for a task reference
+ * (parent_id / depends_on) that names a task which does not exist.
+ * `classifyExpectedError` (utils/mcp-error.ts) maps this message to
+ * VALIDATION_ERROR via the `references '<x>' which does not exist` pattern.
+ */
+function missingReferenceError(field: "parent_id" | "depends_on", value: string, owner: string, repo: string): Error {
+	return new Error(
+		`${field} references '${value}' which does not exist in ${owner}/${repo}. Create the referenced task first or remove the reference.`
+	);
+}
+
+/**
+ * Resolves a task reference (UUID or code) to a UUID and verifies the target
+ * task actually exists in scope (FIX-024).
+ *
+ * `resolveEntityRef` returns a well-formed UUID as-is WITHOUT a DB lookup, so a
+ * reference to a task that does not exist previously reached SQLite and
+ * surfaced as a raw `FOREIGN KEY constraint failed`. This pre-check turns that
+ * into a caller-actionable VALIDATION_ERROR naming the missing reference. The
+ * FK remains in place as a last-resort integrity net — this is a pre-check,
+ * not a constraint removal.
+ *
+ * The optional `localCodeMap` is checked first for cross-references within the
+ * same batch (bulk create); a sibling whose row has not been inserted yet is
+ * still reported as missing because the FK would reject it too.
+ */
+function resolveTaskReference(
+	field: "parent_id" | "depends_on",
+	value: string | null | undefined,
+	owner: string,
+	repo: string,
+	storage: SQLiteStore,
+	localCodeMap?: Map<string, string>
+): string | null {
+	if (!value) return null;
+
+	let id: string | null;
+	try {
+		id = resolveEntityRef(storage, "task", value, owner, repo, { localMap: localCodeMap });
+	} catch (err) {
+		// FIX-021: keep the actionable orchestrator-placeholder error as-is
+		// (an unsubstituted template token, not a genuinely missing reference).
+		if (err instanceof Error && /unsubstituted orchestrator template placeholder/i.test(err.message)) {
+			throw err;
+		}
+		// A code that does not resolve to any task in scope.
+		throw missingReferenceError(field, value, owner, repo);
+	}
+
+	if (!id) return null;
+
+	// The UUID branch of resolveEntityRef does not hit the DB — verify existence
+	// (also covers a localMap id whose sibling row is not inserted yet).
+	if (!storage.tasks.getTaskById(id)) {
+		throw missingReferenceError(field, value, owner, repo);
+	}
+
+	return id;
+}
+
+/**
  * Resolves a parent_id value that is either a UUID or a task_code string.
  * Returns the resolved UUID, or throws if the task cannot be found.
  * An optional localCodeMap is checked first for cross-references within the same batch.
@@ -17,7 +78,7 @@ export function resolveParentId(
 	storage: SQLiteStore,
 	localCodeMap?: Map<string, string>
 ): string | null {
-	return resolveEntityRef(storage, "task", value, owner, repo, { localMap: localCodeMap });
+	return resolveTaskReference("parent_id", value, owner, repo, storage, localCodeMap);
 }
 
 export function resolveDependsOn(
@@ -27,7 +88,7 @@ export function resolveDependsOn(
 	storage: SQLiteStore,
 	localCodeMap?: Map<string, string>
 ): string | null {
-	return resolveEntityRef(storage, "task", value, owner, repo, { localMap: localCodeMap });
+	return resolveTaskReference("depends_on", value, owner, repo, storage, localCodeMap);
 }
 
 export function deriveTaskStatusTimestamps(status: TaskStatus, now: string, existingTask?: { status: TaskStatus }) {

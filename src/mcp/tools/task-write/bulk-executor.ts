@@ -108,6 +108,31 @@ export async function executeBulkOperation(
 					throw new Error("No updatable fields provided for update item");
 				}
 
+				// FIX-024: resolve + pre-validate parent_id/depends_on references
+				// (UUID or code) before the DB transaction. Without this a
+				// non-existent reference reached SQLite as a raw FOREIGN KEY
+				// error; a valid CODE reference was also never resolved, so it
+				// failed the FK too. resolveParentId/resolveDependsOn throw a
+				// caller-actionable VALIDATION_ERROR naming the missing task.
+				if (itemUpdates.parent_id !== undefined) {
+					itemUpdates.parent_id = resolveParentId(
+						itemUpdates.parent_id as string | null | undefined,
+						owner,
+						repo,
+						storage,
+						localCodeMap
+					);
+				}
+				if (itemUpdates.depends_on !== undefined) {
+					itemUpdates.depends_on = resolveDependsOn(
+						itemUpdates.depends_on as string | null | undefined,
+						owner,
+						repo,
+						storage,
+						localCodeMap
+					);
+				}
+
 				// Handle status transition
 				if (itemUpdates.status !== undefined && itemUpdates.status !== existing.status) {
 					const err = validateStatusTransition(

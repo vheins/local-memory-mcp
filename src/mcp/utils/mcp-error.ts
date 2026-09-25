@@ -168,7 +168,14 @@ function classifyExpectedError(error: Error): {
 		// ("'T01' looks like an unsubstituted orchestrator template
 		// placeholder…") is a caller-actionable request-shape error — surface
 		// the real message under VALIDATION_ERROR instead of masking it.
-		/\bunsubstituted orchestrator template placeholder\b/i.test(error.message)
+		/\bunsubstituted orchestrator template placeholder\b/i.test(error.message) ||
+		// FIX-024: a task-write parent_id/depends_on reference to a task that
+		// does not exist ("parent_id references 'FIX-559-2' which does not
+		// exist in owner/repo") is a caller-actionable request-shape error —
+		// surface the real message under VALIDATION_ERROR. The bulk path
+		// re-wraps the item error into a plain Error with the same message, so
+		// classifying by message keeps both transports consistent.
+		/\breferences '[^']*' which does not exist\b/i.test(error.message)
 	) {
 		return { code: "VALIDATION_ERROR", message: error.message, retryable: false };
 	}
