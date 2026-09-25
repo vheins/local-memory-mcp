@@ -103,7 +103,7 @@ describe("bugCapture scope attribution (TASK-421)", () => {
 		bugCapture.capture({
 			source: "tool",
 			message: "boom",
-			context: { owner: "vheins", repo: "local-memory-mcp", sessionId: "sess-1", token: "super-secret" }
+			context: { owner: "vheins", repo: "local-memory-mcp", sessionId: "sess-1", token: "example-token" }
 		});
 
 		const [row] = store.bugReports.list();
