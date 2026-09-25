@@ -132,7 +132,7 @@
 		"tsx": "^4.21.0",
 		"typescript-eslint": "^8.58.1",
 		"vite": "^8.0.6",
-		"vitest": "^4.1.11"
+		"vitest": "^5.0.1"
 	},
 	"overrides": {
 		"protobufjs": "^7.6.5",
