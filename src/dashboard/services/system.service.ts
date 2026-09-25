@@ -139,6 +139,9 @@ export const SystemService = {
 			toolOutcomes: snapshot.toolOutcomes,
 			writeHandler: snapshot.writeHandler,
 			embedLatency: snapshot.embedLatency,
+			// FIX-034: discrete startup-event counters (semantic warm-up /
+			// auto-index failures) so a degraded-but-ready boot is observable.
+			counters: snapshot.counters,
 			worker,
 			reuse
 		};

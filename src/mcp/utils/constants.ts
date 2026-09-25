@@ -219,6 +219,18 @@ export const EMBEDDING_ONNX_THREADS = Math.max(1, envInt("EMBEDDING_ONNX_THREADS
 // first claimed batch. Output-neutral: the same model, loaded later, so every
 // embedding/indexing behavior is preserved while an idle daemon stays lean.
 export const EMBEDDING_LAZY_WARMUP = envBool("EMBEDDING_LAZY_WARMUP", false);
+
+// Wall-clock ceiling (ms) for the `full`-profile eager semantic (ONNX) warm-up
+// at startup (FIX-034). The historical hard-coded 30s cap was exceeded on large
+// DBs (the reported deployment ran a ~897 MB `codebase.db` and a ~2.7 GB
+// `memory.db`) and surfaced as `Semantic warm-up timed out after 30s`, which
+// aborted first tool calls. The warm-up is now BOTH env-configurable AND
+// non-fatal + deferred (see services/startup-warmup.ts): a timeout only logs a
+// degraded notice, the server keeps serving, and semantic features stay lazily
+// available (they load on first use). Env-overridable so operators can widen it
+// for slow disks; `0` disables the cap entirely (wait for the load to settle).
+export const SEMANTIC_WARMUP_TIMEOUT_MS = envInt("SEMANTIC_WARMUP_TIMEOUT_MS", 30_000);
+
 // Idle poll interval for the in-process lease worker.
 export const EMBEDDING_QUEUE_POLL_INTERVAL_MS = envInt("EMBEDDING_QUEUE_POLL_INTERVAL_MS", 500);
 // Idle backoff ceiling: when the queue is empty the poll interval grows

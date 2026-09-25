@@ -45,7 +45,8 @@ import { bugCapture } from "../utils/bug-capture";
 import { reuseTelemetry } from "../utils/reuse-telemetry";
 import { runStartupMaintenance } from "../services/maintenance-job";
 import { runStartupVacuum } from "../services/vacuum";
-import { VACUUM_ON_STARTUP } from "../utils/constants";
+import { scheduleDeferredSemanticWarmup } from "../services/startup-warmup";
+import { EMBEDDING_LAZY_WARMUP, VACUUM_ON_STARTUP } from "../utils/constants";
 import { autoIndexIfStale } from "../codebase-index/services/indexing-service";
 import { evaluateAutoIndexTarget } from "../codebase-index/services/project-detection";
 import { getCodebaseParserPool } from "../codebase-index/parser/singleton";
@@ -293,6 +294,14 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
 	// --- Warm up the runtime engines (full profile only), mirrors server.ts ---
 	if (enableEngines && runtimeCapabilities.profile === "full") {
 		void runtimeCapabilities.ensure("maintenance");
+
+		// FIX-034: eager semantic (ONNX) warm-up, now DEFERRED until after the
+		// listener is ready (this code runs post-`listen`) and NON-FATAL — a
+		// timeout/load failure logs one WARN + bumps a counter and the server
+		// keeps serving; semantic loads lazily on first use. Mirrors server.ts.
+		if (!EMBEDDING_LAZY_WARMUP) {
+			scheduleDeferredSemanticWarmup(runtimeCapabilities);
+		}
 
 		if (process.env.CODEBASE_AUTO_INDEX !== "false") {
 			// GUARD (project detection): the daemon auto-indexes its CWD, and

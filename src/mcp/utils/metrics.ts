@@ -19,6 +19,14 @@
 /** Caps the number of samples retained per series (drives percentile math). */
 const MAX_SAMPLES = 1_000;
 
+/**
+ * Counter names for the discrete startup events FIX-034 makes observable.
+ * Exported so call sites (startup warm-up, auto-index isolation) and tests
+ * share one spelling instead of stringly-duplicating it.
+ */
+export const METRIC_SEMANTIC_WARMUP_FAILURES = "semantic_warmup_failures";
+export const METRIC_AUTOINDEX_FAILURES = "autoindex_failures";
+
 export interface DurationStats {
 	/** Number of recorded samples. */
 	count: number;
@@ -160,6 +168,12 @@ export interface MetricsSnapshot {
 	writeHandler: WriteHandlerSnapshot;
 	/** Embedding batch latency (embedding-queue/worker.ts). */
 	embedLatency: DurationStats;
+	/**
+	 * Monotonic event counters keyed by metric name (FIX-034). Used for
+	 * discrete non-latency events (e.g. `semantic_warmup_failures`,
+	 * `autoindex_failures`) where a duration distribution is meaningless.
+	 */
+	counters: Record<string, number>;
 }
 
 export class MetricsRegistry {
@@ -168,6 +182,7 @@ export class MetricsRegistry {
 	private readonly writeHandlerTotal = new DurationSeries();
 	private readonly writeHandlerByTool = new Map<string, DurationSeries>();
 	private readonly embedLatency = new DurationSeries();
+	private readonly counters = new Map<string, number>();
 
 	private seriesFor(map: Map<string, DurationSeries>, key: string): DurationSeries {
 		let series = map.get(key);
@@ -204,6 +219,22 @@ export class MetricsRegistry {
 		this.embedLatency.add(ms);
 	}
 
+	/**
+	 * Increment a monotonic event counter by `delta` (default 1). Counters are
+	 * for discrete events where latency is irrelevant (FIX-034: warm-up and
+	 * auto-index failures). Negative/zero deltas are ignored so a counter can
+	 * never move backwards.
+	 */
+	incrementCounter(name: string, delta = 1): void {
+		if (delta <= 0) return;
+		this.counters.set(name, (this.counters.get(name) ?? 0) + delta);
+	}
+
+	/** Read a counter's current value (0 when never incremented). */
+	getCounter(name: string): number {
+		return this.counters.get(name) ?? 0;
+	}
+
 	/** Serialized current view of all tracked metrics. */
 	snapshot(): MetricsSnapshot {
 		const writeHandlerByTool: Record<string, DurationStats> = {};
@@ -224,7 +255,8 @@ export class MetricsRegistry {
 				total: this.writeHandlerTotal.snapshot(),
 				byTool: writeHandlerByTool
 			},
-			embedLatency: this.embedLatency.snapshot()
+			embedLatency: this.embedLatency.snapshot(),
+			counters: Object.fromEntries(this.counters)
 		};
 	}
 
@@ -237,6 +269,7 @@ export class MetricsRegistry {
 		this.writeHandlerByTool.clear();
 		this.writeHandlerTotal.reset();
 		this.embedLatency.reset();
+		this.counters.clear();
 	}
 }
 

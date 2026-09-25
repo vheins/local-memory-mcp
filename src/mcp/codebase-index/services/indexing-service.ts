@@ -12,13 +12,13 @@
 
 import type { SQLiteStore } from "../../storage/sqlite";
 import type { ParserPool } from "../parser";
-import { logger } from "../../utils/logger";
 
 // Import from sub-modules
 import { CodebaseIndexServiceImpl, type CodebaseIndexService } from "./indexing-repository";
 
 import { indexingRepos, getLastIndexedAt } from "./indexing-cache";
 import { TTL_MS_PER_DAY } from "../../utils/constants";
+import { containIndexRepositoryFailure } from "./auto-index-guard";
 
 // ── Re-exports (preserving existing public API) ────────────────────────
 
@@ -113,13 +113,17 @@ export async function autoIndexIfStale(
 	// ── Trigger background indexing ──────────────────────────────────
 	// Fire and forget — don't await the full index (it may take minutes).
 	// The module-level `indexingRepos` set prevents concurrent indexing of the same repo.
-	const service = createCodebaseIndexService(db, parserPool);
-	void service.indexRepository(repo, repoPath).catch((err) => {
-		logger.warn("[AutoIndex] indexRepository threw", {
-			repo,
-			error: String(err)
-		});
-	});
+	//
+	// FIX-034: the background run is CONTAINED — a throw (async rejection or a
+	// synchronous one from service construction) is logged once per repo and
+	// counted, and can never escape into the caller's startup path. See
+	// auto-index-guard.ts.
+	try {
+		const service = createCodebaseIndexService(db, parserPool);
+		void containIndexRepositoryFailure(repo, service.indexRepository(repo, repoPath));
+	} catch (err) {
+		containIndexRepositoryFailure(repo, Promise.reject(err));
+	}
 
 	return {
 		status: "started",

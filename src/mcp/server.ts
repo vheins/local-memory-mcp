@@ -18,6 +18,7 @@ import { bugCapture } from "./utils/bug-capture";
 import { reuseTelemetry } from "./utils/reuse-telemetry";
 import { runStartupMaintenance } from "./services/maintenance-job";
 import { runStartupVacuum } from "./services/vacuum";
+import { scheduleDeferredSemanticWarmup } from "./services/startup-warmup";
 import { EMBEDDING_LAZY_WARMUP, VACUUM_ON_STARTUP } from "./utils/constants";
 import { runCliIndex } from "./codebase-index/cli";
 import { autoIndexIfStale } from "./codebase-index/services/indexing-service";
@@ -239,18 +240,16 @@ logger.info("[Server] startup", {
 // worker's first claimed batch). The worker ENGINE still starts so startup
 // reconcile/backfill/purge and the poll loop are unaffected. Default (false)
 // preserves eager warm-up.
+//
+// FIX-034: the eager warm-up is DEFERRED until AFTER the listener is ready
+// (scheduled at the bottom, next to `serverStarted = true`) and is NON-FATAL.
+// Previously it was awaited INLINE here against a hard-coded 30s cap, which on
+// a large DB (~897 MB codebase.db / ~2.7 GB memory.db) both exceeded the cap
+// (`Semantic warm-up timed out after 30s`) and sat on the critical path to the
+// first tool call. See services/startup-warmup.ts.
 if (runtimeCapabilities.profile === "full") {
 	if (EMBEDDING_LAZY_WARMUP) {
 		embeddingWorker.start();
-	} else {
-		try {
-			await Promise.race([
-				runtimeCapabilities.ensure("semantic"),
-				new Promise((_, reject) => setTimeout(() => reject(new Error("Semantic warm-up timed out after 30s")), 30000))
-			]);
-		} catch (error) {
-			logger.warn("[Server] Semantic warm-up failed. Will retry on first use.", { error: String(error) });
-		}
 	}
 	void runtimeCapabilities.ensure("maintenance");
 }
@@ -361,4 +360,14 @@ if (transportMode === "http") {
 	}
 } else {
 	handle = serveStdio(createServerFactory(db, vectors, "stdio"));
+}
+
+// FIX-034: schedule the eager semantic (ONNX) warm-up ONLY NOW that the
+// listener is ready (the HTTP listener is bound / the stdio server is serving),
+// and on the next `setImmediate` tick — mirroring FIX-025's deferral of the
+// embedding backfill. The warm-up is non-fatal (see services/startup-warmup.ts):
+// a timeout or load failure logs one WARN and bumps a counter, but never blocks
+// or aborts startup — the capability still loads lazily on first semantic use.
+if (runtimeCapabilities.profile === "full" && !EMBEDDING_LAZY_WARMUP) {
+	scheduleDeferredSemanticWarmup(runtimeCapabilities);
 }

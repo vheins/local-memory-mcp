@@ -140,4 +140,30 @@ describe("MetricsRegistry", () => {
 		expect(snap.embedLatency.count).toBe(1);
 		expect(snap.tools["agent-context"].count).toBe(1);
 	});
+
+	it("increments named event counters and exposes them in the snapshot (FIX-034)", () => {
+		const reg = createMetricsRegistry();
+		reg.incrementCounter("semantic_warmup_failures");
+		reg.incrementCounter("semantic_warmup_failures", 2);
+		reg.incrementCounter("autoindex_failures");
+
+		expect(reg.getCounter("semantic_warmup_failures")).toBe(3);
+		expect(reg.snapshot().counters).toEqual({ semantic_warmup_failures: 3, autoindex_failures: 1 });
+	});
+
+	it("ignores non-positive counter deltas so a counter never moves backwards (negative)", () => {
+		const reg = createMetricsRegistry();
+		reg.incrementCounter("c", 5);
+		reg.incrementCounter("c", 0);
+		reg.incrementCounter("c", -3);
+		expect(reg.getCounter("c")).toBe(5);
+	});
+
+	it("reset() clears counters too", () => {
+		const reg = createMetricsRegistry();
+		reg.incrementCounter("c", 4);
+		reg.reset();
+		expect(reg.getCounter("c")).toBe(0);
+		expect(reg.snapshot().counters).toEqual({});
+	});
 });
