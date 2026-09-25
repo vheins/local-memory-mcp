@@ -89,6 +89,12 @@ export interface IndexResult {
 	skippedByMtime: number;
 	skippedByExtension: number;
 	skippedByGitignore: number;
+	/**
+	 * Root-relative paths of directories skipped because they could not be
+	 * read (EACCES/EPERM/ENOENT) during discovery (FIX-031). Informational —
+	 * the index still completes.
+	 */
+	skippedDirectories: string[];
 	/** Number of files detected as renames (old path → new path, same content). */
 	renamedFiles: number;
 	/** Structured error classification summary. */
@@ -156,7 +162,8 @@ export async function performIndexRepository(
 			repo,
 			filesFound: discoveredFiles.length,
 			skippedByExt: discoverResult.skippedByExtension,
-			skippedByGitignore: discoverResult.skippedByGitignore
+			skippedByGitignore: discoverResult.skippedByGitignore,
+			skippedDirs: discoverResult.skippedDirectories.length
 		});
 
 		// ═══ 2. COMPARE (delegate to planner) ═══
@@ -242,6 +249,7 @@ export async function performIndexRepository(
 			skippedByMtime,
 			skippedByExtension: discoverResult.skippedByExtension,
 			skippedByGitignore: discoverResult.skippedByGitignore,
+			skippedDirectories: discoverResult.skippedDirectories,
 			renamedFiles: pipeline.renamedFiles,
 			errorSummary: {
 				total: errors.length,

@@ -64,6 +64,12 @@ export interface DiscoverFilesResult {
 	skippedByExtension: number;
 	/** Files skipped due to gitignore rule match. */
 	skippedByGitignore: number;
+	/**
+	 * Root-relative paths of directories skipped because they could not be
+	 * read (EACCES/EPERM/ENOENT). Discovery continues past them; this is the
+	 * skip summary, not an error list (FIX-031).
+	 */
+	skippedDirectories: string[];
 	/** Wall-clock duration of the discovery in milliseconds. */
 	durationMs: number;
 	/** Non-fatal per-file errors (e.g. permission denied). */

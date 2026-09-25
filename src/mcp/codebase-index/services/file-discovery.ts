@@ -14,6 +14,76 @@ import ignoreLib from "ignore";
 import { logger } from "../../utils/logger";
 import type { DiscoveredFile, DiscoverFilesResult, DiscoveryError, FileDiscoveryOptions } from "../types";
 
+// ── Unreadable-directory handling (FIX-031) ───────────────────────────
+
+/**
+ * Errno codes that mean a directory could not be read. On a real filesystem
+ * many directories are legitimately unreadable (protected dotfiles, sockets,
+ * root-owned paths, or a directory removed mid-walk). None of these should
+ * abort discovery — the directory is skipped and reported in the summary.
+ */
+const UNREADABLE_DIR_ERRNO: ReadonlySet<string> = new Set(["EACCES", "EPERM", "ENOENT"]);
+
+/** True when a `readdir` failure means "skip this directory", not "fail the scan". */
+function isUnreadableDirError(error: NodeJS.ErrnoException | null | undefined): boolean {
+	return error != null && typeof error.code === "string" && UNREADABLE_DIR_ERRNO.has(error.code);
+}
+
+/**
+ * Collects the distinct absolute paths of directories skipped because they
+ * could not be read. Deduplicated across the gitignore scan, the main walk,
+ * and the allowlisted dot-directory walk.
+ */
+class SkippedDirectoryTracker {
+	private readonly paths = new Set<string>();
+
+	record(directoryPath: string): void {
+		this.paths.add(directoryPath);
+	}
+
+	get count(): number {
+		return this.paths.size;
+	}
+
+	/** Sorted, root-relative paths for the discovery summary. */
+	relativePaths(root: string): string[] {
+		return [...this.paths].map((p) => path.relative(root, p) || p).sort();
+	}
+}
+
+/**
+ * Build a fast-glob file-system adapter that intercepts directory reads and
+ * records any directory that cannot be read (EACCES/EPERM/ENOENT), while
+ * forwarding the error unchanged so fast-glob's `suppressErrors` handling
+ * still skips it. The adapter is the only place a `readdir` failure is
+ * observed, so the discovery summary can report skipped dirs instead of
+ * surfacing per-path errors (FIX-031).
+ */
+function createScanFsAdapter(tracker: SkippedDirectoryTracker): Partial<fg.FileSystemAdapter> {
+	const readdir = ((directory: string, arg1: unknown, arg2?: unknown): void => {
+		const options = typeof arg1 === "function" ? undefined : (arg1 as fs.ObjectEncodingOptions);
+		const callback = (typeof arg1 === "function" ? arg1 : arg2) as (
+			error: NodeJS.ErrnoException | null,
+			files: unknown
+		) => void;
+		fs.readdir(directory, options, (error, files) => {
+			if (isUnreadableDirError(error)) tracker.record(directory);
+			callback(error, files);
+		});
+	}) as fg.FileSystemAdapter["readdir"];
+
+	const readdirSync = ((directory: string, options?: unknown): unknown => {
+		try {
+			return fs.readdirSync(directory, options as fs.ObjectEncodingOptions);
+		} catch (error) {
+			if (isUnreadableDirError(error as NodeJS.ErrnoException)) tracker.record(directory);
+			throw error;
+		}
+	}) as fg.FileSystemAdapter["readdirSync"];
+
+	return { readdir, readdirSync };
+}
+
 // ── Language detection ────────────────────────────────────────────────
 
 /** File extension → language identifier mapping. */
@@ -191,7 +261,7 @@ const ALLOWED_DOT_DIRS: readonly string[] = Object.freeze([".agents"]);
  * directory depth (parent before child) so the `ignore` library
  * applies overrides correctly.
  */
-function findGitignoreFiles(root: string): string[] {
+function findGitignoreFiles(root: string, tracker: SkippedDirectoryTracker): string[] {
 	try {
 		const files: string[] = fg.sync("**/.gitignore", {
 			cwd: root,
@@ -204,6 +274,9 @@ function findGitignoreFiles(root: string): string[] {
 			// the index never completes, and `last_indexed_at` is never recorded —
 			// which made the watcher re-trigger the walk forever.
 			suppressErrors: true,
+			// Record unreadable dirs (EACCES/EPERM/ENOENT) in the summary instead
+			// of surfacing them as per-path errors (FIX-031).
+			fs: createScanFsAdapter(tracker),
 			ignore: ["**/node_modules/**", "**/.git/**"]
 		});
 		// Sort by depth: root first, then shallow descendents, then deeper
@@ -271,8 +344,8 @@ function transformGitignorePatterns(content: string, scopePrefix: string): strin
  *
  * @returns All gitignore patterns across the repo, parent-before-child ordered.
  */
-function collectAllGitignoreRules(root: string): string[] {
-	const files = findGitignoreFiles(root);
+function collectAllGitignoreRules(root: string, tracker: SkippedDirectoryTracker): string[] {
+	const files = findGitignoreFiles(root, tracker);
 	const allPatterns: string[] = [];
 
 	for (const relativePath of files) {
@@ -316,10 +389,15 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 	// Resolve projectPath to an absolute, normalized path
 	const root = path.resolve(projectPath);
 
+	// Tracks directories skipped because they could not be read (FIX-031).
+	// Shared across the gitignore scan and both walk streams so a directory
+	// unreadable in any phase is reported exactly once.
+	const skippedDirTracker = new SkippedDirectoryTracker();
+
 	// ── Parse .gitignore (root + nested) ──────────────────────────
 	let gitignoreFilter: ReturnType<typeof ignoreLib> | null = null;
 	if (respectGitignore) {
-		const allPatterns = collectAllGitignoreRules(root);
+		const allPatterns = collectAllGitignoreRules(root, skippedDirTracker);
 		if (allPatterns.length > 0) {
 			gitignoreFilter = ignoreLib().add(allPatterns as unknown as string);
 			logger.debug("[FileDiscovery] Parsed .gitignore files", {
@@ -348,8 +426,10 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 		followSymbolicLinks: false,
 		// Skip permission-denied directories instead of rejecting the walk (see
 		// findGitignoreFiles). The index must complete so `last_indexed_at` is
-		// recorded and the watcher stops retrying.
+		// recorded and the watcher stops retrying. The fs adapter records each
+		// unreadable dir in the discovery summary (FIX-031).
 		suppressErrors: true,
+		fs: createScanFsAdapter(skippedDirTracker),
 		ignore: allExcludeGlobs
 	});
 
@@ -429,6 +509,7 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 			stats: true,
 			followSymbolicLinks: false,
 			suppressErrors: true,
+			fs: createScanFsAdapter(skippedDirTracker),
 			ignore: allExcludeGlobs
 		});
 
@@ -486,6 +567,10 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 
 	const durationMs = Math.round(performance.now() - startTime);
 
+	// Directories skipped because they could not be read (FIX-031). Reported
+	// in the summary; never surfaced as per-path errors and never abort the scan.
+	const skippedDirectories = skippedDirTracker.relativePaths(root);
+
 	logger.info("[FileDiscovery] Discovery complete", {
 		projectPath: root,
 		totalFiles,
@@ -493,6 +578,7 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 		skippedFiles,
 		skippedByExtension,
 		skippedByGitignore,
+		skippedDirectories: skippedDirectories.length,
 		durationMs,
 		errorCount: errors.length
 	});
@@ -504,6 +590,7 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 		skippedFiles,
 		skippedByExtension,
 		skippedByGitignore,
+		skippedDirectories,
 		durationMs,
 		errors
 	};

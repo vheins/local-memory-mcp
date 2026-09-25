@@ -464,4 +464,79 @@ describe("FileDiscoveryService", () => {
 		expect(result.skippedByGitignore).toBe(2);
 		expect(result.supportedFiles).toBe(1);
 	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// FIX-031: unreadable directories are skipped, not errored
+	// ══════════════════════════════════════════════════════════════════
+
+	describe("unreadable directories (FIX-031)", () => {
+		/**
+		 * `chmod 000` does not block reads when the process is privileged
+		 * (root) or on filesystems that ignore POSIX bits. Probe once so the
+		 * positive case skips cleanly instead of producing a false failure.
+		 */
+		function canEnforcePermissionDenied(): boolean {
+			if (process.getuid?.() === 0) return false;
+			const probe = fs.mkdtempSync(path.join(os.tmpdir(), "cbi-perm-probe-"));
+			try {
+				fs.chmodSync(probe, 0o000);
+				try {
+					fs.readdirSync(probe);
+					return false; // chmod did not block — cannot simulate EACCES here
+				} catch (err) {
+					const code = (err as NodeJS.ErrnoException).code;
+					return code === "EACCES" || code === "EPERM";
+				}
+			} finally {
+				try {
+					fs.chmodSync(probe, 0o755);
+				} catch {
+					/* best effort */
+				}
+				fs.rmSync(probe, { recursive: true, force: true });
+			}
+		}
+
+		const permissionDeniedEnforceable = canEnforcePermissionDenied();
+
+		it.skipIf(!permissionDeniedEnforceable)(
+			"completes and reports an unreadable subdir as skipped (no errors)",
+			async () => {
+				const root = path.join(tempDir, "unreadable-dir");
+				touch(path.join(root, "src", "readable.ts"));
+				const lockedDir = path.join(root, "locked");
+				touch(path.join(lockedDir, "hidden.ts"));
+				fs.chmodSync(lockedDir, 0o000);
+
+				let result: Awaited<ReturnType<typeof discoverFiles>>;
+				try {
+					result = await discoverFiles({ projectPath: root });
+				} finally {
+					fs.chmodSync(lockedDir, 0o755);
+				}
+
+				// The scan completes and still discovers every readable file.
+				const names = relativePaths(result);
+				expect(names).toEqual(["src/readable.ts"]);
+				expect(result.supportedFiles).toBe(1);
+
+				// The unreadable dir is reported in the skip summary...
+				expect(result.skippedDirectories).toEqual(["locked"]);
+				// ...and NOT surfaced as a per-path error (no EACCES emitted).
+				expect(result.errors).toEqual([]);
+			}
+		);
+
+		it("does not report skipped directories on a fully readable tree", async () => {
+			const root = path.join(tempDir, "all-readable");
+			touch(path.join(root, "src", "a.ts"));
+			touch(path.join(root, "src", "nested", "b.ts"));
+
+			const result = await discoverFiles({ projectPath: root });
+
+			expect(result.skippedDirectories).toEqual([]);
+			expect(result.errors).toEqual([]);
+			expect(result.supportedFiles).toBe(2);
+		});
+	});
 });
