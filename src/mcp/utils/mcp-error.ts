@@ -147,7 +147,7 @@ function classifyExpectedError(error: Error): {
 		return { code: "CAPABILITY_UNAVAILABLE", message: error.message, retryable: false };
 	}
 	if (
-		/^(?:Missing|required|Either|At least|Provide|Invalid|No .* provided|New .* must|CREATE requires|UPDATE requires|Could not infer operation)/i.test(
+		/^(?:Missing|required|Either|At least|Provide|Invalid|No .* provided|New .* must|CREATE requires|UPDATE requires|Could not infer operation|Detected)/i.test(
 			error.message
 		) ||
 		/\bmust be\b|\bmust identify\b|\bis required\b|\brequire(?:s)? type=|\bvalidation\b|\bappears to contain metadata\b|\bcompleted-work summaries\b/i.test(

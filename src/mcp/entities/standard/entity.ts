@@ -91,6 +91,19 @@ export class StandardEntity extends BaseEntity {
 		return row ? this.rowToEntry(row) : null;
 	}
 
+	/**
+	 * Every standard carrying `code`, regardless of scope (FIX-026).
+	 *
+	 * Powers the standard-read not-found scope hint: when a scoped lookup misses,
+	 * this finds the same code under a different owner/repo so the caller can
+	 * retry with the right scope. Uses the `idx_coding_standards_code` index and
+	 * is only invoked on the not-found path, so there is no hot-path cost.
+	 */
+	getByCodeAnyScope(code: string): CodingStandardEntry[] {
+		const rows = this.all<CodingStandardRow>("SELECT * FROM coding_standards WHERE code = ?", [code]);
+		return rows.map((row) => this.rowToEntry(row));
+	}
+
 	search(options: {
 		query?: string;
 		context?: string;

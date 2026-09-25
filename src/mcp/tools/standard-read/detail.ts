@@ -47,6 +47,38 @@ function formatBulkDetail(standards: CodingStandardEntry[]): string {
 	);
 }
 
+// ── Not-found scope hint (FIX-026) ───────────────────────────────────────
+
+/**
+ * Build the not-found message for a single code/id lookup, naming the scope
+ * that was searched and — when the code exists under a different scope — the
+ * matching (owner, repo) so the caller can retry.
+ *
+ * A code is unique per (owner, repo), so the same `STD-017` resolves to
+ * different rows (or nothing) depending on the scope. Previously a scoped miss
+ * surfaced a bare "Coding standard not found: STD-017" with no scope, leaving
+ * the caller to guess why a code they can see was "missing". The cross-scope
+ * lookup only runs on the not-found path (indexed by code), so there is no
+ * cost on successful reads.
+ */
+function buildNotFoundMessage(identifier: string, db: SQLiteStore, owner: string, repo?: string): string {
+	const message = `Coding standard not found: ${identifier} (searched owner="${owner}"${
+		repo !== undefined ? `, repo="${repo}"` : ""
+	})`;
+
+	// Only a code (not a UUID) can match across scopes.
+	if (UUID_REGEX.test(identifier)) return message;
+
+	const matches = db.standards
+		.getByCodeAnyScope(identifier)
+		.filter((s) => s.owner !== owner || (s.repo ?? undefined) !== repo);
+	if (matches.length === 0) return message;
+
+	const hints = matches.map((s) => `owner="${s.owner}" repo="${s.repo ?? "__global__"}"`);
+	const uniqueHints = Array.from(new Set(hints));
+	return `${message} — ${identifier} exists in ${uniqueHints.join(" or ")} — retry with that scope.`;
+}
+
 // ── Detail handler ──────────────────────────────────────────────────────
 
 export async function handleDetailMode(validated: StandardReadInput, db: SQLiteStore): Promise<McpResponse> {
@@ -122,8 +154,8 @@ export async function handleDetailMode(validated: StandardReadInput, db: SQLiteS
 	}
 
 	if (!standard) {
-		const identifier = id ?? code;
-		throw new Error(`Coding standard not found: ${identifier}`);
+		const identifier = id ?? code ?? "";
+		throw new Error(buildNotFoundMessage(identifier, db, owner, repo));
 	}
 
 	// NOTE: hit_count intentionally NOT incremented on read

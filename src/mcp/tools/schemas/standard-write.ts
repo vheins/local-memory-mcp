@@ -9,6 +9,14 @@ import { SingleStandardSchema } from "./shared";
  *   - `standards[]` array     → BULK CREATE
  *   - `content` present       → CREATE single standard
  *   - `id` or `code`          → UPDATE existing standard
+ *
+ * Mode inference is intentionally NOT a schema-level `.refine` (FIX-026): the
+ * old three-mode refine collapsed every malformed payload into one generic
+ * message, so callers could not tell which mode their payload was parsed as or
+ * which field was missing. The handler now calls
+ * {@link diagnoseStandardWriteShape} (standard-write/diagnose.ts) to report the
+ * detected mode + exact missing fields — a directive in the task-write style.
+ * Only field-level constraints remain here.
  */
 export const StandardWriteSchema = z
 	.object({
@@ -41,19 +49,6 @@ export const StandardWriteSchema = z
 		// ── BULK ──
 		standards: z.array(SingleStandardSchema).min(1).optional()
 	})
-	.refine(
-		(data) => {
-			// Must have at least one operational path: bulk, create, or update
-			if (data.standards) return true;
-			if (data.content && data.name && data.tags && data.metadata) return true;
-			if (data.id || data.code) return true;
-			return false;
-		},
-		{
-			message:
-				"Provide 'standards[]' for bulk, 'name+content+tags+metadata' for single create, or 'id'/'code' + fields for update."
-		}
-	)
 	.refine(
 		(data) => {
 			// repo-specific standards need a repo
