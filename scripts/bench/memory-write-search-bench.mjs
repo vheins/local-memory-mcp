@@ -2,7 +2,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { execSync } from "child_process";
+import { execFileSync, execSync } from "child_process";
 import { createRequire } from "module";
 import Database from "better-sqlite3";
 
@@ -723,7 +723,7 @@ async function main() {
 					"scripts/bench/memory-eval/metrics.mjs",
 					"scripts/bench/memory-eval/report.mjs"
 				];
-				const h = execSync(`git hash-object ${files.join(" ")}`, { encoding: "utf8" }).trim();
+				const h = execFileSync("git", ["hash-object", ...files], { encoding: "utf8" }).trim();
 				return h || null;
 			} catch {
 				return null;

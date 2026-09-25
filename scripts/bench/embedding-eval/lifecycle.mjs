@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { createHash } from "crypto";
-import { execSync } from "child_process";
+import { execFileSync, execSync } from "child_process";
 import { createBenchDb } from "./schema.mjs";
 import { contentHash } from "./fixtures.mjs";
 import { BATCH_SIZE, LEASE_MS, POISON_THRESHOLD, BACKOFF_BASE_MS, BACKOFF_MAX_MS } from "./constants.mjs";
@@ -195,7 +195,7 @@ export function collectBenchRevision() {
 	let manifest = "";
 	for (const f of ordered) {
 		try {
-			const h = execSync(`git hash-object ${JSON.stringify(f)}`, { encoding: "utf8" }).trim();
+			const h = execFileSync("git", ["hash-object", f], { encoding: "utf8" }).trim();
 			perFile[f] = h;
 			manifest += `${h}  ${f}\n`;
 		} catch {
