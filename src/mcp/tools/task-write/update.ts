@@ -7,6 +7,7 @@ import { resolveEntityRef } from "../../utils/entity-ref";
 import { resolveParentId, resolveDependsOn } from "../task.helpers";
 import { TASK_UPDATE_COLUMNS } from "../../entities/task/serializers";
 import { validateStatusTransition } from "./state-machine";
+import { invalidIdFormatMessage } from "./errors";
 import { TaskWriteParams } from "./types";
 import {
 	buildUpdatesFromParams,
@@ -84,9 +85,9 @@ async function coreUpdate(
 		if (UUID_REGEX.test(id)) {
 			resolvedId = id;
 		} else {
-			throw new Error(
-				`Invalid id format: '${id}'. Use a UUID or use 'code' for code-based lookup — retry with task-write(code: "<CODE>", ...) or pass a UUID id`
-			);
+			// FIX-027: when the value looks like a task code, say so explicitly
+			// (`use 'code' instead of 'id'`) instead of a bare invalid-UUID error.
+			throw new Error(invalidIdFormatMessage(id));
 		}
 	}
 	if (!resolvedId && params.code) {
@@ -154,7 +155,13 @@ async function coreUpdate(
 					updates.task_code &&
 					storage.tasks.isTaskCodeDuplicate(owner, repo, updates.task_code as string, targetId)
 				) {
-					throw new Error(`Duplicate task_code: '${updates.task_code}' already exists`);
+					// FIX-027: name the EXISTING task (id + status) so the caller
+					// can pick a free code or target the right task.
+					const clash = storage.tasks.getTaskByCode(owner, repo, updates.task_code as string);
+					const detail = clash ? ` (existing task id "${clash.id}", status "${clash.status}")` : "";
+					throw new Error(
+						`Duplicate task_code: '${updates.task_code}' already exists${detail}. Choose a different code or update the existing task directly.`
+					);
 				}
 
 				const finalUpdates: Record<string, unknown> = { ...updates };

@@ -6,6 +6,7 @@ import { resolveEntityCode } from "../../utils/code-generator";
 import { enqueueTask } from "../../embedding-queue";
 import { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps } from "../task.helpers";
 import { applyDecisionRefs } from "./effects";
+import { duplicateCodeMessage, missingCreateFields, missingCreateFieldsMessage } from "./errors";
 import { TaskWriteParams } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -16,15 +17,15 @@ function coreCreate(params: TaskWriteParams, storage: SQLiteStore): { task: Task
 	const { owner, repo } = params;
 
 	if (!params.phase || !params.title || !params.description) {
-		throw new Error(
-			'Missing required fields for single task creation (phase, title, description) — retry with task-write(phase: "...", title: "...", description: "...")'
-		);
+		// FIX-027: list EXACTLY which of phase/title/description are absent.
+		throw new Error(missingCreateFieldsMessage(missingCreateFields(params), "single"));
 	}
 
 	const resolvedCode = resolveEntityCode(params.code ?? null, owner ?? "", repo, "task", storage);
 
 	if (params.code && resolvedCode !== params.code) {
-		throw new Error(`Task code '${params.code}' already exists`);
+		// FIX-027: name the existing task so the caller can update instead.
+		throw new Error(duplicateCodeMessage(params.code, storage.tasks.getTaskByCode(owner, repo, params.code)));
 	}
 
 	let effectiveStatus: TaskStatus = (params.status || TASK_STATUS_BACKLOG) as TaskStatus;

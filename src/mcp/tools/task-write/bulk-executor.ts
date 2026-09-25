@@ -9,7 +9,14 @@ import { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps } from ".
 import { applyDecisionRefs } from "./effects";
 import { validateStatusTransition, validateBulkStatus, resolveTransitionComment } from "./state-machine";
 import { archiveCompletedTasks } from "./update-status";
-import { inferItemMode } from "./bulk-infer";
+import { inferItemMode, describeBulkItem } from "./bulk-infer";
+import {
+	duplicateCodeMessage,
+	missingCreateFields,
+	missingCreateFieldsMessage,
+	noUpdatableFieldsMessage,
+	scopeBulkItemError
+} from "./errors";
 
 // ---------------------------------------------------------------------------
 // Bulk execution — processes each item (create or update)
@@ -105,7 +112,9 @@ export async function executeBulkOperation(
 				}
 
 				if (Object.keys(itemUpdates).length === 0) {
-					throw new Error("No updatable fields provided for update item");
+					// FIX-027: name the fields an update item MAY carry so the
+					// caller can see what the inferred-update item was missing.
+					throw new Error(noUpdatableFieldsMessage(updatableFields));
 				}
 
 				// FIX-024: resolve + pre-validate parent_id/depends_on references
@@ -278,7 +287,9 @@ export async function executeBulkOperation(
 				});
 
 				if (preferredCode && assignedCode !== preferredCode) {
-					throw new Error(`Task code '${preferredCode}' already exists`);
+					// FIX-027: name the EXISTING task (id + status) so the caller
+					// can switch to an update instead of retrying the create.
+					throw new Error(duplicateCodeMessage(preferredCode, storage.tasks.getTaskByCode(owner, repo, preferredCode)));
 				}
 
 				codesInRequest.add(assignedCode);
@@ -289,9 +300,8 @@ export async function executeBulkOperation(
 				const description = raw.description as string;
 
 				if (!phase || !title || !description) {
-					throw new Error(
-						'Missing required fields for create (phase, title, description) — every tasks[] create item needs phase, title, and description; retry with tasks: [{ phase: "...", title: "...", description: "..." }]'
-					);
+					// FIX-027: list EXACTLY which of phase/title/description are absent.
+					throw new Error(missingCreateFieldsMessage(missingCreateFields(raw), "bulk"));
 				}
 
 				let normalizedStatus = (raw.status as TaskStatus) || "backlog";
@@ -372,7 +382,12 @@ export async function executeBulkOperation(
 				}
 			}
 		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err);
+			const raw = err instanceof Error ? err.message : String(err);
+			// FIX-027: every rejection names the failing item (index + code).
+			// The orchestrator already carries `index` in the structured
+			// envelope, but the all-items-failed path throws `failed[0].error`
+			// bare — scoping here keeps the item identity on that path too.
+			const msg = scopeBulkItemError(raw, describeBulkItem(items[i], i));
 			results.push({
 				index: i,
 				operation: mode,

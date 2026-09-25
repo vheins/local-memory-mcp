@@ -93,13 +93,21 @@ export async function handleTaskWrite(
 		}
 
 		// ── Nothing matched ──
+		// FIX-027: name the fields actually received (minus scope/plumbing keys)
+		// so the caller can see WHY no operation was inferred, not just the
+		// accepted shapes. The leading "Could not infer operation" token is kept
+		// stable (VALIDATION_ERROR classification in utils/mcp-error.ts).
+		const received = Object.keys(args)
+			.filter((key) => args[key] !== undefined && key !== "owner" && key !== "repo" && key !== "json")
+			.sort();
 		throw new Error(
 			"Could not infer operation. Provide:\n" +
 				"  - `phase` + `title` + `description` for CREATE\n" +
 				"  - `id` (UUID) or `code` + fields for UPDATE\n" +
 				"  - `id` or `code` + `status` for STATUS UPDATE\n" +
 				"  - `interactive: true` for guided creation\n" +
-				"  - `tasks[]` for BULK create/update"
+				"  - `tasks[]` for BULK create/update\n" +
+				`Received fields: ${received.length > 0 ? received.join(", ") : "(none)"}.`
 		);
 	});
 }
