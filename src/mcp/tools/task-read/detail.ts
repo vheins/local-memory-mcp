@@ -3,6 +3,7 @@ import { Task, TaskChild, TaskComment } from "../../types";
 import { createMcpResponse, McpResponse, withEnvelope } from "../../utils/mcp-response";
 import { UUID_REGEX } from "../../utils/uuid";
 import { logger } from "../../utils/logger";
+import { assertNotOrchestratorPlaceholder } from "../../utils/placeholder-code";
 import { fetchTaskKgContext } from "../kg-archivist/query";
 
 function buildTaskDetailLines(
@@ -94,6 +95,10 @@ export async function handleDetailMode(
 	// ── Single detail ──
 	if (id || code) {
 		const identifier = id || code!;
+		// FIX-021: reject reserved orchestrator template placeholders (T01/R01/
+		// Q01/…) with an actionable VALIDATION_ERROR before the not-found path.
+		// A non-UUID `id` is treated as a code, so both slots are checked.
+		assertNotOrchestratorPlaceholder(identifier);
 		let task: Task | null;
 		if (id) {
 			task = UUID_REGEX.test(id) ? storage.tasks.getTaskById(id) : storage.tasks.getTaskByCode(owner, repo, id);
@@ -138,6 +143,9 @@ export async function handleDetailMode(
 	if (ids) {
 		tasks = storage.tasks.getTasksByIds(ids);
 	} else if (codes) {
+		// FIX-021: reject reserved orchestrator placeholders in a bulk code list
+		// too, so `codes: ["T01"]` cannot fall through to a bare not-found.
+		for (const c of codes) assertNotOrchestratorPlaceholder(c);
 		tasks = storage.tasks.getTasksByCodes(owner, repo, codes);
 	}
 

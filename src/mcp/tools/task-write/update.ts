@@ -2,6 +2,7 @@ import { SQLiteStore } from "../../storage/sqlite";
 import { TaskStatus, VectorStore } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { UUID_REGEX } from "../../utils/uuid";
+import { assertNotOrchestratorPlaceholder } from "../../utils/placeholder-code";
 import { resolveEntityRef } from "../../utils/entity-ref";
 import { resolveParentId, resolveDependsOn } from "../task.helpers";
 import { TASK_UPDATE_COLUMNS } from "../../entities/task/serializers";
@@ -76,6 +77,10 @@ async function coreUpdate(
 	// Resolve task identifier to UUID: prefer id, fall back to code
 	let resolvedId: string | undefined;
 	if (id) {
+		// FIX-021: reject reserved orchestrator placeholders (T01/R01/Q01/…) in
+		// the `id` slot too — a placeholder there is an unsubstituted template
+		// token, not an invalid UUID, so surface the actionable error.
+		assertNotOrchestratorPlaceholder(id);
 		if (UUID_REGEX.test(id)) {
 			resolvedId = id;
 		} else {

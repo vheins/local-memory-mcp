@@ -163,7 +163,12 @@ function classifyExpectedError(error: Error): {
 		// "are required", or a scope mismatch ("Repository mismatch").
 		/\brequires agent\b|\bneither 'id' nor 'code'|\brepository mismatch\b|\bare required\b|\bnot valid for\b/i.test(
 			error.message
-		)
+		) ||
+		// FIX-021: an unsubstituted orchestrator template placeholder
+		// ("'T01' looks like an unsubstituted orchestrator template
+		// placeholder…") is a caller-actionable request-shape error — surface
+		// the real message under VALIDATION_ERROR instead of masking it.
+		/\bunsubstituted orchestrator template placeholder\b/i.test(error.message)
 	) {
 		return { code: "VALIDATION_ERROR", message: error.message, retryable: false };
 	}

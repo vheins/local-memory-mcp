@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
 import { buildTableResult, createMcpResponse, McpResponse } from "./mcp-response";
 import { UUID_REGEX } from "./uuid";
+import { assertNotOrchestratorPlaceholder } from "./placeholder-code";
 import { TASK_STATUS_IN_PROGRESS } from "../types";
 import type { Claim, Task, TaskStatus } from "../types";
 import { logger } from "./logger";
@@ -54,6 +55,13 @@ export function resolveTaskByRef(
 ): ResolvedTaskRef {
 	let resolvedId = taskId as string | undefined;
 	let resolvedCode: string | null = taskCode ?? null;
+
+	// FIX-021: reject reserved orchestrator template placeholders (T01/R01/Q01/…)
+	// in either slot before any lookup, so an unsubstituted template yields the
+	// actionable VALIDATION_ERROR instead of a bare "Task not found: T01". The
+	// reserved shape can never match a UUID, so asserting on both slots is safe.
+	assertNotOrchestratorPlaceholder(taskId);
+	assertNotOrchestratorPlaceholder(taskCode);
 
 	// task_code supplied in the task_id slot → resolve via code
 	if (resolvedId && !UUID_REGEX.test(resolvedId)) {

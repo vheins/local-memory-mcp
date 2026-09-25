@@ -1,5 +1,6 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { UUID_REGEX } from "./uuid";
+import { assertNotOrchestratorPlaceholder } from "./placeholder-code";
 
 export type EntityRefKind = "memory" | "standard" | "task";
 
@@ -55,6 +56,10 @@ export function resolveEntityRef(
 			id = storage.standards.getByCode(value, owner, repo)?.id ?? null;
 			break;
 		case "task":
+			// FIX-021: a reserved orchestrator placeholder (T01/R01/Q01/…) is an
+			// unsubstituted template token, not a real code — surface the
+			// actionable VALIDATION_ERROR instead of a bare "Task not found".
+			assertNotOrchestratorPlaceholder(value);
 			id = storage.tasks.getTaskByCode(owner ?? "", repo ?? "", value)?.id ?? null;
 			break;
 	}
