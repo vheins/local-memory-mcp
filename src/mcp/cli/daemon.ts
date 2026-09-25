@@ -299,7 +299,19 @@ export function startDaemon(options: { paths?: DaemonPaths; io?: Partial<DaemonI
 	if (existing !== null) removeDaemonPid(paths.pidFile);
 
 	// 2. Acquire the single-instance lock atomically BEFORE binding/forking.
-	const lock = acquireLock(paths.lockFile, io);
+	// FIX-025: an fs failure here (permissions, vanished config dir) must be an
+	// actionable message, not an uncaught stack trace out of the CLI.
+	let lock: AcquireLockResult;
+	try {
+		lock = acquireLock(paths.lockFile, io);
+	} catch (error) {
+		throw new Error(
+			`Failed to acquire the daemon single-instance lock at ${paths.lockFile}: ` +
+				`${error instanceof Error ? error.message : String(error)}. ` +
+				"Check that the config directory is writable, then retry.",
+			{ cause: error }
+		);
+	}
 	if (!lock.acquired) {
 		const owner = lock.pid ?? readDaemonPid(paths.pidFile) ?? 0;
 		io.log(`Daemon already running (pid ${owner})`);
@@ -741,18 +753,27 @@ function uninstallWindows(io: ServiceIo): UninstallDaemonResult {
  */
 export function runDaemonCli(argv: string[] = process.argv.slice(3)): void {
 	const sub = argv[0];
-	if (sub === "stop") {
-		stopDaemon();
-	} else if (sub === "status") {
-		statusDaemon();
-	} else if (sub === "install") {
-		installDaemon({ force: argv.includes("--force") });
-	} else if (sub === "uninstall") {
-		uninstallDaemon();
-	} else if (sub === undefined || sub === "start") {
-		startDaemon();
-	} else {
-		process.stderr.write(`Unknown daemon subcommand: ${sub} (expected: start | stop | status | install | uninstall)\n`);
+	try {
+		if (sub === "stop") {
+			stopDaemon();
+		} else if (sub === "status") {
+			statusDaemon();
+		} else if (sub === "install") {
+			installDaemon({ force: argv.includes("--force") });
+		} else if (sub === "uninstall") {
+			uninstallDaemon();
+		} else if (sub === undefined || sub === "start") {
+			startDaemon();
+		} else {
+			process.stderr.write(
+				`Unknown daemon subcommand: ${sub} (expected: start | stop | status | install | uninstall)\n`
+			);
+			process.exit(1);
+		}
+	} catch (error) {
+		// FIX-025: a lock/spawn failure is reported as an actionable message and
+		// a clean non-zero exit — never an uncaught stack trace.
+		process.stderr.write(`Daemon command failed: ${error instanceof Error ? error.message : String(error)}\n`);
 		process.exit(1);
 	}
 	process.exit(0);

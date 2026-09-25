@@ -252,7 +252,12 @@ describe("combined server — MCP face", () => {
 		const unknown = await fetch(`${handle.url}/mcp`, {
 			method: "POST",
 			headers: { ...jsonHeaders, "mcp-session-id": "00000000-0000-4000-8000-000000000000" },
-			body: JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "memory-read", arguments: {} } })
+			body: JSON.stringify({
+				jsonrpc: "2.0",
+				id: 4,
+				method: "tools/call",
+				params: { name: "memory-read", arguments: {} }
+			})
 		});
 		expect(unknown.status).toBe(404);
 		const unknownBody = await unknown.text();
@@ -293,6 +298,80 @@ describe("runDaemonWorker — never resolves (no double-boot)", () => {
 		await new Promise((r) => setTimeout(r, 50));
 		expect(booted).toBe(true);
 		expect(settled).toBe(false);
+	});
+});
+
+describe("runDaemonWorker — recoverable lock error containment (FIX-025)", () => {
+	it("logs a WARN and does NOT exit when a lock refresh error reaches the process handler", async () => {
+		const { runDaemonWorker } = await import("../cli/combined-server");
+		const { addLogSink } = await import("../utils/logger");
+
+		// Capture the process handlers the worker installs without triggering a
+		// real boot/listener (startServer is stubbed and parks).
+		const captured: Record<string, ((arg: unknown) => void)[]> = {};
+		const onSpy = vi.spyOn(process, "on").mockImplementation(((event: string, handler: (arg: unknown) => void) => {
+			(captured[event] ??= []).push(handler);
+			return process;
+		}) as never);
+		const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+		const logs: Array<{ level: string; message: string }> = [];
+		const detach = addLogSink((payload) => {
+			if (typeof payload.data.message === "string") logs.push({ level: payload.level, message: payload.data.message });
+		});
+
+		let settled = false;
+		const fakeHandle = { server: {} as never, port: 0, url: "http://127.0.0.1:0", close: vi.fn() };
+		const workerPromise = runDaemonWorker({ startServer: async () => fakeHandle });
+		void workerPromise.then(() => (settled = true));
+
+		try {
+			// Let boot settle and the handlers install.
+			await new Promise((r) => setTimeout(r, 30));
+			expect(captured.uncaughtException?.length).toBeGreaterThanOrEqual(1);
+
+			// Fire a recoverable proper-lockfile failure through the handler.
+			const handler = captured.uncaughtException![0]!;
+			handler(Object.assign(new Error("Unable to update lock within the stale threshold"), { code: "ECOMPROMISED" }));
+
+			// Contained: WARN logged, process.exit NOT called, worker still parked.
+			expect(exitSpy).not.toHaveBeenCalled();
+			expect(logs.some((l) => l.level === "warning" && l.message.includes("Recoverable lock error contained"))).toBe(
+				true
+			);
+			expect(logs.some((l) => l.level === "error" && l.message.includes("Uncaught exception"))).toBe(false);
+			expect(settled).toBe(false);
+		} finally {
+			onSpy.mockRestore();
+			exitSpy.mockRestore();
+			detach();
+			void workerPromise.catch(() => {});
+		}
+	});
+
+	it("still logs ERROR + exits for a non-lock uncaught exception before startup (negative)", async () => {
+		const { runDaemonWorker } = await import("../cli/combined-server");
+
+		const captured: Record<string, ((arg: unknown) => void)[]> = {};
+		const onSpy = vi.spyOn(process, "on").mockImplementation(((event: string, handler: (arg: unknown) => void) => {
+			(captured[event] ??= []).push(handler);
+			return process;
+		}) as never);
+		const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+
+		// A startServer that never settles keeps serverStarted=false while the
+		// handler runs, so a genuine error must trigger exit(1).
+		const workerPromise = runDaemonWorker({ startServer: () => new Promise(() => {}) });
+		try {
+			await new Promise((r) => setTimeout(r, 20));
+			const handler = captured.uncaughtException![0]!;
+			handler(new Error("boom: genuine fault"));
+
+			expect(exitSpy).toHaveBeenCalledWith(1);
+		} finally {
+			onSpy.mockRestore();
+			exitSpy.mockRestore();
+			void workerPromise.catch(() => {});
+		}
 	});
 });
 

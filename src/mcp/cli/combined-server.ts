@@ -29,6 +29,7 @@ import {
 	buildAllowedHostnames,
 	buildRequestUrl,
 	createDualHandler,
+	serveNodeRequest,
 	toWebRequest,
 	writeWebResponse,
 	type DualHandler,
@@ -37,6 +38,7 @@ import {
 } from "../transport/http";
 import { CAPABILITIES } from "../capabilities";
 import { resolveDaemonPaths, removeLock } from "./daemon";
+import { isRecoverableLockError } from "../storage/write-lock";
 import { formatBuildInfo, getBuildInfo } from "../utils/build-info";
 import { logger } from "../utils/logger";
 import { bugCapture } from "../utils/bug-capture";
@@ -144,29 +146,31 @@ function createMcpPreRoute(handler: DualHandler, host: string): ExpressPreRoute 
 	return {
 		path: MCP_HTTP_DEFAULT_PATH,
 		handler: (req, res) => {
-			void (async () => {
-				const port = req.socket.localPort ?? DAEMON_DEFAULT_PORT;
-				const url = buildRequestUrl(req, host, port);
-				const webRequest = toWebRequest(req, url);
+			// FIX-025: route through the shared disconnect-safe bridge so a
+			// client that goes away mid-request (ERR_STREAM_PREMATURE_CLOSE —
+			// the highest-volume signal in daemon.log) aborts only this request
+			// and logs at WARN instead of escaping as an uncaught exception.
+			serveNodeRequest(
+				req,
+				res,
+				async (nodeReq, nodeRes) => {
+					const port = nodeReq.socket.localPort ?? DAEMON_DEFAULT_PORT;
+					const url = buildRequestUrl(nodeReq, host, port);
+					const webRequest = toWebRequest(nodeReq, url);
 
-				const rejected =
-					hostHeaderValidationResponse(webRequest, allowedHostnames) ??
-					originValidationResponse(webRequest, allowedHostnames);
-				if (rejected !== undefined) {
-					await writeWebResponse(res, rejected);
-					return;
-				}
+					const rejected =
+						hostHeaderValidationResponse(webRequest, allowedHostnames) ??
+						originValidationResponse(webRequest, allowedHostnames);
+					if (rejected !== undefined) {
+						await writeWebResponse(nodeRes, rejected);
+						return;
+					}
 
-				const webResponse = await handler.fetch(webRequest);
-				await writeWebResponse(res, webResponse);
-			})().catch((error: unknown) => {
-				logger.error("[Daemon] MCP request failed", { error: String(error) });
-				if (!res.headersSent) {
-					res.statusCode = 500;
-					res.setHeader("Content-Type", "text/plain; charset=utf-8");
-				}
-				res.end("Internal Server Error");
-			});
+					const webResponse = await handler.fetch(webRequest);
+					await writeWebResponse(nodeRes, webResponse);
+				},
+				{ logTag: "[Daemon]" }
+			);
 		}
 	};
 }
@@ -385,32 +389,41 @@ export async function runDaemonWorker(options: RunDaemonWorkerOptions = {}): Pro
 	// non-zero; a post-start failure logs and continues.
 	let serverStarted = false;
 	if (options.installProcessHandlers !== false) {
-		process.on("unhandledRejection", (reason: unknown) => {
-			logger.error("[Daemon] Unhandled promise rejection", {
+		/**
+		 * FIX-025: a residual proper-lockfile failure that reaches the process
+		 * level (heartbeat `onCompromised`, vanished lockfile) is a KNOWN,
+		 * non-fatal condition — log it at WARN and keep serving. Treating it as
+		 * a generic ERROR is what made `daemon.log` show `Uncaught exception`
+		 * for a lock refresh race. Any other error keeps the historical
+		 * ERROR + startup-exit behavior.
+		 */
+		const reportProcessError = (source: "uncaught" | "unhandled_rejection", err: Error): void => {
+			if (isRecoverableLockError(err)) {
+				logger.warn("[Daemon] Recoverable lock error contained — daemon continues", {
+					pid: process.pid,
+					source,
+					error: err.message
+				});
+				return;
+			}
+			logger.error(`[Daemon] ${source === "uncaught" ? "Uncaught exception" : "Unhandled promise rejection"}`, {
 				pid: process.pid,
-				error: reason instanceof Error ? `${reason.message}\n${reason.stack ?? ""}` : String(reason)
+				error: `${err.message}\n${err.stack ?? ""}`
 			});
 			bugCapture.capture({
-				source: "unhandled_rejection",
-				message: reason instanceof Error ? reason.message : String(reason),
-				stack: reason instanceof Error ? (reason.stack ?? null) : null,
-				context: { pid: process.pid, startup: !serverStarted }
-			});
-			if (!serverStarted) process.exit(1);
-		});
-		process.on("uncaughtException", (err: Error) => {
-			logger.error("[Daemon] Uncaught exception", {
-				pid: process.pid,
-				error: err.message,
-				stack: err.stack ?? ""
-			});
-			bugCapture.capture({
-				source: "uncaught",
+				source,
 				message: err.message,
 				stack: err.stack ?? null,
 				context: { pid: process.pid, startup: !serverStarted }
 			});
 			if (!serverStarted) process.exit(1);
+		};
+
+		process.on("unhandledRejection", (reason: unknown) => {
+			reportProcessError("unhandled_rejection", reason instanceof Error ? reason : new Error(String(reason)));
+		});
+		process.on("uncaughtException", (err: Error) => {
+			reportProcessError("uncaught", err);
 		});
 	}
 

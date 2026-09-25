@@ -30,6 +30,38 @@ import { logger } from "../utils/logger";
 const LOCK_STALE_MS = 30_000; // consider lock stale after 30s (handles crashed processes)
 const LOCK_RETRY_DELAY_MS = 200;
 const LOCK_RETRY_COUNT = 250; // 250 * 200ms = 50s max wait
+/**
+ * Extra whole-acquire retries after a recoverable failure (FIX-025). A single
+ * retry absorbs the transient "stale threshold" / vanished-lockfile races; a
+ * second consecutive failure is surfaced as an actionable error instead of an
+ * uncaught crash.
+ */
+const LOCK_ACQUIRE_RETRIES = 1;
+
+/**
+ * Whether a lock error is a RECOVERABLE acquisition/refresh failure that a
+ * release-and-retry can clear, as opposed to a genuine programming error.
+ *
+ * Covers the exact signatures seen in `daemon.log` (FIX-025):
+ *   - `Unable to update lock within the stale threshold` (heartbeat lost the
+ *     race after an event-loop stall → `ECOMPROMISED`),
+ *   - `ENOENT … memory.db.lock` (the lockfile vanished under `utimes`),
+ *   - `ECOMPROMISED` / `ELOCKED` codes proper-lockfile assigns directly.
+ */
+export function isRecoverableLockError(error: unknown): boolean {
+	if (error === null || typeof error !== "object") return false;
+	const err = error as { code?: unknown; message?: unknown };
+	const code = typeof err.code === "string" ? err.code : "";
+	const message = typeof err.message === "string" ? err.message : "";
+	// proper-lockfile's own codes are unambiguous.
+	if (code === "ECOMPROMISED" || code === "ELOCKED") return true;
+	// The heartbeat lost the race after an event-loop stall.
+	if (/stale threshold/i.test(message)) return true;
+	// A vanished lockfile surfaces as ENOENT/utime on a `*.lock` path — require
+	// a lock-related token so an unrelated ENOENT is NOT swallowed.
+	if ((code === "ENOENT" || /ENOENT/i.test(message)) && /\.lock|lockfile|utime/i.test(message)) return true;
+	return false;
+}
 
 export class WriteLock {
 	private lockTarget: string;
@@ -125,36 +157,80 @@ export class WriteLock {
 	/**
 	 * Acquire the exclusive proper-lockfile. Waits up to 50s for other
 	 * processes to release.
+	 *
+	 * Robustness (FIX-025): acquisition/refresh failures that proper-lockfile
+	 * reports (`Unable to update lock within the stale threshold`,
+	 * `ECOMPROMISED`, `ENOENT` on the vanished lockfile) are CAUGHT, not
+	 * thrown into the event loop. A recoverable failure is retried ONCE after
+	 * a clean release; a second failure raises an actionable error naming the
+	 * lock path and the recovery, so the caller fails a single request/task
+	 * instead of the process dying with an uncaught exception.
 	 */
 	async acquire(): Promise<void> {
-		await lockfile.lock(this.lockTarget, {
-			stale: LOCK_STALE_MS,
-			retries: {
-				retries: LOCK_RETRY_COUNT,
-				minTimeout: LOCK_RETRY_DELAY_MS,
-				maxTimeout: LOCK_RETRY_DELAY_MS
-			},
-			realpath: false,
-			// A held lock can be compromised when the heartbeat cannot refresh it
-			// in time — e.g. a long synchronous better-sqlite3 statement inside
-			// `withExclusiveLock` blocks the event loop past the 15s heartbeat /
-			// 30s stale window, another process legitimately steals the stale
-			// lock, and our next `stat` sees a foreign mtime. proper-lockfile's
-			// DEFAULT onCompromised THROWS ("Unable to update lock within the
-			// stale threshold"), which escapes as an uncaught exception and kills
-			// the process. We instead record the loss: the section completes and
-			// `release()` skips unlocking a lock we no longer own.
-			onCompromised: (error: Error) => {
-				this.compromised = true;
-				this.locked = false;
-				logger.warn("[WriteLock] Exclusive lock compromised — another process took over", {
-					lock: this.lockTarget,
-					error: error.message
+		let lastError: unknown;
+		for (let attempt = 0; attempt <= LOCK_ACQUIRE_RETRIES; attempt++) {
+			try {
+				await lockfile.lock(this.lockTarget, {
+					stale: LOCK_STALE_MS,
+					retries: {
+						retries: LOCK_RETRY_COUNT,
+						minTimeout: LOCK_RETRY_DELAY_MS,
+						maxTimeout: LOCK_RETRY_DELAY_MS
+					},
+					realpath: false,
+					// A held lock can be compromised when the heartbeat cannot refresh it
+					// in time — e.g. a long synchronous better-sqlite3 statement inside
+					// `withExclusiveLock` blocks the event loop past the 15s heartbeat /
+					// 30s stale window, another process legitimately steals the stale
+					// lock, and our next `stat` sees a foreign mtime. proper-lockfile's
+					// DEFAULT onCompromised THROWS ("Unable to update lock within the
+					// stale threshold"), which escapes as an uncaught exception and kills
+					// the process. We instead record the loss: the section completes and
+					// `release()` skips unlocking a lock we no longer own.
+					onCompromised: (error: Error) => {
+						this.compromised = true;
+						this.locked = false;
+						logger.warn("[WriteLock] Exclusive lock compromised — another process took over", {
+							lock: this.lockTarget,
+							error: error.message
+						});
+					}
 				});
+				this.locked = true;
+				this.compromised = false;
+				return;
+			} catch (error) {
+				lastError = error;
+				// Reset our belief before retrying so the next acquire starts clean.
+				this.locked = false;
+				this.compromised = false;
+				if (attempt < LOCK_ACQUIRE_RETRIES && isRecoverableLockError(error)) {
+					logger.warn("[WriteLock] exclusive lock acquire failed — retrying once", {
+						lock: this.lockTarget,
+						attempt: attempt + 1,
+						error: error instanceof Error ? error.message : String(error)
+					});
+					// Best-effort cleanup of any half-acquired lockfile so the
+					// retry does not immediately re-read the same stale state.
+					try {
+						await lockfile.unlock(this.lockTarget, { realpath: false });
+					} catch {
+						/* best effort */
+					}
+					continue;
+				}
+				break;
 			}
-		});
-		this.locked = true;
-		this.compromised = false;
+		}
+
+		throw new Error(
+			`Failed to acquire exclusive write lock at ${this.lockTarget} after ${
+				LOCK_ACQUIRE_RETRIES + 1
+			} attempt(s): ${lastError instanceof Error ? lastError.message : String(lastError)}. ` +
+				"Another process may hold the lock, or a stale lockfile could not be refreshed. " +
+				"Retry the operation; if it persists, stop the other local-memory-mcp process or delete the stale " +
+				`lockfile (${this.lockTarget}.lock).`
+		);
 	}
 
 	/**

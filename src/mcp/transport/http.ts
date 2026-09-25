@@ -557,14 +557,10 @@ export async function startHttpTransport(options: HttpTransportOptions): Promise
 	const allowedHostnames = buildAllowedHostnames(host);
 
 	const server = http.createServer((req, res) => {
-		void handleNodeRequest(req, res).catch((error: unknown) => {
-			logger.error("[MCP HTTP] request failed", { error: String(error) });
-			if (!res.headersSent) {
-				res.statusCode = 500;
-				res.setHeader("Content-Type", "text/plain; charset=utf-8");
-			}
-			res.end("Internal Server Error");
-		});
+		// FIX-025: client disconnects (ERR_STREAM_PREMATURE_CLOSE / ECONNRESET /
+		// aborted body) abort only this request and log at WARN — they never
+		// reach the process-level uncaught handler.
+		serveNodeRequest(req, res, handleNodeRequest, { logTag: "[MCP HTTP]" });
 	});
 
 	await listen(server, host, port);
@@ -715,6 +711,143 @@ export async function writeWebResponse(res: ServerResponse, web: Response): Prom
 	}
 	const source = Readable.fromWeb(web.body as NodeWebReadableStream<Uint8Array>);
 	await pipeline(source, res);
+}
+
+/**
+ * Error codes that mean "the CLIENT went away mid-request" — a socket reset,
+ * a half-closed stream, or a client that stopped reading a streaming response.
+ *
+ * These are EXPECTED on a long-lived daemon that streams SSE (and whose
+ * clients are short-lived agent processes that exit without a clean
+ * `DELETE`/`close`). They must abort ONLY the affected request and log at
+ * WARN — never be treated as a server fault or, worse, escape as an uncaught
+ * exception (FIX-025: `ERR_STREAM_PREMATURE_CLOSE` was the highest-volume
+ * stability signal in `daemon.log`).
+ */
+const CLIENT_DISCONNECT_CODES = new Set([
+	"ERR_STREAM_PREMATURE_CLOSE",
+	"ERR_STREAM_DESTROYED",
+	"ERR_STREAM_WRITE_AFTER_END",
+	"ECONNRESET",
+	"EPIPE",
+	"ABORT_ERR"
+]);
+
+/**
+ * Whether an error represents a client disconnect (socket close/reset, aborted
+ * request body, or a premature close while writing a streaming response).
+ *
+ * Checks the error `code`, the DOM `AbortError` name (Node's `Readable.toWeb`
+ * rejects request-body reads with an `AbortError`), and — as a last resort —
+ * the message, since `pipeline()` wraps some socket failures in an
+ * `ERR_STREAM_PREMATURE_CLOSE` whose message is `"Premature close"`. One level
+ * of `cause` is inspected so a wrapped transport error still classifies.
+ */
+export function isClientDisconnectError(error: unknown, depth = 0): boolean {
+	if (error === null || typeof error !== "object") return false;
+	const err = error as { code?: unknown; name?: unknown; message?: unknown; cause?: unknown };
+	if (typeof err.code === "string" && CLIENT_DISCONNECT_CODES.has(err.code)) return true;
+	if (err.name === "AbortError") return true;
+	if (typeof err.message === "string" && /premature close|aborted|socket hang up/i.test(err.message)) return true;
+	if (depth < 2 && "cause" in err) return isClientDisconnectError(err.cause, depth + 1);
+	return false;
+}
+
+/**
+ * Serve one Node HTTP exchange through the Web-standard MCP handler WITHOUT
+ * ever letting a client disconnect become an uncaught exception (FIX-025).
+ *
+ * Two hazards are handled:
+ *
+ *   1. **Unhandled stream errors.** An `IncomingMessage`/`ServerResponse`
+ *      `'error'` event with no listener is re-emitted as an uncaught
+ *      exception that kills the daemon. Persistent listeners are attached to
+ *      BOTH streams so a late socket error (after the response was partially
+ *      written) is logged and swallowed instead.
+ *
+ *   2. **Disconnect rejection.** `writeWebResponse` pipes the response body
+ *      through `pipeline(source, res)`; a client that goes away mid-stream
+ *      makes that reject with `ERR_STREAM_PREMATURE_CLOSE`. That rejection is
+ *      EXPECTED — it aborts only this request and is logged at WARN, with a
+ *      per-request id + duration so it can be correlated to a slow request.
+ *      Any OTHER rejection is a genuine server fault → 500 + error log.
+ *
+ * Shared by the standalone HTTP transport ({@link startHttpTransport}) and the
+ * combined daemon server (`combined-server.ts`) so both mounts behave
+ * identically.
+ *
+ * @param nodeReq - The Node request.
+ * @param res - The Node response (Express's `Response` subclass is accepted).
+ * @param handle - The async body that serves the exchange and ends the
+ *   response. Rejections are classified here.
+ * @param options - `logTag` prefixes every emitted log line.
+ */
+export function serveNodeRequest(
+	nodeReq: IncomingMessage,
+	res: ServerResponse,
+	handle: (nodeReq: IncomingMessage, res: ServerResponse) => Promise<void>,
+	options: { logTag: string }
+): void {
+	const tag = options.logTag;
+	const requestId = randomUUID();
+	const startedAt = Date.now();
+	let disconnectLogged = false;
+
+	/** Warn ONCE per request even if several disconnect signals fire. */
+	const logDisconnect = (error: unknown, where: string): void => {
+		if (disconnectLogged) return;
+		disconnectLogged = true;
+		logger.warn(`${tag} client disconnected mid-request`, {
+			requestId,
+			method: nodeReq.method,
+			url: nodeReq.url,
+			where,
+			durationMs: Date.now() - startedAt,
+			error: String(error)
+		});
+	};
+
+	// Persistent guards: an unlistened `'error'` on either stream is an uncaught
+	// exception. A disconnect is a WARN; anything else is a real error.
+	nodeReq.on("error", (error: unknown) => {
+		if (isClientDisconnectError(error)) logDisconnect(error, "request");
+		else logger.error(`${tag} request stream error`, { requestId, error: String(error) });
+	});
+	res.on("error", (error: unknown) => {
+		if (isClientDisconnectError(error)) logDisconnect(error, "response");
+		else logger.error(`${tag} response stream error`, { requestId, error: String(error) });
+	});
+
+	void handle(nodeReq, res)
+		.then(() => {
+			// Concise per-request observability (debug: the dashboard already
+			// logs one INFO line per request). The disconnect/error WARNs above
+			// carry the SAME requestId + durationMs, so a premature close can be
+			// correlated to a slow request.
+			logger.debug(`${tag} request complete`, {
+				requestId,
+				method: nodeReq.method,
+				url: nodeReq.url,
+				status: res.statusCode,
+				durationMs: Date.now() - startedAt
+			});
+		})
+		.catch((error: unknown) => {
+			if (isClientDisconnectError(error)) {
+				logDisconnect(error, "handler");
+				return;
+			}
+			logger.error(`${tag} request failed`, {
+				requestId,
+				error: String(error),
+				durationMs: Date.now() - startedAt
+			});
+			if (!res.headersSent) {
+				res.statusCode = 500;
+				res.setHeader("Content-Type", "text/plain; charset=utf-8");
+			}
+			if (!res.writableEnded) res.end("Internal Server Error");
+		});
 }
 
 /**

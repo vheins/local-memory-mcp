@@ -267,6 +267,38 @@ describe("daemon — single-instance lock (TASK-425)", () => {
 	});
 });
 
+describe("daemon — lock failure hardening (FIX-025)", () => {
+	it("wraps an fs failure acquiring the lock in an actionable message (not a raw error)", () => {
+		// Point the lock at a path whose parent "directory" is actually a FILE,
+		// so acquireLock's mkdirSync throws ENOTDIR — the class of fs failure
+		// that previously escaped the CLI as an uncaught stack trace.
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lmc-lockfail-"));
+		tempDirs.push(dir);
+		const notADir = path.join(dir, "blocker");
+		fs.writeFileSync(notADir, "x", "utf8");
+		const paths: DaemonPaths = {
+			dir,
+			pidFile: path.join(dir, "daemon.pid"),
+			logFile: path.join(dir, "daemon.log"),
+			lockFile: path.join(notADir, "daemon.lock")
+		};
+		const { log } = collector();
+
+		expect(() => startDaemon({ paths, io: { log } })).toThrow(/Failed to acquire the daemon single-instance lock/);
+	});
+
+	it("still starts normally when the lock is acquirable (positive control)", () => {
+		const paths = makePaths();
+		const { log } = collector();
+		const spawnFn = (() => ({ pid: 4321, unref: () => undefined })) as unknown as typeof spawn;
+
+		const result = startDaemon({ paths, io: { spawnFn, log, isAlive: () => false } });
+
+		expect(result).toEqual({ started: true, pid: 4321 });
+		expect(readLockPid(paths.lockFile)).toBe(4321);
+	});
+});
+
 describe("daemon — stop", () => {
 	it("SIGTERMs the recorded pid, removes the pid file, and logs 'Daemon stopped'", () => {
 		const paths = makePaths();

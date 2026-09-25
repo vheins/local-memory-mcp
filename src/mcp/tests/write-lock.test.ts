@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { WriteLock } from "../storage/write-lock";
+import { WriteLock, isRecoverableLockError } from "../storage/write-lock";
 import lockfile from "proper-lockfile";
 import fs from "fs";
 
@@ -24,7 +24,11 @@ describe("WriteLock", () => {
 	const dirPath = "/test/db/path";
 
 	beforeEach(() => {
-		vi.clearAllMocks();
+		// Reset BOTH call history and implementations so a test that stubs a
+		// rejection (FIX-025 retry cases) cannot leak into the next test.
+		vi.resetAllMocks();
+		vi.mocked(lockfile.lock).mockImplementation(async () => async () => {});
+		vi.mocked(lockfile.unlock).mockResolvedValue(undefined);
 	});
 
 	describe("constructor", () => {
@@ -83,6 +87,71 @@ describe("WriteLock", () => {
 			// uncaught exception ("Unable to update lock within the stale
 			// threshold"). Our handler must swallow it instead.
 			expect(() => opts.onCompromised(new Error("Unable to update lock within the stale threshold"))).not.toThrow();
+		});
+	});
+
+	describe("acquire robustness (FIX-025)", () => {
+		it("classifies the recoverable lock signatures (stale threshold, ENOENT, ECOMPROMISED/ELOCKED)", () => {
+			expect(isRecoverableLockError(new Error("Unable to update lock within the stale threshold"))).toBe(true);
+			expect(
+				isRecoverableLockError(
+					Object.assign(new Error("ENOENT: no such file or directory, utime '/x/memory.db.lock'"), { code: "ENOENT" })
+				)
+			).toBe(true);
+			expect(isRecoverableLockError(Object.assign(new Error("x"), { code: "ECOMPROMISED" }))).toBe(true);
+			expect(
+				isRecoverableLockError(Object.assign(new Error("Lock file is already being held"), { code: "ELOCKED" }))
+			).toBe(true);
+			// A genuine programming error is NOT recoverable.
+			expect(isRecoverableLockError(new Error("SQLITE_BUSY: database is locked"))).toBe(false);
+			expect(isRecoverableLockError(undefined)).toBe(false);
+			// A bare ENOENT unrelated to a lockfile must NOT be swallowed.
+			expect(
+				isRecoverableLockError(
+					Object.assign(new Error("ENOENT: no such file or directory, open '/x/other'"), { code: "ENOENT" })
+				)
+			).toBe(false);
+		});
+
+		it("retries a recoverable acquire failure ONCE, then succeeds (positive)", async () => {
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+			vi.mocked(lockfile.lock).mockRejectedValueOnce(new Error("Unable to update lock within the stale threshold"));
+			const lock = new WriteLock(dbPath);
+
+			// First attempt rejects (recoverable) → retry → second succeeds.
+			await expect(lock.acquire()).resolves.toBeUndefined();
+			expect(lockfile.lock).toHaveBeenCalledTimes(2);
+		});
+
+		it("throws an actionable error after the retry budget is exhausted (negative)", async () => {
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+			vi.mocked(lockfile.lock).mockRejectedValue(new Error("Unable to update lock within the stale threshold"));
+			const lock = new WriteLock(dbPath);
+
+			// Two consecutive failures (1 retry) must NOT escape as the raw
+			// proper-lockfile error; it is wrapped with recovery guidance.
+			await expect(lock.acquire()).rejects.toThrow(/Failed to acquire exclusive write lock.*stale threshold/s);
+			expect(lockfile.lock).toHaveBeenCalledTimes(2);
+		});
+
+		it("does NOT retry a non-recoverable acquire failure (negative)", async () => {
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+			vi.mocked(lockfile.lock).mockRejectedValue(Object.assign(new Error("permission denied"), { code: "EACCES" }));
+			const lock = new WriteLock(dbPath);
+
+			await expect(lock.acquire()).rejects.toThrow(/Failed to acquire exclusive write lock/);
+			expect(lockfile.lock).toHaveBeenCalledTimes(1);
+		});
+
+		it("withExclusiveLock surfaces the actionable error and still releases (no wedge)", async () => {
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+			vi.mocked(lockfile.lock).mockRejectedValue(new Error("Unable to update lock within the stale threshold"));
+			const lock = new WriteLock(dbPath);
+
+			await expect(lock.withExclusiveLock(() => "never")).rejects.toThrow(/Failed to acquire exclusive write lock/);
+			// The failure must not wedge the tail chain — a later call still runs.
+			vi.mocked(lockfile.lock).mockImplementation(async () => async () => {});
+			await expect(lock.withExclusiveLock(() => "ok")).resolves.toBe("ok");
 		});
 	});
 

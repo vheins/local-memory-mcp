@@ -9,6 +9,7 @@ import { handleTaskDelete } from "../tools/task.delete";
 import { _queueJobKindInvariant, type QueueJobKind } from "../embedding-queue/types";
 import type { CodebaseSymbolInsert, CodebaseReferenceInsert } from "../types";
 import { makeTask, makeMemory, makeWorker, makeStubVectors, getJob, countRows, REPO } from "./embedding-queue.helpers";
+import { addLogSink } from "../utils/logger";
 
 // ─── EmbeddingWorker behavior ────────────────────────────────────────────
 // Split out from embedding-queue.test.ts (the worker half) to keep that file
@@ -212,6 +213,75 @@ describe("EmbeddingWorker — lazy ONNX warm-up gate (PERF-005)", () => {
 		expect(stats.started).toBe(true);
 		expect(stats.modelReady).toBe(false);
 		worker.stop();
+	});
+});
+
+describe("EmbeddingWorker — deferred startup maintenance (FIX-025)", () => {
+	let db: SQLiteStore;
+	let detach: (() => void) | null = null;
+
+	beforeEach(async () => {
+		db = await createTestStore();
+	});
+
+	afterEach(() => {
+		detach?.();
+		detach = null;
+		db.close();
+	});
+
+	/**
+	 * FIX-025 latency reduction: on a 2.6GB DB the synchronous startup sweep
+	 * (reconcile + backfill + purge) blocked the event loop at boot — exactly
+	 * when the HTTP listener is binding and clients send `initialize`. `start()`
+	 * now defers the sweep to `setImmediate` so the listener becomes ready
+	 * first; the worker still reports `started` synchronously.
+	 */
+	it("defers the maintenance sweep until after start() returns (listener-first)", async () => {
+		const messages: string[] = [];
+		detach = addLogSink((payload) => {
+			if (typeof payload.data.message === "string") messages.push(payload.data.message);
+		});
+		const vectors = makeStubVectors();
+		vectors.initialize = vi.fn().mockResolvedValue(undefined);
+		const worker = new EmbeddingWorker(db, vectors, {
+			pollIntervalMs: 3_600_000,
+			purgeIntervalMs: 3_600_000,
+			backfillCap: 0
+		});
+
+		worker.start();
+
+		// Synchronously after start(): the worker is marked started, but the
+		// heavy sweep has NOT run yet (deferred to a later tick).
+		expect(worker.getStats().started).toBe(true);
+		expect(messages).toContain("[EmbeddingWorker] started");
+		expect(messages).not.toContain("[EmbeddingWorker] startup maintenance complete");
+
+		// The sweep settles on its own tick; callers can await it deterministically.
+		await worker.whenStartupMaintenanceSettled();
+		expect(messages).toContain("[EmbeddingWorker] startup maintenance complete");
+		worker.stop();
+	});
+
+	it("does not run the deferred sweep after stop() (negative: no work past shutdown)", async () => {
+		const messages: string[] = [];
+		detach = addLogSink((payload) => {
+			if (typeof payload.data.message === "string") messages.push(payload.data.message);
+		});
+		const vectors = makeStubVectors();
+		vectors.initialize = vi.fn().mockResolvedValue(undefined);
+		const worker = new EmbeddingWorker(db, vectors, {
+			pollIntervalMs: 3_600_000,
+			purgeIntervalMs: 3_600_000,
+			backfillCap: 0
+		});
+
+		worker.start();
+		worker.stop();
+		// The deferred callback sees `stopped` and skips the sweep entirely.
+		await worker.whenStartupMaintenanceSettled();
+		expect(messages).not.toContain("[EmbeddingWorker] startup maintenance complete");
 	});
 });
 

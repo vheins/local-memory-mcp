@@ -75,6 +75,12 @@ export class EmbeddingWorker {
 	private running = false;
 	private stopped = false;
 	private modelReady = false;
+	/**
+	 * Resolves when the (deferred) startup maintenance sweep has settled.
+	 * Exposed so callers/tests can await the one-time reconcile/backfill/purge
+	 * without polling the queue (FIX-025 latency reduction).
+	 */
+	private startupMaintenancePromise: Promise<void> = Promise.resolve();
 	/** Embedding batch latency samples (OPT-OBS-01) — surfaced as p50/p95. */
 	private readonly embedLatency = new DurationSeries();
 
@@ -98,7 +104,23 @@ export class EmbeddingWorker {
 
 		// Startup maintenance: reconcile expired leases, backfill missing/stale
 		// vectors, purge finished rows.
-		void runStartupMaintenance(this.outbox, this.opts);
+		//
+		// DEFERRED (FIX-025): `runStartupMaintenance` is fully synchronous on a
+		// 2.6GB DB (reconcile + backfill scan + purge), so running it inline here
+		// blocked the event loop for the whole sweep at boot — exactly the window
+		// in which the HTTP listener is binding and clients send `initialize`.
+		// Deferring to `setImmediate` lets the listener become ready (and answer
+		// its first requests) BEFORE the heavy sweep, so `initialize` is no
+		// longer starved into a client-side timeout/disconnect.
+		this.startupMaintenancePromise = new Promise<void>((resolve) => {
+			setImmediate(() => {
+				if (this.stopped) {
+					resolve();
+					return;
+				}
+				void runStartupMaintenance(this.outbox, this.opts).finally(resolve);
+			});
+		});
 
 		// Warm the ONNX model in the background (shares the RealVectorStore
 		// extractor, so it is loaded once per process). PERF-005: when
@@ -130,6 +152,15 @@ export class EmbeddingWorker {
 			backfillCap: this.opts.backfillCap,
 			lazyWarmup: this.opts.lazyWarmup
 		});
+	}
+
+	/**
+	 * Resolve when the deferred startup maintenance sweep (reconcile + backfill
+	 * + purge) has settled. `start()` defers it to a later tick (FIX-025), so
+	 * callers/tests that must observe the sweep await this instead of polling.
+	 */
+	whenStartupMaintenanceSettled(): Promise<void> {
+		return this.startupMaintenancePromise;
 	}
 
 	stop(): void {
