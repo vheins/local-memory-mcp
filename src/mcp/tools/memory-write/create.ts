@@ -4,7 +4,13 @@ import { VectorStore, MEMORY_STATUS_ARCHIVED } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { enqueueMemory } from "../../embedding-queue";
 import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../../utils/memory-utils";
-import { applyDecisionFields, applySessionFields, buildMemoryEntry, checkCreateConflict } from "./helpers";
+import {
+	applyDecisionFields,
+	applySessionFields,
+	buildMemoryEntry,
+	checkCreateConflict,
+	resolveScopeOwnerRepo
+} from "./helpers";
 
 // ── Single CREATE ────────────────────────────────────────────────────────
 
@@ -32,8 +38,9 @@ export async function handleCreate(
 	}
 
 	const isTaskArchive = parsed.type === "task_archive";
-	const owner = parsed.owner ?? parsed.scope?.owner ?? "unknown";
-	const repo = parsed.repo ?? parsed.scope?.repo ?? "unknown";
+	// Scope-first resolution (FIX-020) — shared with buildMemoryEntry so the
+	// supersede/conflict lookups and the stored row use the same scope.
+	const { owner, repo } = resolveScopeOwnerRepo(parsed);
 
 	// Check for resolved supersedes to decide
 	const resolvedSupersedes = resolveMemorySupersedes(parsed.supersedes, db, owner, repo);

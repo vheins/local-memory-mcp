@@ -120,6 +120,33 @@ export function applySessionFields(params: Record<string, unknown>): void {
 	delete params.next_steps;
 }
 
+// ── Scope resolution ─────────────────────────────────────────────────────
+
+/**
+ * Resolves the effective `(owner, repo)` for a memory-write item.
+ *
+ * Precedence is nested `scope` FIRST, then the top-level fields, then
+ * `"unknown"`. This is the single source of truth shared by
+ * {@link buildMemoryEntry} and {@link checkCreateConflict} so the stored scope
+ * and the conflict-gate scope can never disagree.
+ *
+ * Why scope-first: `normalizeToolArguments` mirrors the resolved repo/owner
+ * INTO `scope` when `scope` exists but lacks them, and it fills the TOP-LEVEL
+ * `owner`/`repo` from the session (roots/CWD) even when the caller scoped the
+ * write ONLY via `scope:{owner,repo}`. Preferring the top-level would therefore
+ * silently re-target a scope-only write to the session repo (e.g. "agents")
+ * instead of the requested one (FIX-020). Because normalization keeps
+ * `scope.owner`/`scope.repo` equal to the top-level pair whenever they were NOT
+ * caller-supplied, scope-first is byte-identical for every `owner`/`repo`-only
+ * call — `"unknown"` applies only when BOTH are absent.
+ */
+export function resolveScopeOwnerRepo(params: MemoryWriteItemInput): { owner: string; repo: string } {
+	return {
+		owner: params.scope?.owner ?? params.owner ?? "unknown",
+		repo: params.scope?.repo ?? params.repo ?? "unknown"
+	};
+}
+
 // ── Memory entry builder ─────────────────────────────────────────────────
 
 /**
@@ -129,15 +156,17 @@ export function applySessionFields(params: Record<string, unknown>): void {
  * `MemoryWriteItemSchema`) instead of `Record<string, unknown>`, so field
  * reads are statically typed — no `as` casts per field.
  *
- * Four fields keep a narrow compile-time cast because the schema marks them
+ * Fields keep a narrow compile-time cast because the schema marks them
  * optional (the schema is shared with the update/acknowledge modes) while the
  * entity type and the memories table expect non-null:
  * - `type`     → `type TEXT NOT NULL`.
- * - `content`  → `content TEXT NOT NULL`.
- * - `importance` → `importance INTEGER NOT NULL CHECK (importance BETWEEN 1 AND 5)`.
- *   All three: an absent value flows through the entry unchanged and the
+ * - `content`  → `content TEXT NOT NULL`: an absent value flows through and the
  *   insert fails with SQLITE_CONSTRAINT — the exact pre-refactor outcome for a
- *   create missing a required column.
+ *   create missing a required column (surfaced as a structured error, FIX-020).
+ * - `importance` → `importance INTEGER NOT NULL CHECK (importance BETWEEN 1 AND 5)`.
+ *   The schema now supplies `.default(3)`, and the `?? 3` here is an
+ *   independent safety net so NO create path can ever bind `undefined`
+ *   (FIX-020) — the constraint can never be violated by an omitted importance.
  * - `title`    → `title TEXT` (nullable): an absent value flows through and is
  *   stored as NULL (insert binds `entry.title || null`).
  *
@@ -152,8 +181,8 @@ export function buildMemoryEntry(
 	batchCodes?: Set<string>
 ): MemoryEntry {
 	const scope = params.scope;
-	const owner = params.owner ?? scope?.owner ?? "unknown";
-	const repo = params.repo ?? scope?.repo ?? "unknown";
+	// Scope-first resolution (FIX-020) — see resolveScopeOwnerRepo.
+	const { owner, repo } = resolveScopeOwnerRepo(params);
 	const fullScope = {
 		owner,
 		repo,
@@ -182,7 +211,10 @@ export function buildMemoryEntry(
 		type: params.type as MemoryEntry["type"],
 		title: params.title as string,
 		content: params.content as string,
-		importance: params.importance as number,
+		// Safety net (FIX-020): the schema now defaults importance to 3, but this
+		// `?? 3` guarantees NO create path can ever bind `undefined` into the
+		// NOT NULL CHECK(1..5) column, independent of the schema.
+		importance: (params.importance ?? 3) as number,
 		agent: params.agent ?? "unknown",
 		role: params.role ?? "unknown",
 		model: params.model ?? "unknown",
@@ -215,8 +247,9 @@ export async function checkCreateConflict(
 		return { conflict: false };
 	}
 
-	const owner = params.owner ?? params.scope?.owner ?? "unknown";
-	const repo = params.repo ?? params.scope?.repo ?? "unknown";
+	// Same scope-first resolution as buildMemoryEntry (FIX-020) so the
+	// conflict gate and the stored row agree on the scope.
+	const { owner, repo } = resolveScopeOwnerRepo(params);
 
 	// `content` is schema-optional but checkConflicts requires a string. The cast
 	// is type-level only — it passes `params.content` (possibly undefined) through

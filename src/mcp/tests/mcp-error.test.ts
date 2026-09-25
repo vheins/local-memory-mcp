@@ -108,6 +108,41 @@ describe("mcp-error — canonical error envelope (OPT-CODE-01)", () => {
 			expect(res.structuredContent).toMatchObject({ code: "INTERNAL_ERROR", retryable: true });
 		});
 
+		// FIX-020: a SQLite constraint violation is a caller-actionable
+		// request-shape failure — it must surface the real message + the raw
+		// constraint code, not the opaque "Internal tool error".
+		it("positive: SQLITE_CONSTRAINT_NOTNULL maps to VALIDATION_ERROR with the real message + constraint code", () => {
+			const err = new Error("NOT NULL constraint failed: memories.importance") as Error & { code: string };
+			err.code = "SQLITE_CONSTRAINT_NOTNULL";
+			const res = toErrorResponse(err);
+			expect(res.isError).toBe(true);
+			expect(res.content?.[0]).toEqual({ type: "text", text: "NOT NULL constraint failed: memories.importance" });
+			expect(res.structuredContent).toMatchObject({
+				schema: "tool-error",
+				code: "VALIDATION_ERROR",
+				retryable: false,
+				message: "NOT NULL constraint failed: memories.importance",
+				details: { constraint: "SQLITE_CONSTRAINT_NOTNULL" }
+			});
+		});
+
+		it("positive: SQLITE_CONSTRAINT_CHECK maps to VALIDATION_ERROR with the constraint code", () => {
+			const err = new Error("CHECK constraint failed: importance BETWEEN 1 AND 5") as Error & { code: string };
+			err.code = "SQLITE_CONSTRAINT_CHECK";
+			const res = toErrorResponse(err);
+			expect(res.structuredContent).toMatchObject({
+				code: "VALIDATION_ERROR",
+				retryable: false,
+				details: { constraint: "SQLITE_CONSTRAINT_CHECK" }
+			});
+		});
+
+		it("positive: a 'constraint failed' message without a code is still surfaced as VALIDATION_ERROR", () => {
+			const res = toErrorResponse(new Error("UNIQUE constraint failed: memories.code"));
+			expect(res.structuredContent).toMatchObject({ code: "VALIDATION_ERROR", retryable: false });
+			expect((res.structuredContent as Record<string, unknown>).details).toBeUndefined();
+		});
+
 		it("negative: an unrelated unexpected error still maps to the generic non-retryable INTERNAL_ERROR", () => {
 			const res = toErrorResponse(new Error("segmentation fault in widget parser"));
 			expect(res.isError).toBe(true);

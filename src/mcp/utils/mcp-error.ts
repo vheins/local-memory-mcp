@@ -175,6 +175,25 @@ function classifyExpectedError(error: Error): {
 	if (/\b(?:already exists|duplicate|conflict)\b/i.test(error.message)) {
 		return { code: "CONFLICT", message: error.message, retryable: false };
 	}
+	// SQLite constraint violations (FIX-020): better-sqlite3 throws SqliteError
+	// with a stable `code` (SQLITE_CONSTRAINT_NOTNULL / _CHECK / _UNIQUE /
+	// _FOREIGNKEY) and a schema-level message ("NOT NULL constraint failed:
+	// memories.importance"). These are caller-actionable request-shape failures
+	// — surface the real message under VALIDATION_ERROR instead of masking it
+	// behind the generic "Internal tool error". The message names only the
+	// table/column (no stack trace, no secrets), so it is safe to return; the
+	// raw SQLite code is carried in `details.constraint` for machine handling.
+	const sqliteCode = (error as Error & { code?: unknown }).code;
+	const constraintCode =
+		typeof sqliteCode === "string" && /^SQLITE_CONSTRAINT/.test(sqliteCode) ? sqliteCode : undefined;
+	if (constraintCode || /\bconstraint failed\b/i.test(error.message)) {
+		return {
+			code: "VALIDATION_ERROR",
+			message: error.message,
+			retryable: false,
+			...(constraintCode ? { details: { constraint: constraintCode } } : {})
+		};
+	}
 	if (/\bunsupported\b/i.test(error.message)) {
 		return { code: "UNSUPPORTED_OPERATION", message: error.message, retryable: false };
 	}

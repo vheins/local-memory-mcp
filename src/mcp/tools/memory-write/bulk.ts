@@ -155,22 +155,29 @@ export async function handleBulk(
 					const itemOwner = (raw.owner as string) ?? (itemScope.owner as string) ?? defaultOwner;
 					const itemRepo = (raw.repo as string) ?? (itemScope.repo as string) ?? defaultRepo;
 
-					// Propagate owner/repo to the item so buildMemoryEntry picks them up.
-					// Scope is only synthesized when BOTH defaults exist — MemoryScopeSchema
-					// requires owner+repo min(1), so an asymmetric pair (exactly one
-					// non-empty) would emit a PARTIAL scope that fails the item parse below
-					// and flips the whole valid bulk create into per-item errors (TASK-147).
-					// When a half is missing, leave scope undefined; buildMemoryEntry falls
-					// back to "unknown" for that half, keeping stored owner/repo byte-identical
-					// to the pre-refactor behavior.
-					if (!raw.owner && defaultOwner) raw.owner = defaultOwner;
-					if (!raw.repo && defaultRepo) raw.repo = defaultRepo;
+					// Propagate the RESOLVED owner/repo to the item so
+					// buildMemoryEntry (scope-first, FIX-020) and the conflict gate
+					// agree on the item's own scope. Synthesizing the scope from the
+					// item's resolved values — not the raw parent defaults — keeps an
+					// item that set ONLY a top-level owner/repo from being overridden
+					// by a parent-derived scope under the scope-first precedence.
+					//
+					// Scope is only synthesized when BOTH halves resolve —
+					// MemoryScopeSchema requires owner+repo min(1), so an asymmetric
+					// pair (exactly one non-empty) would emit a PARTIAL scope that
+					// fails the item parse below and flips the whole valid bulk create
+					// into per-item errors (TASK-147). When a half is missing, leave
+					// scope undefined; buildMemoryEntry falls back to "unknown" for
+					// that half, keeping stored owner/repo byte-identical to the
+					// pre-refactor behavior.
+					if (!raw.owner && itemOwner) raw.owner = itemOwner;
+					if (!raw.repo && itemRepo) raw.repo = itemRepo;
 					if (!raw.scope) {
-						raw.scope = defaultOwner && defaultRepo ? { owner: defaultOwner, repo: defaultRepo } : undefined;
+						raw.scope = itemOwner && itemRepo ? { owner: itemOwner, repo: itemRepo } : undefined;
 					} else {
 						const scope = raw.scope as Record<string, unknown>;
-						if (!scope.owner && defaultOwner) scope.owner = defaultOwner;
-						if (!scope.repo && defaultRepo) scope.repo = defaultRepo;
+						if (!scope.owner && itemOwner) scope.owner = itemOwner;
+						if (!scope.repo && itemRepo) scope.repo = itemRepo;
 					}
 
 					// Parse the item through the item schema (OPT-CODE-03). Bulk items

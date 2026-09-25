@@ -16,7 +16,8 @@ export {
 	applyDecisionFields,
 	applySessionFields,
 	buildMemoryEntry,
-	checkCreateConflict
+	checkCreateConflict,
+	resolveScopeOwnerRepo
 } from "./helpers";
 
 // ── Main handler ─────────────────────────────────────────────────────────

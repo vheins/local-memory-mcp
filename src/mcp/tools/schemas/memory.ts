@@ -63,7 +63,13 @@ const MemoryWriteFields = {
 	type: MemoryTypeSchema.optional(),
 	title: z.string().min(3).max(255).optional(),
 	content: z.string().min(10).optional(),
-	importance: z.coerce.number().min(1).max(5).optional(),
+	// `.default(3)` guarantees every CREATE carries a value (FIX-020): the
+	// memories.importance column is NOT NULL CHECK (1..5), and an omitted value
+	// previously bound `undefined` and failed the INSERT. UPDATE/ACKNOWLEDGE do
+	// NOT run this schema through `.parse()` (handlers read the raw normalized
+	// args), so the default never forces a spurious importance write on those
+	// paths — only CREATE (single) and bulk CREATE parse through it.
+	importance: z.coerce.number().min(1).max(5).default(3),
 	code: z.string().max(20).optional(),
 	ttlDays: z.coerce.number().min(1).optional(),
 	supersedes: z.string().optional(),
