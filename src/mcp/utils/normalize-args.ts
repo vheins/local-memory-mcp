@@ -30,6 +30,56 @@ function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
 }
 
+// ── Owner-inference warning dedup (FIX-029) ──────────────────────────────
+// The "owner inferred from session — may be incorrect" advisory used to be
+// emitted on EVERY scope-less call (6903 occurrences observed; bursts of 52
+// in one minute) because the derived JSON Schema drops owner/repo from
+// `required` and agents legitimately omit them. The advisory is useful ONCE
+// per scope, not per call, so it is now rate-limited per (owner, repo,
+// session) with a fixed interval and a bounded key set.
+const OWNER_WARN_INTERVAL_MS = 60_000;
+/** Hard cap on retained dedup keys — bounds memory under many sessions. */
+const OWNER_WARN_MAX_KEYS = 512;
+
+/** key → epoch-ms of the last emitted advisory for that (owner,repo,session). */
+const ownerWarnTimestamps = new Map<string, number>();
+
+/**
+ * Clears the owner-inference warning dedup state.
+ *
+ * Exported so long-lived daemons (and tests) can reset the rate-limiter
+ * deterministically without waiting for the interval to elapse.
+ */
+export function resetOwnerWarnDedup(): void {
+	ownerWarnTimestamps.clear();
+}
+
+/**
+ * Emits the owner-inference advisory at most once per
+ * `OWNER_WARN_INTERVAL_MS` for a given `(owner, repo, sessionId)` triple.
+ *
+ * @param owner    the owner that was inferred from the session
+ * @param repo     the (slash-less) repo the call was scoped to
+ * @param session  current session context (its `sessionId` partitions keys)
+ */
+function warnOwnerInferred(owner: string, repo: string, session?: SessionContext): void {
+	const key = `${owner}\u0000${repo}\u0000${session?.sessionId ?? ""}`;
+	const now = Date.now();
+	const last = ownerWarnTimestamps.get(key);
+	if (last !== undefined && now - last < OWNER_WARN_INTERVAL_MS) return;
+
+	// Bound the key set: evict the oldest entry when at capacity.
+	if (!ownerWarnTimestamps.has(key) && ownerWarnTimestamps.size >= OWNER_WARN_MAX_KEYS) {
+		const oldest = ownerWarnTimestamps.keys().next().value;
+		if (oldest !== undefined) ownerWarnTimestamps.delete(oldest);
+	}
+	ownerWarnTimestamps.set(key, now);
+
+	logger.warn(
+		`[normalize-args] owner inferred from session (${owner}) — may be incorrect. Agents should pass explicit owner/repo.`
+	);
+}
+
 /**
  * Identifier argument keys that, when carrying a UUID, make a write
  * self-scoping: the handler resolves the stored entity by id and inherits that
@@ -247,9 +297,9 @@ export function normalizeToolArguments(
 		if (inferredOwner !== undefined) {
 			nextArgs.owner = inferredOwner;
 			if (!repoVal.includes("/")) {
-				logger.warn(
-					`[normalize-args] owner inferred from session (${nextArgs.owner}) — may be incorrect. Agents should pass explicit owner/repo.`
-				);
+				// Rate-limited per (owner, repo, session) — see warnOwnerInferred
+				// (FIX-029). The advisory is emitted once per scope, not per call.
+				warnOwnerInferred(inferredOwner, repoVal, session);
 			}
 		}
 	}

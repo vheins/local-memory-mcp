@@ -56,14 +56,16 @@ If unsure, run `git remote -v` in the project directory — the remote URL (e.g.
 
 **Session-wide defaults (can be omitted):** `owner`, `repo`, `agent`, and `model` are auto-populated from the session context and environment when not explicitly provided:
 
-| Field   | Fallback chain                                                                                |
-| :------ | :-------------------------------------------------------------------------------------------- |
-| `owner` | tool arg → `session.owner` (git remote) → `inferOwnerFromSession`                             |
-| `repo`  | tool arg → `session.repo` (directory basename) → `inferRepoFromSession`                       |
-| `agent` | tool arg → `session.lastSeenAgent` → `session.clientName` (handshake) → `MCP_CLIENT_NAME` env |
-| `model` | tool arg → `session.lastSeenModel` → `MCP_MODEL` env                                          |
+| Field   | Fallback chain                                                                                                                   |
+| :------ | :------------------------------------------------------------------------------------------------------------------------------- |
+| `owner` | tool arg → `owner` segment of `owner/repo` → `inferOwnerFromSession` (git remote / MCP roots) → `session.owner` (CWD git remote) |
+| `repo`  | tool arg → `inferRepoFromSession` (single MCP root basename) → `session.repo` (CWD basename)                                     |
+| `agent` | tool arg → `session.lastSeenAgent` → `session.clientName` (handshake) → `MCP_CLIENT_NAME` env                                    |
+| `model` | tool arg → `session.lastSeenModel` → `MCP_MODEL` env                                                                             |
 
 Setting these explicitly in the tool call always takes priority over session defaults.
+
+Path-basename values are NEVER used as `owner` (FIX-029): a structural path segment such as `home` (from `/home/<user>`) or a dotfile directory (`.config`) is rejected rather than fabricated as an owner, so a scope-less call can never silently mis-file data under a wrong-scope owner. When the scope is genuinely undeterminable for an HTTP/daemon write, the call fails loud instead.
 
 Violation: tasks created with a wrong owner will be invisible to other agents querying with the correct owner.
 

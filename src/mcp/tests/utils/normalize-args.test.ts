@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { normalizeToolArguments, validateRootBoundPath } from "../../utils/normalize-args";
+import { normalizeToolArguments, resetOwnerWarnDedup, validateRootBoundPath } from "../../utils/normalize-args";
 import { inferOwnerFromSession, inferRepoFromSession, type SessionContext } from "../../session";
 import { logger } from "../../utils/logger";
 
@@ -32,6 +32,10 @@ function makeSession(overrides: Partial<SessionContext> = {}): SessionContext {
 beforeEach(() => {
 	vi.mocked(inferOwnerFromSession).mockReset();
 	vi.mocked(inferRepoFromSession).mockReset();
+	// FIX-029: the owner-inference advisory is rate-limited per
+	// (owner, repo, session) via module-level state; reset it between tests so
+	// each test observes the first emission deterministically.
+	resetOwnerWarnDedup();
 });
 
 afterEach(() => {
@@ -106,7 +110,8 @@ describe("normalizeToolArguments", () => {
 		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
 		const result = normalizeToolArguments({ repo: "my-repo" });
 		expect(result.owner).toBe("vheins");
-		expect(warnSpy).toHaveBeenCalled();
+		// FIX-029: exactly one advisory on the first inference for a scope.
+		expect(warnSpy).toHaveBeenCalledTimes(1);
 	});
 
 	it("treats an empty owner as not provided and fills it from session.owner", () => {
@@ -133,7 +138,7 @@ describe("normalizeToolArguments", () => {
 		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
 		const result = normalizeToolArguments({ owner: "", repo: "my-repo" });
 		expect(result.owner).toBe("vheins");
-		expect(warnSpy).toHaveBeenCalled();
+		expect(warnSpy).toHaveBeenCalledTimes(1);
 	});
 
 	it("never re-infers an explicit non-empty owner (FIX-OWNER-INFER regression guard)", () => {
@@ -155,7 +160,7 @@ describe("normalizeToolArguments", () => {
 		expect(result.owner).toBe("vheins");
 		expect(memories[0].scope.repo).toBe("my-repo");
 		expect(memories[0].scope.owner).toBe("vheins");
-		expect(warnSpy).toHaveBeenCalled();
+		expect(warnSpy).toHaveBeenCalledTimes(1);
 	});
 
 	it("fills scope.owner from an owner/repo scoped repo when the top-level owner is empty", () => {
@@ -352,6 +357,62 @@ describe("normalizeToolArguments", () => {
 			expect(result.owner).toBe("cwd-owner");
 			expect(warnSpy).toHaveBeenCalled();
 		});
+	});
+});
+
+describe("owner-inference warning is rate-limited per (owner, repo, session) (FIX-029)", () => {
+	it("emits the advisory once, then suppresses repeats for the same scope", () => {
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
+		const session = makeSession({ sessionId: "sess-1" });
+
+		// 52-in-a-minute burst scenario from the incident: 50 identical calls.
+		for (let i = 0; i < 50; i++) {
+			const result = normalizeToolArguments({ repo: "my-repo" }, session);
+			expect(result.owner).toBe("vheins");
+		}
+
+		expect(warnSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("warns again for a different repo scope", () => {
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
+		const session = makeSession({ sessionId: "sess-1" });
+
+		normalizeToolArguments({ repo: "repo-a" }, session);
+		normalizeToolArguments({ repo: "repo-b" }, session);
+
+		expect(warnSpy).toHaveBeenCalledTimes(2);
+	});
+
+	it("warns again for a different session on the same scope", () => {
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
+
+		normalizeToolArguments({ repo: "my-repo" }, makeSession({ sessionId: "sess-1" }));
+		normalizeToolArguments({ repo: "my-repo" }, makeSession({ sessionId: "sess-2" }));
+
+		expect(warnSpy).toHaveBeenCalledTimes(2);
+	});
+
+	it("emits again after the dedup state is reset", () => {
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
+		const session = makeSession({ sessionId: "sess-1" });
+
+		normalizeToolArguments({ repo: "my-repo" }, session);
+		expect(warnSpy).toHaveBeenCalledTimes(1);
+
+		resetOwnerWarnDedup();
+		normalizeToolArguments({ repo: "my-repo" }, session);
+		expect(warnSpy).toHaveBeenCalledTimes(2);
+	});
+
+	it("never warns when the owner is explicit", () => {
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		normalizeToolArguments({ owner: "explicit", repo: "my-repo" }, makeSession({ sessionId: "sess-1" }));
+		expect(warnSpy).not.toHaveBeenCalled();
 	});
 });
 

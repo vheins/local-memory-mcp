@@ -46,6 +46,62 @@ export type SessionContext = {
 	transport?: "stdio" | "http";
 };
 
+/**
+ * Structural OS/XDG path segments that can NEVER be a real GitHub owner or
+ * repository name. `inferOwnerFromSession`/`inferRepoFromSession` (and the
+ * CWD-derived defaults in {@link createSessionContext}) used to fall back to
+ * the parent-directory / basename of the working directory, which produced
+ * spurious owners such as `home` (from `/home/<user>`) and `.config`
+ * (FIX-029) — writes scoped to those wrong-scope owners silently mis-filed
+ * data. A segment on this list — or any dotfile — is a path artifact, not a
+ * project scope.
+ */
+const RESERVED_PATH_SEGMENTS = new Set([
+	"home",
+	"users",
+	"root",
+	"tmp",
+	"var",
+	"usr",
+	"opt",
+	"etc",
+	"mnt",
+	"media",
+	"srv",
+	"bin",
+	"sbin",
+	"lib",
+	"lib64",
+	"boot",
+	"dev",
+	"proc",
+	"sys",
+	"run",
+	"applications",
+	"library",
+	"system",
+	"volumes",
+	"private",
+	"windows",
+	"program files",
+	"programdata"
+]);
+
+/**
+ * Whether a raw path segment is a plausible owner/repo identifier.
+ *
+ * Rejects (FIX-029): empty/whitespace segments, dotfiles / hidden dirs
+ * (`.config`, `.cache`, …) and reserved OS/XDG structural directories
+ * (`home`, `tmp`, `usr`, …). Legitimate project directories pass.
+ */
+function isPlausibleScopeSegment(segment: string | undefined): segment is string {
+	if (!segment) return false;
+	const trimmed = segment.trim();
+	if (trimmed.length === 0) return false;
+	if (trimmed.startsWith(".")) return false;
+	return !RESERVED_PATH_SEGMENTS.has(trimmed.toLowerCase());
+}
+
 export function createSessionContext(transport: "stdio" | "http" = "stdio"): SessionContext {
 	const cwd = process.cwd();
 	const repo = path.basename(cwd);
@@ -55,7 +111,10 @@ export function createSessionContext(transport: "stdio" | "http" = "stdio"): Ses
 	if (!owner) {
 		const parts = cwd.split(path.sep).filter(Boolean);
 		if (parts.length >= 2) {
-			owner = parts[parts.length - 2];
+			const candidate = parts[parts.length - 2];
+			if (isPlausibleScopeSegment(candidate)) {
+				owner = candidate;
+			}
 		}
 	}
 
@@ -220,12 +279,17 @@ export function findContainingRoot(targetPath: string, session?: SessionContext)
 export function inferRepoFromSession(session?: SessionContext): string | undefined {
 	const roots = getFilesystemRoots(session);
 	if (roots.length === 1) {
-		return path.basename(roots[0]);
+		const candidate = path.basename(roots[0]);
+		// FIX-029: a basename that is a path artifact (dotfile / reserved OS dir)
+		// is never a repository name — do not fabricate one.
+		return isPlausibleScopeSegment(candidate) ? candidate : undefined;
 	}
 	if (roots.length === 0) {
 		if (!session) return undefined;
 		const cwd = process.cwd();
-		return path.basename(cwd);
+		const candidate = path.basename(cwd);
+		// FIX-029: the rootless CWD fallback must not yield `home`, `.config`, …
+		return isPlausibleScopeSegment(candidate) ? candidate : undefined;
 	}
 	return undefined;
 }
@@ -266,7 +330,12 @@ export function inferOwnerFromSession(session?: SessionContext): string | undefi
 	if (roots.length === 1) {
 		const parts = roots[0].split(path.sep).filter(Boolean);
 		if (parts.length >= 2) {
-			return parts[parts.length - 2];
+			const candidate = parts[parts.length - 2];
+			// FIX-029: reject path-basename owners (`home`, `.config`, dotfiles,
+			// reserved OS dirs) — a structural path segment is not a real owner.
+			if (isPlausibleScopeSegment(candidate)) {
+				return candidate;
+			}
 		}
 	}
 	return undefined;

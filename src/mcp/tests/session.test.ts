@@ -64,6 +64,33 @@ describe("inferOwnerFromSession()", () => {
 		const session = sessionWithRoots([root1, root2]);
 		expect(inferOwnerFromSession(session)).toBeUndefined();
 	});
+
+	// ── FIX-029: reject path-basename owners ────────────────────────────────
+	it("rejects a parent segment that is the OS 'home' directory (spurious owner)", () => {
+		const root = path.resolve("/home", "vheins", "myrepo");
+		const session = sessionWithRoots([fileUri(root)]);
+		// parent = "vheins" is plausible → still inferred (positive guard).
+		expect(inferOwnerFromSession(session)).toBe("vheins");
+	});
+
+	it("returns undefined when the parent segment is a reserved OS directory", () => {
+		// /home/vheins → parent "home" is structural, not an owner.
+		const root = path.resolve("/home", "myrepo");
+		const session = sessionWithRoots([fileUri(root)]);
+		expect(inferOwnerFromSession(session)).toBeUndefined();
+	});
+
+	it("returns undefined when the parent segment is a dotfile/.config", () => {
+		const root = path.resolve("/Users", "alice", ".config", "myrepo");
+		const session = sessionWithRoots([fileUri(root)]);
+		expect(inferOwnerFromSession(session)).toBeUndefined();
+	});
+
+	it("returns undefined when the parent segment is a reserved dir like 'tmp'", () => {
+		const root = path.resolve("/tmp", "myrepo");
+		const session = sessionWithRoots([fileUri(root)]);
+		expect(inferOwnerFromSession(session)).toBeUndefined();
+	});
 });
 
 // ─── inferRepoFromSession ─────────────────────────────────────────────────────
@@ -89,5 +116,44 @@ describe("inferRepoFromSession()", () => {
 		const root2 = fileUri(path.resolve("/Users", "bob", "repo2"));
 		const session = sessionWithRoots([root1, root2]);
 		expect(inferRepoFromSession(session)).toBeUndefined();
+	});
+
+	// ── FIX-029: reject path-artifact repo basenames ────────────────────────
+	it("returns undefined for a single root whose basename is a reserved dir", () => {
+		const session = sessionWithRoots([fileUri(path.resolve("/Users", "alice", "tmp"))]);
+		expect(inferRepoFromSession(session)).toBeUndefined();
+	});
+
+	it("returns undefined for a single root whose basename is a dotfile", () => {
+		const session = sessionWithRoots([fileUri(path.resolve("/Users", "alice", ".config"))]);
+		expect(inferRepoFromSession(session)).toBeUndefined();
+	});
+
+	it("returns undefined for a rootless session whose cwd basename is reserved", () => {
+		// /home → basename "home" is structural, not a repo name (FIX-029).
+		const spy = vi.spyOn(process, "cwd").mockReturnValue("/home");
+		const session = createSessionContext();
+		expect(inferRepoFromSession(session)).toBeUndefined();
+		spy.mockRestore();
+	});
+});
+
+// ─── createSessionContext CWD-derived defaults (FIX-029) ──────────────────────
+
+describe("createSessionContext() path-basename hardening (FIX-029)", () => {
+	it("keeps a plausible parent-dir owner when there is no git remote", () => {
+		const spy = vi.spyOn(process, "cwd").mockReturnValue(path.resolve("/Users", "alice", "myrepo"));
+		const session = createSessionContext();
+		expect(session.owner).toBe("alice");
+		expect(session.repo).toBe("myrepo");
+		spy.mockRestore();
+	});
+
+	it("does NOT fabricate a 'home' owner from /home/<user> (spurious-owner guard)", () => {
+		const spy = vi.spyOn(process, "cwd").mockReturnValue(path.resolve("/home", "vheins"));
+		const session = createSessionContext();
+		// parent segment "home" is structural — never a real GitHub owner.
+		expect(session.owner).toBeUndefined();
+		spy.mockRestore();
 	});
 });

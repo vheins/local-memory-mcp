@@ -58,6 +58,13 @@ import { toJSONSchema, type z } from "zod";
  *      validation, so AJV must not reject it first (FIX-EMPTY-PARAMS). The
  *      non-empty constraints remain enforced; the handler Zod schema stays the
  *      authoritative gate for non-empty values.
+ *   9. Annotate every session-injectable property (`owner`/`repo`, any nesting
+ *      level) with a `description` documenting that the field is auto-injected
+ *      from the session / MCP workspace roots when omitted or empty
+ *      (FIX-029). Because rule 2 drops these fields from `required`, agents
+ *      may omit them; the annotation tells the agent WHY that is safe and how
+ *      to override. An existing `.describe()` is preserved and the note
+ *      appended.
  *
  * `description` fields (from `.describe()`) are kept — they are part of the
  * Zod contract and richer than the old handwritten copies.
@@ -65,6 +72,13 @@ import { toJSONSchema, type z } from "zod";
 
 /** Fields that `normalizeToolArguments` injects/heals from the session when absent or empty. */
 const SESSION_INJECTABLE = new Set(["owner", "repo"]);
+
+/**
+ * Appended to every session-injectable property's description (rule 9,
+ * FIX-029) so agents know the field is auto-filled and how to override it.
+ */
+const SESSION_INJECTION_NOTE =
+	"Auto-injected from the session / MCP workspace roots when omitted or empty; pass an explicit value to override.";
 
 /** Raw JSON Schema nodes produced by `toJSONSchema`. */
 type JsonNode = unknown;
@@ -88,6 +102,27 @@ function rejectsEmptyString(node: Record<string, unknown>): boolean {
 	if (typeof node.pattern === "string") return true;
 	if (typeof node.format === "string") return true;
 	return false;
+}
+
+/**
+ * Annotates `owner`/`repo` properties of a normalized object node with the
+ * session-injection note (rule 9, FIX-029). Mutates `out.properties` in place
+ * and preserves any existing `description` by appending the note.
+ *
+ * @param out  normalized JSON Schema object node
+ */
+function annotateSessionInjectables(out: Record<string, unknown>): void {
+	const properties = out.properties;
+	if (properties === null || typeof properties !== "object" || Array.isArray(properties)) return;
+
+	for (const [key, value] of Object.entries(properties as Record<string, unknown>)) {
+		if (!SESSION_INJECTABLE.has(key)) continue;
+		if (value === null || typeof value !== "object" || Array.isArray(value)) continue;
+
+		const node = value as Record<string, unknown>;
+		const existing = typeof node.description === "string" ? node.description.trim() : "";
+		node.description = existing ? `${existing} ${SESSION_INJECTION_NOTE}` : SESSION_INJECTION_NOTE;
+	}
 }
 
 /**
@@ -139,6 +174,13 @@ function normalizeNode(node: JsonNode): JsonNode {
 	// Rule 3: plain objects stay open to additional properties
 	if (hasProperties && out.additionalProperties === false) {
 		delete out.additionalProperties;
+	}
+
+	// Rule 9: document session-injection on owner/repo properties (FIX-029).
+	// Children are already normalized, so a string-typed owner/repo may now be
+	// an anyOf wrapper — the note is placed on whichever node carries it.
+	if (hasProperties) {
+		annotateSessionInjectables(out);
 	}
 
 	// Rule 5: integer → number (repo convention)
