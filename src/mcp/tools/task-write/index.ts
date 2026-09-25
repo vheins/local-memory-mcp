@@ -36,7 +36,11 @@ export { applyDecisionRefs, tryVectorEmbedding } from "./effects";
  *   4. `id` or `code` present    → UPDATE (id=UUID, code=string code)
  *
  * **Status state machine:** backlog ↔ pending ↔ in_progress ↔ completed/canceled/blocked
- *   - comment required on status change
+ *   - a comment is optional on a status change — when omitted, a deterministic
+ *     auto-comment is recorded (`Status: <from> -> <to> (<agent>, <timestamp>)`,
+ *     FIX-022); an explicit comment is honored verbatim
+ *   - backlog/pending/blocked → completed is rejected with a VALIDATION_ERROR
+ *     naming the required `in_progress` hop (no silent state manipulation)
  *   - completed: children MUST be completed first (gate)
  *   - completed: auto-release claims + expire linked handoffs
  *   - canceled: auto-release claims + expire handoffs

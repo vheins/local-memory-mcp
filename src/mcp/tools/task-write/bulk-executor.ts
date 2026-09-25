@@ -7,7 +7,7 @@ import { resolveEntityCode } from "../../utils/code-generator";
 import { enqueueTask } from "../../embedding-queue";
 import { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps } from "../task.helpers";
 import { applyDecisionRefs } from "./effects";
-import { validateStatusTransition, validateBulkStatus } from "./state-machine";
+import { validateStatusTransition, validateBulkStatus, resolveTransitionComment } from "./state-machine";
 import { archiveCompletedTasks } from "./update-status";
 import { inferItemMode } from "./bulk-infer";
 
@@ -171,15 +171,24 @@ export async function executeBulkOperation(
 					.transaction(() => {
 						storage.tasks.updateTask(resolvedId, itemUpdates);
 
-						// Comment insertion
+						// Comment insertion (FIX-022: a status change with no
+						// caller comment records a deterministic auto-comment
+						// instead of bouncing; explicit comments are verbatim).
 						if (itemUpdates.status !== undefined && itemUpdates.status !== existing.status) {
+							const commentAgent = (raw.agent as string) || existing.agent || "unknown";
 							storage.taskComments.insertTaskComment({
 								id: randomUUID(),
 								task_id: resolvedId,
 								owner,
 								repo,
-								comment: (raw.comment as string) || `Status updated to ${itemUpdates.status}`,
-								agent: (raw.agent as string) || existing.agent || "unknown",
+								comment: resolveTransitionComment(
+									raw.comment as string | undefined,
+									existing.status,
+									itemUpdates.status as TaskStatus,
+									commentAgent,
+									now
+								),
+								agent: commentAgent,
 								role: (raw.role as string) || existing.role || "unknown",
 								model: (raw.model as string) || "unknown",
 								previous_status: existing.status as TaskStatus,

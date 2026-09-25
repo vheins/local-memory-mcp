@@ -3,6 +3,7 @@ import { SQLiteStore } from "../../storage/sqlite";
 import { Task, TaskStatus, VectorStore } from "../../types";
 import { logger } from "../../utils/logger";
 import { archiveTasksToMemory } from "../task.helpers";
+import { resolveTransitionComment } from "./state-machine";
 
 // ---------------------------------------------------------------------------
 // Status transition logic
@@ -31,6 +32,12 @@ export function applyStatusTimestamps(
 
 /**
  * Inserts a task comment when status changes or a comment is provided.
+ *
+ * FIX-022: a status change with no caller comment no longer bounces — the
+ * comment is derived deterministically via {@link resolveTransitionComment}
+ * (`Status: <from> -> <to> (<agent>, <timestamp>)`) so the audit trail stays
+ * inspectable. An explicit comment is still honored verbatim. A status change
+ * NEVER persists an empty-string comment.
  */
 export function insertStatusComment(
 	storage: SQLiteStore,
@@ -43,14 +50,19 @@ export function insertStatusComment(
 	comment: string | undefined,
 	now: string
 ): void {
-	if (comment !== undefined || isStatusChanging) {
+	const hasExplicitComment = comment !== undefined && comment.trim() !== "";
+	if (hasExplicitComment || isStatusChanging) {
+		const agent = (updates.agent as string) || existingTask.agent || "unknown";
+		const persistedComment = isStatusChanging
+			? resolveTransitionComment(comment, existingTask.status, updates.status as TaskStatus, agent, now)
+			: (comment as string);
 		storage.taskComments.insertTaskComment({
 			id: randomUUID(),
 			task_id: targetId,
 			owner,
 			repo,
-			comment: comment || `Status updated to ${updates.status}`,
-			agent: (updates.agent as string) || existingTask.agent || "unknown",
+			comment: persistedComment,
+			agent,
 			role: (updates.role as string) || existingTask.role || "unknown",
 			model: (updates.model as string) || "unknown",
 			previous_status: isStatusChanging ? (existingTask.status as TaskStatus) : null,

@@ -514,7 +514,7 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 	// tests pin the fields that the old hand-rolled copy silently stripped
 	// (comment/force/model/commit_id/changed_files) plus the tightened phase min.
 
-	it("schema-drift: a bulk tasks[] status update requires a comment; force:true no longer bypasses the gate", async () => {
+	it("schema-drift: a bulk tasks[] status update with no comment records an auto-comment (FIX-022; force:true is inert)", async () => {
 		await router("tools/call", {
 			name: "task-write",
 			arguments: {
@@ -537,8 +537,9 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 		});
 		expect(startRes.isError).toBe(false);
 
-		// TASK-061: force:true NO LONGER bypasses the "comment is required" gate —
-		// the status transition is rejected and the task is NOT mutated.
+		// FIX-022: a status change with NO comment no longer bounces — it
+		// succeeds and records a deterministic auto-comment. `force:true` stays
+		// inert (it neither bypasses nor alters anything).
 		const forcedRes = await router("tools/call", {
 			name: "task-write",
 			arguments: {
@@ -547,24 +548,15 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 				tasks: [{ id: task.id, status: "completed", force: true }]
 			}
 		});
-		expect(forcedRes.isError).toBe(true);
-		expect(getTextContent(forcedRes)).toContain("comment is required when changing task status");
-		expect(db.tasks.getTaskById(task.id)?.status).toBe("in_progress");
+		expect(forcedRes.isError).toBe(false);
+		expect(db.tasks.getTaskById(task.id)?.status).toBe("completed");
 
-		// With a comment the transition succeeds — the item schema still carries
-		// `comment`, so a bulk tasks[] status update can proceed.
-		const doneRes = await router("tools/call", {
-			name: "task-write",
-			arguments: {
-				owner: "test",
-				repo: REPO,
-				tasks: [{ id: task.id, status: "completed", comment: "done" }]
-			}
-		});
-		expect(doneRes.isError).toBe(false);
-
-		const updated = db.tasks.getTaskById(task.id);
-		expect(updated?.status).toBe("completed");
+		// The auto-comment is persisted (non-empty) so the audit trail survives.
+		const comments = db.taskComments.getTaskCommentsByTaskId(task.id);
+		const autoComment = comments.find((c) => c.next_status === "completed");
+		expect(autoComment).toBeDefined();
+		expect(autoComment!.comment).toMatch(/^Status: in_progress -> completed \(.+\)$/);
+		expect(autoComment!.comment.trim()).not.toBe("");
 	});
 
 	it("schema-drift: a bulk tasks[] update persists commit_id + changed_files", async () => {

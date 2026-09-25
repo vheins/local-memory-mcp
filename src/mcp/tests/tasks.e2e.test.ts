@@ -3,7 +3,7 @@ import { createRouter } from "../router";
 import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
-import { McpResponse, getPrimaryTextContent } from "../utils/mcp-response";
+import { McpResponse } from "../utils/mcp-response";
 
 vi.setConfig({ testTimeout: 30000 });
 
@@ -156,7 +156,7 @@ describe("MCP Local Memory - Consolidated Task Tools E2E (write lifecycle)", () 
 		expect(updatedTask!.comments![0].next_status).toBe("in_progress");
 	});
 
-	it("requires comment when status changes", async () => {
+	it("records a deterministic auto-comment when status changes without a comment (FIX-022)", async () => {
 		await router("tools/call", {
 			name: "task-write",
 			arguments: {
@@ -175,6 +175,9 @@ describe("MCP Local Memory - Consolidated Task Tools E2E (write lifecycle)", () 
 		const taskId = db.tasks.getTaskByCode("test", REPO, "TASK-003")?.id;
 		expect(taskId).toBeDefined();
 
+		// FIX-022: a status change with no comment NO LONGER bounces — it
+		// succeeds and records a deterministic auto-comment so the audit trail
+		// stays inspectable.
 		const res = await router("tools/call", {
 			name: "task-write",
 			arguments: {
@@ -187,8 +190,16 @@ describe("MCP Local Memory - Consolidated Task Tools E2E (write lifecycle)", () 
 				est_tokens: 50
 			}
 		});
-		expect(res.isError).toBe(true);
-		expect(getPrimaryTextContent(res)).toContain("comment is required when changing task status");
+		expect(res.isError).toBe(false);
+
+		const updated = db.tasks.getTaskById(taskId!);
+		expect(updated?.status).toBe("in_progress");
+
+		const comments = db.taskComments.getTaskCommentsByTaskId(taskId!);
+		expect(comments.length).toBe(1);
+		expect(comments[0].comment).toMatch(/^Status: pending -> in_progress \(TestAgent, .+\)$/);
+		expect(comments[0].comment.trim()).not.toBe("");
+		expect(comments[0].next_status).toBe("in_progress");
 	});
 
 	it("allows task-write without est_tokens", async () => {
