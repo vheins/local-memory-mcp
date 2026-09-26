@@ -165,8 +165,12 @@ describe("listPrompts", () => {
 });
 
 describe("getPrompt", () => {
+	// The root lives under a plausible, non-reserved parent segment so owner
+	// inference (parent-directory fallback) yields a real owner. A bare
+	// `file:///tmp/fake-repo` root would resolve its owner to the reserved OS
+	// segment `tmp`, which FIX-029's `isPlausibleScopeSegment` rejects.
 	const session = {
-		roots: [{ uri: "file:///tmp/fake-repo", name: "fake-repo" }]
+		roots: [{ uri: "file:///tmp/alice-project/fake-repo", name: "fake-repo" }]
 	} as unknown as SessionContext;
 
 	it("substitutes arguments and auto-injected repo/owner context", async () => {
@@ -176,7 +180,7 @@ describe("getPrompt", () => {
 		expect(result.messages).toEqual([
 			{
 				role: "user",
-				content: { type: "text", text: "Discuss Phaedo for fake-repo by tmp." }
+				content: { type: "text", text: "Discuss Phaedo for fake-repo by alice-project." }
 			}
 		]);
 	});
