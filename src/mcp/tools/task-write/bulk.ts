@@ -153,6 +153,16 @@ export async function handleBulk(
 	const owner = params.owner;
 	const repo = params.repo;
 
+	// FEAT-007: the explicit owner move is single-task only and is NOT part of
+	// TaskWriteItemSchema (bulk items can never carry new_owner). Reject a
+	// top-level new_owner on a tasks[] request rather than silently ignoring it.
+	if (params.new_owner !== undefined) {
+		throw new Error(
+			"Invalid new_owner for bulk update: an owner move is single-task only. " +
+				'Retry with task-write(id: "<uuid>" or code: "<CODE>", new_owner: "<owner>") for one task at a time.'
+		);
+	}
+
 	const { results, allOk } = await executeBulkOperation(items, owner, repo, storage, vectors);
 
 	const succeeded = results.filter((r) => r.success);

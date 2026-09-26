@@ -95,3 +95,50 @@ export function duplicateCodeMessage(code: string, existing?: Task | null): stri
 export function scopeBulkItemError(message: string, label: string): string {
 	return `${message} — item ${label}`;
 }
+
+// ---------------------------------------------------------------------------
+// Explicit owner move (FEAT-007)
+// ---------------------------------------------------------------------------
+
+/**
+ * "Invalid new_owner" message for the explicit opt-in owner move. Keeps the
+ * leading `Invalid` token so `classifyExpectedError` (utils/mcp-error.ts) maps
+ * the failure to VALIDATION_ERROR. `reason` distinguishes a shape violation
+ * from a reserved/dotfile path segment (FIX-029) so the caller knows WHY the
+ * otherwise well-formed value was rejected.
+ */
+export function invalidNewOwnerMessage(newOwner: string, reason: "format" | "reserved"): string {
+	if (reason === "reserved") {
+		return (
+			`Invalid new_owner: '${newOwner}' is a reserved OS/path segment (or a dotfile) and cannot be an owner. ` +
+			'Retry with a real GitHub username or organization (e.g. new_owner: "vheins").'
+		);
+	}
+	return (
+		`Invalid new_owner: '${newOwner}'. A task owner must be a valid GitHub username ` +
+		"(1-39 chars, alphanumeric start/end, single internal hyphens). Retry with a valid owner."
+	);
+}
+
+/**
+ * Identity-key collision message for an explicit owner move (FEAT-007).
+ * `(owner, repo, task_code)` is UNIQUE (`idx_tasks_code_owner_repo`), so moving
+ * onto an occupied identity must fail loudly. Mirrors the duplicate-code message
+ * pattern (names the EXISTING task id + status) while adding the actionable
+ * recovery: pass a new `task_code` in the SAME call to rename-and-move.
+ * Contains "already exists" so `classifyExpectedError` maps it to CONFLICT.
+ */
+export function ownerMoveCollisionMessage(
+	taskCode: string,
+	newOwner: string,
+	repo: string,
+	existing?: Task | null
+): string {
+	const identity = `(owner "${newOwner}", repo "${repo}", task_code "${taskCode}")`;
+	const detail = existing ? ` (existing task id "${existing.id}", status "${existing.status}")` : "";
+	const retry =
+		` Choose a different code in the same call to rename-and-move, e.g. ` +
+		`task-write(code: "${taskCode}", new_owner: "${newOwner}", task_code: "${taskCode}B"), ` +
+		"or move/rename the existing task first.";
+	return `Cannot move task '${taskCode}' to owner '${newOwner}' — identity ${identity} already exists${detail}.${retry}`;
+}

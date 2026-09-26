@@ -18,7 +18,10 @@ export const TASK_TOOL_DEFINITIONS = [
 			"  - `tasks[]` → BULK (each item infers independently: create if phase+title+desc, update if id/code)\n" +
 			"  - `interactive: true` → INTERACTIVE (elicit missing fields via form, then create)\n" +
 			"  - `id` or `code` → UPDATE (single by UUID or code)\n" +
-			"  - `phase` + `title` + `description` → CREATE (optionally with `code` for custom code)",
+			"  - `phase` + `title` + `description` → CREATE (optionally with `code` for custom code)\n" +
+			"Owner is a scope/identity field, never implicitly mutable. To re-scope a task, pass the explicit opt-in `new_owner` " +
+			"with a single `id`/`code` (validated GitHub username; fails loudly if the target (owner, repo, task_code) identity " +
+			"already exists — add `task_code` in the same call to rename-and-move).",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,

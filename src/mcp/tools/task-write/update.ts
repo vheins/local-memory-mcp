@@ -7,13 +7,14 @@ import { resolveEntityRef } from "../../utils/entity-ref";
 import { resolveParentId, resolveDependsOn } from "../task.helpers";
 import { TASK_UPDATE_COLUMNS } from "../../entities/task/serializers";
 import { validateStatusTransition } from "./state-machine";
-import { invalidIdFormatMessage } from "./errors";
+import { invalidIdFormatMessage, ownerMoveCollisionMessage } from "./errors";
 import { TaskWriteParams } from "./types";
 import {
 	buildUpdatesFromParams,
 	applyPhaseTagSync,
 	applyDecisionRefsToUpdates,
-	enrichUpdatedTasks
+	enrichUpdatedTasks,
+	validateNewOwner
 } from "./update-field";
 import {
 	applyStatusTimestamps,
@@ -70,10 +71,17 @@ async function coreUpdate(
 	oldStatus: string;
 	newStatus: string | undefined;
 }> {
-	const { owner, repo, id, comment, force } = params;
+	const { owner, repo, id, comment, force, new_owner: newOwner } = params;
 
 	// Build the set of updates (exclude identification/control fields)
 	const updates = buildUpdatesFromParams(params);
+
+	// FEAT-007: validate the explicit owner-move target BEFORE any DB work so an
+	// invalid owner (empty/dotfile/reserved OS segment) fails fast with a
+	// caller-actionable VALIDATION_ERROR and never enters the transaction.
+	if (newOwner !== undefined) {
+		validateNewOwner(newOwner);
+	}
 
 	// Resolve task identifier to UUID: prefer id, fall back to code
 	let resolvedId: string | undefined;
@@ -104,6 +112,7 @@ async function coreUpdate(
 	const completedTaskIds: string[] = [];
 	let releasedClaims = 0;
 	let expiredHandoffs = 0;
+	let movedOwner = false;
 	const now = new Date().toISOString();
 	const isStatusChangingGlobal = updates.status !== undefined;
 
@@ -150,11 +159,31 @@ async function coreUpdate(
 					}
 				}
 
-				// Check for duplicate task_code if updating it
+				// FEAT-007: explicit opt-in owner move. `owner` is the scope
+				// selector for the CURRENT row; `new_owner` re-scopes the row.
+				// A move is an IDENTITY change (owner is part of the identity key
+				// `idx_tasks_code_owner_repo`), so it is routed here — never
+				// through the generic update set. The collision check below uses
+				// the TARGET owner so a move (with or without a rename) cannot
+				// violate the UNIQUE identity key.
+				const isMovingOwner = newOwner !== undefined && newOwner !== existingTask.owner;
+				// Treat an empty-string task_code as "not provided" (it is stripped
+				// at dispatch anyway) to preserve the pre-FEAT-007 truthy semantics.
+				const renameRequested = typeof updates.task_code === "string" && updates.task_code.length > 0;
+				const effectiveTaskCode = renameRequested ? (updates.task_code as string) : existingTask.task_code;
+				const collisionScopeOwner = isMovingOwner ? (newOwner as string) : owner;
+
+				// Check for duplicate task_code if renaming, or if moving the owner
+				// (a move alone collides when the target identity is already taken).
 				if (
-					updates.task_code &&
-					storage.tasks.isTaskCodeDuplicate(owner, repo, updates.task_code as string, targetId)
+					(renameRequested || isMovingOwner) &&
+					storage.tasks.isTaskCodeDuplicate(collisionScopeOwner, repo, effectiveTaskCode, targetId)
 				) {
+					if (isMovingOwner) {
+						// Actionable: name the existing task + the rename-and-move retry.
+						const clash = storage.tasks.getTaskByCode(newOwner as string, repo, effectiveTaskCode);
+						throw new Error(ownerMoveCollisionMessage(effectiveTaskCode, newOwner as string, repo, clash));
+					}
 					// FIX-027: name the EXISTING task (id + status) so the caller
 					// can pick a free code or target the right task.
 					const clash = storage.tasks.getTaskByCode(owner, repo, updates.task_code as string);
@@ -165,6 +194,12 @@ async function coreUpdate(
 				}
 
 				const finalUpdates: Record<string, unknown> = { ...updates };
+
+				// Apply the explicit owner move to the row (same transaction).
+				if (isMovingOwner) {
+					finalUpdates.owner = newOwner;
+					movedOwner = true;
+				}
 
 				// Resolve parent_id if provided (UUID or code)
 				if (updates.parent_id !== undefined) {
@@ -200,6 +235,15 @@ async function coreUpdate(
 				// Insert comment if status changed or comment provided
 				insertStatusComment(storage, targetId, owner, repo, updates, existingTask, isStatusChanging, comment, now);
 
+				// FEAT-007: re-scope every comment row for the moved task in the
+				// SAME transaction (after the status comment insert, so a new
+				// comment is included). A partial move would strand comments
+				// under the old scope, making them invisible to owner-scoped
+				// reads; the shared transaction guarantees row + comments agree.
+				if (isMovingOwner) {
+					storage.taskComments.updateTaskCommentsOwnerByTaskId(targetId, newOwner as string);
+				}
+
 				// Track completed tasks for later archival
 				if (updates.status === "completed" && existingTask.status !== "completed") {
 					completedTaskIds.push(targetId);
@@ -230,13 +274,21 @@ async function coreUpdate(
 	}
 
 	const existingTask = taskMap.get(targetIds[0])!;
+	// FEAT-007: report `owner` as an updated field when an explicit move
+	// happened. It is intentionally NOT in `updates` (the generic update set
+	// never carries owner), so it is appended here only on an actual move —
+	// an ordinary update still never reports owner.
+	const updatedFields = deriveUpdatedFields(updates);
+	if (movedOwner && !updatedFields.includes("owner")) {
+		updatedFields.push("owner");
+	}
 	return {
 		updatedCount,
 		updatedTasks,
 		completedTaskIds,
 		releasedClaims,
 		expiredHandoffs,
-		updatedFields: deriveUpdatedFields(updates),
+		updatedFields,
 		taskTitle: (updates.title as string) || existingTask.title,
 		oldStatus: existingTask.status,
 		newStatus: updates.status as string | undefined
@@ -316,6 +368,18 @@ export async function handleBulkUpdateByIds(
 	const { owner, repo, ids, comment, force } = params;
 	if (!ids || ids.length === 0) {
 		throw new Error("No task IDs provided for bulk update");
+	}
+
+	// FEAT-007: the explicit owner move is single-task only. Re-scoping many
+	// rows at once is an ambiguous identity change (each id may collide
+	// differently under the target owner), so it is rejected here instead of
+	// being silently dropped by buildUpdatesFromParams (which excludes
+	// new_owner). Direct the caller to the single-update path.
+	if (params.new_owner !== undefined) {
+		throw new Error(
+			"Invalid new_owner for bulk update: an owner move is single-task only. " +
+				'Retry with task-write(id: "<uuid>" or code: "<CODE>", new_owner: "<owner>") for one task at a time.'
+		);
 	}
 
 	// Build the set of updates (exclude identification/control fields)

@@ -163,6 +163,15 @@ export const TaskWriteSchema = z
 		code: z.string().optional(),
 		task_code: z.string().optional(),
 
+		// Explicit opt-in owner move (FEAT-007). `owner` above is the scope
+		// SELECTOR for the current (owner, repo, code) — it is never mutated
+		// implicitly. `new_owner` is the ONLY way to re-scope a task row; it is
+		// validated (GitHub username + non-reserved path segment), fails loudly
+		// on an identity-key collision, and syncs task_comments.owner in the
+		// same transaction. Deliberately NOT part of TaskWriteFieldDefs so bulk
+		// items can never silently accept it.
+		new_owner: z.string().optional(),
+
 		// Mutable fields
 		...TaskWriteFieldDefs,
 

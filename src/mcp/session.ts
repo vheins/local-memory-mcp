@@ -94,7 +94,7 @@ const RESERVED_PATH_SEGMENTS = new Set([
  * (`.config`, `.cache`, …) and reserved OS/XDG structural directories
  * (`home`, `tmp`, `usr`, …). Legitimate project directories pass.
  */
-function isPlausibleScopeSegment(segment: string | undefined): segment is string {
+export function isPlausibleScopeSegment(segment: string | undefined): segment is string {
 	if (!segment) return false;
 	const trimmed = segment.trim();
 	if (trimmed.length === 0) return false;

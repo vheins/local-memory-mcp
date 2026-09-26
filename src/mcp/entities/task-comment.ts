@@ -102,4 +102,14 @@ export class TaskCommentEntity extends BaseEntity {
 		}
 		return this.all<TaskComment>(sql, params);
 	}
+
+	/**
+	 * Re-scopes every comment of a task to a new owner (FEAT-007 explicit owner
+	 * move). Called INSIDE the caller's task-mutation transaction so the task
+	 * row and its comment rows can never diverge (a partial move would strand
+	 * comments under the old scope). Returns the number of comment rows updated.
+	 */
+	updateTaskCommentsOwnerByTaskId(taskId: string, owner: string): number {
+		return this.run("UPDATE task_comments SET owner = ? WHERE task_id = ?", [owner, taskId]).changes;
+	}
 }
