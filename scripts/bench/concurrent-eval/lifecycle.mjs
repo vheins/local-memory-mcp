@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { createHash, randomUUID } from "crypto";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { createConcurrentBenchDb } from "./schema.mjs";
 
 export function withConcurrentBenchDb(tmpDir, label, fn) {
@@ -81,7 +81,7 @@ export function collectBenchRevision() {
 	let manifest = "";
 	for (const f of ordered) {
 		try {
-			const h = execSync(`git hash-object ${JSON.stringify(f)}`, { encoding: "utf8" }).trim();
+			const h = execFileSync("git", ["hash-object", f], { encoding: "utf8" }).trim();
 			perFile[f] = h;
 			manifest += `${h}  ${f}\n`;
 		} catch {

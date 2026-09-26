@@ -290,13 +290,19 @@ Dasbor bisa otomatis menyala saat Anda membuka project di VS Code, Cursor, Winds
 - [Kebijakan Keamanan](SECURITY.md) — Cara melaporkan kerentanan keamanan
 - [Dukungan](SUPPORT.md) — Tempat mendapatkan bantuan (dokumentasi, isu, integrasi)
 
+## 🌱 Proyek Terkait
+
+- [opencode-9router](https://github.com/vheins/opencode-9router) — Plugin OpenCode yang mendaftarkan 9Router sebagai provider dengan penemuan model otomatis dan caching.
+- [RustaSea framework](https://github.com/rustasea/framework) — Framework web Rust yang ekspresif dan terinspirasi Laravel, dengan keamanan, performa, dan konkurensi khas Rust.
+- [RustaSea skeleton](https://github.com/rustasea/rustasea) — Kerangka aplikasi RustaSea (varian Blade), dibuat dengan `cargo rustasea new`.
+
 ## ⚠️ Penyangkalan
 
 **PERANGKAT LUNAK INI DISEDIAKAN "SEBAGAIMANA ADANYA", TANPA JAMINAN DALAM BENTUK APAPUN**, baik tersurat maupun tersirat, termasuk namun tidak terbatas pada jaminan kepatutan, kesesuaian untuk tujuan tertentu, dan tidak melanggar hak pihak ketiga. Dalam hal apa pun penulis atau pemegang hak cipta tidak bertanggung jawab atas klaim, kerusakan, atau kewajiban lainnya, baik dalam tindakan kontrak, gugatan, atau lainnya, yang timbul dari, di luar, atau sehubungan dengan perangkat lunak ini.
 
 ## ⚖️ Lisensi
 
-MIT © Muhammad Rheza Alfin — lihat teks lengkap di [LICENSE.md](LICENSE.md).
+MIT © Muhammad Rheza Alfin — lihat teks lengkap di [LICENSE](LICENSE).
 
 ## 🙏 Ucapan Terima Kasih
 

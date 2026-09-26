@@ -18,7 +18,7 @@ import { StubVectorStore } from "../storage/vectors.stub";
 import { createServerFactory } from "../transport/factory";
 import { startHttpTransport, type HttpTransportHandle } from "../transport/http";
 
-const TOKEN = "test-bearer-token";
+const TOKEN = "example-bearer-token";
 
 interface Harness {
 	store: SQLiteStore;

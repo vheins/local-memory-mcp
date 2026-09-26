@@ -6,7 +6,7 @@ import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { createHash } from "crypto";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import Database from "better-sqlite3";
 
 export function createBenchDb(dbPath) {
@@ -108,7 +108,7 @@ export function collectBenchRevision() {
 	let manifest = "";
 	for (const f of ordered) {
 		try {
-			const h = execSync(`git hash-object ${JSON.stringify(f)}`, { encoding: "utf8" }).trim();
+			const h = execFileSync("git", ["hash-object", f], { encoding: "utf8" }).trim();
 			perFile[f] = h;
 			manifest += `${h}  ${f}\n`;
 		} catch {
