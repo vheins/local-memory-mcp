@@ -153,6 +153,14 @@ export class SQLiteStore {
 		ensureDerivedReady(this.db, finalPath);
 		this.derivedPathInstance = resolveDerivedDbPath(finalPath);
 
+		// Re-assert + verify busy_timeout AFTER the derived attach (FIX-032).
+		// busy_timeout is CONNECTION-scoped: a schema-qualified
+		// `derived.busy_timeout` in attachDerivedDb rewrites the shared
+		// connection's value, and any later connection-level pragma could too.
+		// Read it back and restore the configured value so the write-contention
+		// hardening is guaranteed to be in effect for every subsequent write.
+		this.applyBusyTimeout();
+
 		this.memories = new MemoryEntity(this.db);
 		this.memoryVectors = new MemoryVectorEntity(this.db);
 		this.memoryArchives = new MemoryArchiveEntity(this.db);
@@ -172,6 +180,37 @@ export class SQLiteStore {
 		this.reuseTelemetry = new ReuseTelemetryEntity(this.db);
 		this.bugReports = new BugReportEntity(this.db);
 		this.lock = new WriteLock(finalPath);
+	}
+
+	/**
+	 * Apply the configured connection-scoped `busy_timeout` (FIX-032) and log
+	 * the value that is actually in effect.
+	 *
+	 * Called once during construction and again AFTER the derived-database
+	 * attach, because `busy_timeout` is CONNECTION-scoped: a schema-qualified
+	 * `derived.busy_timeout` (or any later connection-level pragma) silently
+	 * rewrites it. Reading it back makes a future regression observable instead
+	 * of latent.
+	 */
+	private applyBusyTimeout(): void {
+		this.db.pragma(`busy_timeout = ${MEMORY_DB_BUSY_TIMEOUT_MS}`);
+		const effective = this.getBusyTimeoutMs();
+		if (effective !== MEMORY_DB_BUSY_TIMEOUT_MS) {
+			logger.warn("[SQLiteStore] busy_timeout did not stick — write contention hardening degraded", {
+				configured: MEMORY_DB_BUSY_TIMEOUT_MS,
+				effective
+			});
+		}
+	}
+
+	/**
+	 * The `busy_timeout` (ms) currently in effect on the connection. Used by
+	 * tests to assert the hardening is applied (and not downgraded by a later
+	 * pragma).
+	 */
+	getBusyTimeoutMs(): number {
+		const rows = this.db.pragma("busy_timeout") as Array<{ timeout: number }>;
+		return rows[0]?.timeout ?? 0;
 	}
 
 	/**

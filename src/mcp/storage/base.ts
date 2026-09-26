@@ -17,6 +17,7 @@ import {
 	TASK_STATUS_BACKLOG
 } from "../types";
 import { SQLITE_WRITE_RETRY_ATTEMPTS, SQLITE_WRITE_RETRY_BASE_MS, SQLITE_WRITE_RETRY_MAX_MS } from "../utils/constants";
+import { logger } from "../utils/logger";
 
 /**
  * SQLite result codes that represent TRANSIENT lock contention — a sibling
@@ -58,6 +59,31 @@ function computeRetryBackoffMs(attempt: number): number {
 }
 
 /**
+ * Build the CLEAR terminal error thrown once the bounded retry is exhausted
+ * (FIX-032). The original transient error is preserved as `cause` and its
+ * `code` is copied onto the wrapper, so:
+ *   - the message names the operation, the attempt count, and the actionable
+ *     recovery instead of surfacing a bare `database is locked`;
+ *   - downstream classifiers that key on `.code` (embedding-queue
+ *     `isBusyError`, transport disconnect guards) still see `SQLITE_BUSY`;
+ *   - `mcp-error.classifyExpectedError`'s `/database is locked|SQLITE_BUSY/`
+ *     match still flags the envelope `retryable: true` because the original
+ *     message is embedded in the wrapper text.
+ */
+function buildWriteRetryExhaustedError(error: unknown, attempts: number): Error {
+	const original = error instanceof Error ? error : new Error(String(error));
+	const code = (original as { code?: unknown }).code;
+	const wrapped = new Error(
+		`SQLite write failed after ${attempts} attempt(s) due to persistent lock contention: ${original.message}. ` +
+			"Another local-memory-mcp process (or an in-process maintenance/indexing sweep) is holding the write lock. " +
+			"Retry the operation; if it persists, raise MEMORY_DB_BUSY_TIMEOUT_MS or stop the competing process.",
+		{ cause: original }
+	);
+	if (typeof code === "string") (wrapped as { code?: string }).code = code;
+	return wrapped;
+}
+
+/**
  * Block the (synchronous) thread for `ms` milliseconds. better-sqlite3 is
  * synchronous, so a blocking sleep is the only way to back off between retries
  * without yielding the transaction; the wait is bounded and only runs on an
@@ -73,8 +99,10 @@ function sleepSync(ms: number): void {
 /**
  * Run a synchronous write transaction, retrying TRANSIENT SQLite busy/locked
  * errors a bounded number of times with jittered backoff. Non-transient errors
- * propagate immediately; exhaustion surfaces the last transient error verbatim
- * (deterministic — the caller sees the same error it would have without retry).
+ * propagate immediately. Every retry is logged at `warn`; exhaustion is logged
+ * at `error` and surfaces {@link buildWriteRetryExhaustedError} — a clear,
+ * actionable terminal error that preserves the original `code`/`cause` rather
+ * than a bare `database is locked` (FIX-032).
  */
 export function runWithSqliteWriteRetry<T>(run: () => T): T {
 	let attempt = 0;
@@ -83,10 +111,25 @@ export function runWithSqliteWriteRetry<T>(run: () => T): T {
 			return run();
 		} catch (error) {
 			attempt += 1;
-			if (attempt >= SQLITE_WRITE_RETRY_ATTEMPTS || !isTransientSqliteError(error)) {
+			if (!isTransientSqliteError(error)) {
 				throw error;
 			}
-			sleepSync(computeRetryBackoffMs(attempt));
+			if (attempt >= SQLITE_WRITE_RETRY_ATTEMPTS) {
+				logger.error("[SQLite] write retry exhausted — surfacing terminal lock error", {
+					attempts: attempt,
+					error: error instanceof Error ? error.message : String(error),
+					code: (error as { code?: unknown }).code
+				});
+				throw buildWriteRetryExhaustedError(error, attempt);
+			}
+			const backoffMs = computeRetryBackoffMs(attempt);
+			logger.warn("[SQLite] transient write lock contention — retrying", {
+				attempt,
+				maxAttempts: SQLITE_WRITE_RETRY_ATTEMPTS,
+				backoffMs,
+				error: error instanceof Error ? error.message : String(error)
+			});
+			sleepSync(backoffMs);
 		}
 	}
 }
@@ -132,7 +175,8 @@ export abstract class BaseEntity {
 		// Phase-2 hardening: the immediate transaction is additionally wrapped in
 		// a bounded, jittered retry (runWithSqliteWriteRetry) so a transient
 		// SQLITE_BUSY / "database is locked" that escapes busy_timeout is retried
-		// instead of failing the write. Non-transient errors propagate unchanged.
+		// instead of failing the write. Non-transient errors propagate unchanged;
+		// exhaustion surfaces the clear terminal error from the wrapper.
 		// Reentrancy is preserved: better-sqlite3 itself turns a nested call into
 		// a SAVEPOINT, and the retry wrapper simply re-invokes the same closure.
 		const immediate = this.db.transaction(fn).immediate;
@@ -192,10 +236,27 @@ export abstract class BaseEntity {
 		return deleted;
 	}
 
+	/**
+	 * Run a single write statement.
+	 *
+	 * A bare statement runs in autocommit mode (its own implicit transaction), so
+	 * a transient SQLITE_BUSY here was previously NOT covered by the retry
+	 * wrapper — only `transaction()` was. That left every single-statement write
+	 * path (e.g. `MemoryEntity.insert`) able to surface a raw `database is
+	 * locked` to callers (FIX-032). Such a statement is atomic and fully rolled
+	 * back on failure, so it is safe to route through the same bounded retry.
+	 *
+	 * Inside an explicit transaction (`this.db.inTransaction`) the statement is
+	 * part of the enclosing `transaction()` call, which already owns the retry —
+	 * retrying a statement mid-transaction would be unsound — so no nested loop
+	 * is added there.
+	 */
 	protected run(sql: string, params: unknown[] = []): { changes: number } {
 		const stmt = this.prepare(sql);
-		const result = stmt.run(...(params as (string | number | null | Buffer)[]));
-		return { changes: result.changes };
+		const execute = (): { changes: number } => ({
+			changes: stmt.run(...(params as (string | number | null | Buffer)[])).changes
+		});
+		return this.db.inTransaction ? execute() : runWithSqliteWriteRetry(execute);
 	}
 
 	protected exec(sql: string): void {

@@ -3,9 +3,19 @@
 
 import { describe, it, expect, vi } from "vitest";
 import * as fc from "fast-check";
+import { Worker } from "node:worker_threads";
+import { createRequire } from "node:module";
+import Database from "better-sqlite3";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { performance } from "node:perf_hooks";
 import { SQLiteStore, createTestStore } from "../storage/sqlite";
 import { handleMemoryWrite } from "../tools/memory.write";
+import { MEMORY_DB_BUSY_TIMEOUT_MS } from "../utils/constants";
 import type { MemoryEntry, VectorStore } from "../types";
+
+const require = createRequire(import.meta.url);
 
 type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "task_archive";
 
@@ -434,4 +444,127 @@ describe("Dashboard memory queries", () => {
 		expect(secondPage.length).toBe(3);
 		expect(firstPage[0].id).not.toBe(secondPage[0].id);
 	});
+});
+
+// ---------------------------------------------------------------------------
+// FIX-032 — SQLite write-contention hardening.
+//
+// The store must open with the CONFIGURED busy_timeout (regression: the derived
+// attach previously rewrote the connection-scoped busy_timeout down to 5000),
+// and concurrent writes must not surface a raw `database is locked` to callers:
+// busy_timeout absorbs transient holds, and a persistent hold is retried
+// (bounded) then surfaced as a CLEAR terminal error.
+// ---------------------------------------------------------------------------
+
+/** A file-backed store plus its temp dir, cleaned up by the caller. */
+async function fileStore(): Promise<{ store: SQLiteStore; dir: string; dbPath: string }> {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sqlite-contention-"));
+	const dbPath = path.join(dir, "memory.db");
+	const store = await SQLiteStore.create(dbPath);
+	return { store, dir, dbPath };
+}
+
+describe("FIX-032 — busy_timeout on connection open", () => {
+	it("keeps the configured busy_timeout after the derived schema is attached", async () => {
+		const { store, dir } = await fileStore();
+		try {
+			// Derived attach must have happened (otherwise this regression guard
+			// is not exercising the downgrade path).
+			expect(store.getDerivedDbPath()).not.toBeNull();
+			expect(store.getBusyTimeoutMs()).toBe(MEMORY_DB_BUSY_TIMEOUT_MS);
+		} finally {
+			store.close();
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("FIX-032 — concurrent writes never surface a raw lock error", () => {
+	it("a persistent writer hold is retried then surfaced as a CLEAR terminal error (never bare 'database is locked')", async () => {
+		const { store, dir, dbPath } = await fileStore();
+		// Second connection holds the write lock for the whole test — the store's
+		// busy_timeout is forced to 0 so each attempt fails IMMEDIATELY with
+		// SQLITE_BUSY (no multi-second wait), exercising the retry + terminal
+		// error path deterministically.
+		const lockHolder = new Database(dbPath);
+		try {
+			store.db.pragma("busy_timeout = 0");
+			lockHolder.exec("BEGIN IMMEDIATE");
+
+			let caught: unknown;
+			try {
+				store.memories.insert(makeEntry({ id: "blocked-1", repo: "contention" }));
+			} catch (error) {
+				caught = error;
+			}
+
+			expect(caught).toBeInstanceOf(Error);
+			const message = (caught as Error).message;
+			// Clear + actionable, NOT a bare "database is locked".
+			expect(message).toMatch(/persistent lock contention/);
+			expect(message).toMatch(/database is locked/);
+			// Machine code preserved so downstream classifiers still see BUSY.
+			expect((caught as { code?: string }).code).toBe("SQLITE_BUSY");
+			// Nothing was written.
+			expect(store.memories.getById("blocked-1")).toBeNull();
+		} finally {
+			try {
+				lockHolder.exec("ROLLBACK");
+			} catch {
+				/* best effort */
+			}
+			lockHolder.close();
+			store.close();
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("waits out a transient cross-connection hold and succeeds with no error (busy_timeout absorbs it)", async () => {
+		const { store, dir, dbPath } = await fileStore();
+		// A worker thread (separate connection) takes the write lock, holds it
+		// ~200ms, then commits. The main thread's write must block on
+		// busy_timeout and then succeed — no retry, no error. A worker is used
+		// because better-sqlite3 is synchronous: the lock must be released by an
+		// independent thread while the main thread is blocked inside SQLite.
+		const workerSource = `
+			import { parentPort, workerData } from "node:worker_threads";
+			const { default: Database } = await import(workerData.modulePath);
+			const db = new Database(workerData.dbPath);
+			db.pragma("busy_timeout = 30000");
+			db.exec("BEGIN IMMEDIATE");
+			parentPort.postMessage({ type: "locked" });
+			setTimeout(() => {
+				db.exec("COMMIT");
+				db.close();
+				parentPort.postMessage({ type: "released" });
+			}, 200);
+		`;
+
+		const worker = new Worker(workerSource, {
+			eval: true,
+			workerData: { dbPath, modulePath: require.resolve("better-sqlite3") }
+		});
+		try {
+			await new Promise<void>((resolve, reject) => {
+				worker.once("message", (msg: { type?: string }) => {
+					if (msg.type === "locked") resolve();
+					else reject(new Error(`unexpected worker message: ${JSON.stringify(msg)}`));
+				});
+				worker.once("error", reject);
+			});
+
+			const started = performance.now();
+			expect(() => store.memories.insert(makeEntry({ id: "waited-1", repo: "contention" }))).not.toThrow();
+			const elapsed = performance.now() - started;
+
+			// It genuinely waited for the hold to clear (proves busy_timeout was
+			// in effect) and then committed.
+			expect(elapsed).toBeGreaterThanOrEqual(100);
+			expect(store.memories.getById("waited-1")).not.toBeNull();
+		} finally {
+			await worker.terminate();
+			store.close();
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	}, 15000);
 });

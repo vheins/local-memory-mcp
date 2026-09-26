@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import { logger } from "../utils/logger";
-import { DERIVED_DB_FILENAME, DERIVED_SCHEMA } from "../utils/constants";
+import { DERIVED_DB_FILENAME, DERIVED_SCHEMA, MEMORY_DB_BUSY_TIMEOUT_MS } from "../utils/constants";
 
 /**
  * Derived-database management (DB-shrink L4 / TASK-037).
@@ -105,7 +105,14 @@ export function attachDerivedDb(db: Database.Database, memoryDbPath: string): st
 		db.prepare(`ATTACH DATABASE ? AS ${DERIVED_SCHEMA}`).run(derivedPath);
 		db.pragma(`${DERIVED_SCHEMA}.journal_mode = WAL`);
 		db.pragma(`${DERIVED_SCHEMA}.synchronous = NORMAL`);
-		db.pragma(`${DERIVED_SCHEMA}.busy_timeout = 5000`);
+		// busy_timeout is CONNECTION-scoped, not per-schema: a schema-qualified
+		// `derived.busy_timeout` rewrites the SHARED connection's timeout. Setting
+		// it to a fixed 5000 here silently downgraded the hot store's configured
+		// MEMORY_DB_BUSY_TIMEOUT_MS (default 30s) to 5s, so contention the operator
+		// had tuned for still surfaced as raw `database is locked` (FIX-032). Use
+		// the shared value so attaching the derived schema never weakens hot-store
+		// contention handling.
+		db.pragma(`${DERIVED_SCHEMA}.busy_timeout = ${MEMORY_DB_BUSY_TIMEOUT_MS}`);
 	}
 
 	return derivedPath;

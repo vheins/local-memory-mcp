@@ -2,7 +2,12 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import { BaseEntity } from "./base";
-import { TABLE_COLD_MEMORIES, COLD_ARCHIVE_DB_FILENAME, BULK_UPDATE_CHUNK_SIZE } from "../utils/constants";
+import {
+	TABLE_COLD_MEMORIES,
+	COLD_ARCHIVE_DB_FILENAME,
+	BULK_UPDATE_CHUNK_SIZE,
+	MEMORY_DB_BUSY_TIMEOUT_MS
+} from "../utils/constants";
 import { chunksOf } from "../utils/chunk";
 import type { MemoryEntry, MemoryRow, MemoryType, MemoryStatus } from "../types";
 
@@ -117,9 +122,12 @@ export class ColdArchiveStore extends BaseEntity {
 
 		// WAL + NORMAL mirror the hot store (see SQLiteStore constructor); an
 		// in-memory DB silently keeps its memory journal, which is fine.
+		// busy_timeout uses the shared MEMORY_DB_BUSY_TIMEOUT_MS so a cold-tier
+		// offload batch contends with a sibling writer on the same terms as the
+		// hot store instead of failing after a fixed 5s (FIX-032).
 		db.pragma("journal_mode = WAL");
 		db.pragma("synchronous = NORMAL");
-		db.pragma("busy_timeout = 5000");
+		db.pragma(`busy_timeout = ${MEMORY_DB_BUSY_TIMEOUT_MS}`);
 
 		this.initSchema();
 	}
