@@ -278,6 +278,7 @@ Dasbor bisa otomatis menyala saat Anda membuka project di VS Code, Cursor, Winds
 - [Integrasi dengan Codex (OpenAI)](https://github.com/vheins/local-memory-mcp/wiki/id/Codex-Integration) — Panduan setup untuk Codex CLI
 - [Integrasi dengan Kiro](https://github.com/vheins/local-memory-mcp/wiki/id/Kiro-Integration) — Panduan setup untuk Kiro IDE
 - [Auto-Start Dasbor di IDE](https://github.com/vheins/local-memory-mcp/wiki/id/Auto-Start-Dashboard) — tasks.json untuk VS Code, Cursor, Windsurf, Zed, JetBrains
+- [Changelog](CHANGELOG.md) — Riwayat rilis dan catatan versi
 
 > Dokumentasi untuk pengguna (consumer) kini berada di **GitHub Wiki** (`https://github.com/vheins/local-memory-mcp/wiki/Home`). Dokumentasi kontributor & pengembang (standar pengujian, referensi API, runbook ops, desain/optimasi, audit) berada di `.agents/documents/`.
 

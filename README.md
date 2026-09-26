@@ -280,6 +280,7 @@ The dashboard can auto-start when you open a project in VS Code, Cursor, Windsur
 - [Codex (OpenAI) Integration](https://github.com/vheins/local-memory-mcp/wiki/en/Codex-Integration) — Setup for Codex CLI
 - [Kiro Integration](https://github.com/vheins/local-memory-mcp/wiki/en/Kiro-Integration) — Setup for Kiro IDE
 - [Auto-Start Dashboard in IDEs](https://github.com/vheins/local-memory-mcp/wiki/en/Auto-Start-Dashboard) — tasks.json for VS Code, Cursor, Windsurf, Zed, JetBrains
+- [Changelog](CHANGELOG.md) — Release history and version notes
 
 > User documentation lives on the **GitHub Wiki** (`https://github.com/vheins/local-memory-mcp/wiki/Home`). Contributor & developer docs (testing standard, API references, ops runbooks, design/optimization, audits) live in `.agents/documents/`.
 
