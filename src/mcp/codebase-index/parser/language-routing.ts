@@ -391,7 +391,7 @@ export interface RegistryMaps {
  * Canonical lookup key for an extensionless file: its lowercased basename.
  *
  * The ParserPool resolves an extensionless file (`Dockerfile`, `Makefile`, …)
- * by basename, NOT by full path — every `**​/Dockerfile` anywhere in the tree
+ * by basename, NOT by full path — every `**`/`Dockerfile` anywhere in the tree
  * maps to the SAME generic config, which is intended. Normalizing through this
  * single helper keeps the registry keys and the runtime lookup identical, so
  * two files sharing a basename across directories can never disagree about
