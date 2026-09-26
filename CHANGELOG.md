@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.0] — 2026-09-26
+
+Coordination-DX and daemon-stability release — a 16-fix sweep driven by live runtime logs (task/handoff/standard tool ergonomics, daemon transport stability, SQLite write contention, indexer noise), one feature (explicit opt-in task owner move), plus CI supply-chain hardening.
+
+### Added
+
+- **Explicit opt-in task owner move (`FEAT-007`):** `task-write` accepts `new_owner` to move a task to another owner without ever mutating `owner` implicitly. The target is validated (`isValidGitHubUsername` + `isPlausibleScopeSegment` — empty, dotfile, and reserved segments like `home` rejected), the row resolves by the CURRENT `(owner, repo, code)`, an identity-key collision fails with an actionable error (an optional `task_code` rename in the same call resolves it), and `task_comments.owner` is synced in the same transaction. Bulk paths reject `new_owner`; `owner` appears in `updatedFields` only on an actual move.
+
+### Changed
+
+- **Status changes auto-derive a transition comment (`FIX-022`):** the comment-required gate on task status changes is dropped — a missing/blank comment now persists a deterministic default (`Status: <from> -> <to> (<agent>, <timestamp>)`), while an explicit comment is honored verbatim. Applies to single, `ids[]` bulk, and `tasks[]` bulk paths so the audit trail never gets an empty row.
+- **Direct-to-completed rejection enumerates recovery (`FIX-033`):** the intentional `backlog|pending|blocked -> completed` claim gate stays (never skip `in_progress`), but the VALIDATION_ERROR now enumerates allowed next states and the exact retry calls; `force` remains inert.
+- **CI supply chain pinned (`528511b9`):** actions/checkout, actions/setup-node, actions/upload-artifact, and softprops/action-gh-release pinned to full commit SHAs.
+- **Dependabot configured (`17782f18`):** automated updates for npm dependencies and GitHub Actions.
+
+### Fixed
+
+- **`memory-write` create with omitted `importance` (`FIX-020`):** defaults to 3 (schema + `buildMemoryEntry` safety net); SQLITE_CONSTRAINT now surfaces as VALIDATION_ERROR with `details.constraint` instead of a generic internal error; nested-only `scope:{owner,repo}` resolves to the requested scope.
+- **Placeholder task codes (`FIX-021`):** `T01`/`R01`/`Q01` template placeholders are rejected with an actionable error instead of a bare not-found.
+- **Handoff short ids (`FIX-023`):** the 8-char id shown by `handoff-read` lists now resolves on detail and write lookups (prefix resolution).
+- **Task references validated before insert (`FIX-024`):** `parent_id`/`depends_on` pointing at a non-existent task returns a VALIDATION_ERROR naming the missing reference instead of a raw SQLite FOREIGN KEY error.
+- **Daemon premature close + lock churn (`FIX-025`):** `ERR_STREAM_PREMATURE_CLOSE` is handled per-request (warn, no uncaught exception); lock acquisition failures are caught with a clear message instead of killing the process.
+- **`standard-write`/`standard-read` shape friction (`FIX-026`):** shape errors state which mode was detected and what was missing; code lookups that miss due to scope suggest the scope that would match.
+- **`task-write` bulk/inference errors (`FIX-027`):** errors name the failing item and the corrective shape (e.g. "use `code:` instead of `id:`").
+- **SSE stream lifetime (`FIX-028`):** `GET /mcp` streams are bounded (idle timeout + keep-alive), an open stream refreshes session liveness (no mid-stream sweep), and request-duration logging no longer reports stream lifetime as handler latency.
+- **Owner-inference noise (`FIX-029`):** the normalize-args owner warning is deduplicated/rate-limited, and path-basename owners (`home`, `.config`) are rejected as implausible scope segments.
+- **Indexer noise (`FIX-030`):** unsupported extensions (`.sql`, `.lock`, `.env`, `.dockerfile`) are skipped by extension, ParserPool duplicate basenames are namespaced by full path, and expected tree-sitter parse errors are downgraded to debug.
+- **FileDiscovery on unreadable directories (`FIX-031`):** EACCES/EPERM/ENOENT directories are skipped and counted instead of erroring per path.
+- **SQLite write contention (`FIX-032`):** the derived-attach busy_timeout downgrade is fixed (explicit `MEMORY_DB_BUSY_TIMEOUT_MS` now holds), bare autocommit statements route through the bounded jittered retry wrapper, and exhausted retries surface a clear terminal error with preserved code/cause.
+- **Startup warm-up + AutoIndex (`FIX-034`):** semantic warm-up is non-fatal and deferred until after the listener is ready (`SEMANTIC_WARMUP_TIMEOUT_MS`, default 30000, 0 = disabled); AutoIndex failures are isolated and logged once — startup is never aborted.
+- **CI lint blocker (`FIX-035`):** removed a zero-width space (U+200B) from a `language-routing.ts` doc comment that failed `no-irregular-whitespace`.
+- **Bench shell interpolation (`9062e930`):** `git hash-object` paths passed via argv (`execFileSync`) instead of a shell string.
+
+### Docs
+
+- **README cross-links (`ea86b282`):** related projects cross-linked.
+- **LICENSE (`a37fe882`):** `LICENSE.md` renamed to `LICENSE`.
+
+### Tests
+
+- **Secret-scanner hygiene (`fa9f3f8d`):** secret-like literals in bug-capture and HTTP transport tests replaced with clearly non-secret example tokens.
+- New/updated suites: `memory.write.create`, `mcp-error`, `state-machine` (+6×6 transition matrix), `tasks-transition`, `tools/task-write/owner-move`, `startup-warmup`, `auto-index-guard`, `metrics`, handoff short-id coverage; codebase-index aggregate 80 files / 734 tests green.
+
 ## [0.49.0] — 2026-09-21
 
 ### Added
