@@ -26,6 +26,9 @@ describe("task-write state machine — validateStatusTransition", () => {
 		expect(err).toMatch(/Cannot transition from 'backlog' directly to 'completed'/);
 		expect(err).toMatch(/Required sequence: backlog -> in_progress -> completed/);
 		expect(err).toMatch(/Must go through 'in_progress' first/);
+		// FIX-033: the rejection ENUMERATES the reachable states so a caller is
+		// never left with a bare "Cannot transition" (actionable-guidance gate).
+		expect(err).toMatch(/Allowed next states from 'backlog': pending, in_progress, canceled, blocked/);
 		// The directive retry shape names the exact task.
 		expect(err).toContain('code: "TASK-001"');
 	});
@@ -35,6 +38,36 @@ describe("task-write state machine — validateStatusTransition", () => {
 			const err = validateStatusTransition(from, "completed", "x", undefined, undefined, "TASK-002");
 			expect(err).toMatch(new RegExp(`Cannot transition from '${from}' directly to 'completed'`));
 			expect(err).toMatch(new RegExp(`Required sequence: ${from} -> in_progress -> completed`));
+			// FIX-033: allowed-next-states enumeration is present for every source.
+			expect(err).toMatch(new RegExp(`Allowed next states from '${from}':`));
+			// Every enumerated state must be a real transition target (not the
+			// source itself and not the rejected 'completed').
+			const enumerated = err!.match(/Allowed next states from '[^']+': (.+)\. — call/)![1].split(", ");
+			expect(enumerated).not.toContain(from);
+			expect(enumerated).not.toContain("completed");
+		}
+	});
+
+	it("FIX-033 transition matrix: only backlog|pending|blocked -> completed is rejected", () => {
+		// The guard is deliberately NARROW (FIX-033 policy): every pair except the
+		// documented direct-to-completed claim-gate violation is allowed. A no-op
+		// (same status) also returns null.
+		const all = ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"] as const;
+		const rejected = new Set(["backlog->completed", "pending->completed", "blocked->completed"]);
+
+		for (const from of all) {
+			for (const to of all) {
+				const err = validateStatusTransition(from, to, "x", undefined, undefined, "TASK-003");
+				const pair = `${from}->${to}`;
+				if (rejected.has(pair)) {
+					expect(err, `${pair} must be rejected`).toBeTruthy();
+					expect(err).toMatch(new RegExp(`Cannot transition from '${from}' directly to 'completed'`));
+					expect(err).toMatch(new RegExp(`Allowed next states from '${from}':`));
+					expect(err).toContain("in_progress");
+				} else {
+					expect(err, `${pair} must be allowed`).toBeNull();
+				}
+			}
 		}
 	});
 });

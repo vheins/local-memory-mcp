@@ -36,12 +36,13 @@ describe("Consolidated Task Write — Status Transitions", () => {
 		);
 	}
 
-	it("should block transition from backlog to completed", async () => {
+	it("should block transition from backlog to completed with actionable guidance", async () => {
 		await createTask("TASK-001", "backlog");
 		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
-		await expect(
-			handleTaskWrite(
+		let thrown: unknown;
+		try {
+			await handleTaskWrite(
 				{
 					owner: "test",
 					repo: REPO,
@@ -54,8 +55,22 @@ describe("Consolidated Task Write — Status Transitions", () => {
 				},
 				db,
 				mockVectors
-			)
-		).rejects.toThrow(/Cannot transition from 'backlog' directly to 'completed'/);
+			);
+		} catch (err) {
+			thrown = err;
+		}
+
+		expect(thrown).toBeInstanceOf(Error);
+		const message = (thrown as Error).message;
+		expect(message).toMatch(/Cannot transition from 'backlog' directly to 'completed'/);
+		// FIX-033: the rejection is caller-actionable — it names the allowed next
+		// states and the exact retry calls, never a bare "Cannot transition".
+		expect(message).toMatch(/Allowed next states from 'backlog': pending, in_progress, canceled, blocked/);
+		expect(message).toMatch(/Must go through 'in_progress' first/);
+		expect(message).toContain('code: "TASK-001"');
+
+		// No silent state manipulation: the task stays in backlog.
+		expect(db.tasks.getTaskById(task.id)?.status).toBe("backlog");
 	});
 
 	it("should allow transition from backlog to pending", async () => {
@@ -80,12 +95,13 @@ describe("Consolidated Task Write — Status Transitions", () => {
 		expect(updatedTask?.status).toBe("pending");
 	});
 
-	it("should block transition from pending to completed", async () => {
+	it("should block transition from pending to completed with allowed-next-states guidance", async () => {
 		await createTask("TASK-001", "pending");
 		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
-		await expect(
-			handleTaskWrite(
+		let thrown: unknown;
+		try {
+			await handleTaskWrite(
 				{
 					owner: "test",
 					repo: REPO,
@@ -98,8 +114,16 @@ describe("Consolidated Task Write — Status Transitions", () => {
 				},
 				db,
 				mockVectors
-			)
-		).rejects.toThrow(/Cannot transition from 'pending' directly to 'completed'/);
+			);
+		} catch (err) {
+			thrown = err;
+		}
+
+		expect(thrown).toBeInstanceOf(Error);
+		const message = (thrown as Error).message;
+		expect(message).toMatch(/Cannot transition from 'pending' directly to 'completed'/);
+		expect(message).toMatch(/Allowed next states from 'pending': backlog, in_progress, canceled, blocked/);
+		expect(db.tasks.getTaskById(task.id)?.status).toBe("pending");
 	});
 
 	it("should allow transition from pending to in_progress", async () => {
@@ -414,8 +438,9 @@ describe("Consolidated Task Write — Status Transitions", () => {
 			mockVectors
 		);
 
-		await expect(
-			handleTaskWrite(
+		let thrown: unknown;
+		try {
+			await handleTaskWrite(
 				{
 					owner: "test",
 					repo: REPO,
@@ -428,8 +453,17 @@ describe("Consolidated Task Write — Status Transitions", () => {
 				},
 				db,
 				mockVectors
-			)
-		).rejects.toThrow(/Cannot transition from 'blocked' directly to 'completed'/);
+			);
+		} catch (err) {
+			thrown = err;
+		}
+
+		expect(thrown).toBeInstanceOf(Error);
+		const message = (thrown as Error).message;
+		expect(message).toMatch(/Cannot transition from 'blocked' directly to 'completed'/);
+		// FIX-033: the allowed-next-states enumeration is present for blocked too.
+		expect(message).toMatch(/Allowed next states from 'blocked': backlog, pending, in_progress, canceled/);
+		expect(db.tasks.getTaskById(task.id)?.status).toBe("blocked");
 	});
 
 	// issue #108 (PRIMARY): a state-machine rejection must surface through the

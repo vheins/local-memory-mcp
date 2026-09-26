@@ -1,7 +1,28 @@
-import { TaskStatus } from "../../types";
+import { TaskStatus, TASK_STATUSES } from "../../types";
 
 // ---------------------------------------------------------------------------
 // Status state machine validation
+// ---------------------------------------------------------------------------
+//
+// POLICY (FIX-033 — decided after 89 live rejections of direct-to-completed):
+//
+//   * `backlog|pending|blocked -> completed` stays REJECTED on purpose.
+//     `claim-manage` (backlog|pending -> in_progress) is the coordination gate
+//     that establishes the task claim; skipping it would bypass that primitive
+//     and contradict the canonical contract
+//     (`src/mcp/prompts/server/instructions.md` — "NEVER skip in_progress").
+//     FIX-022 reached the same conclusion: explicit guidance over silent state
+//     manipulation. Reversing that would require changing the canonical
+//     contract + its 4 companion policy docs, which is out of this task's scope.
+//
+//   * The rejection is a CALLER-ACTIONABLE VALIDATION_ERROR: it enumerates the
+//     allowed next states, names the required `in_progress` hop, and gives the
+//     exact retry call. A bare "Cannot transition" is never returned.
+//
+//   * Every OTHER transition is allowed — the guard is deliberately narrow so
+//     it never adds friction beyond the documented claim gate.
+//
+//   * `force` stays INERT (TASK-061 / FIX-022): it does NOT bypass this guard.
 // ---------------------------------------------------------------------------
 
 /**
@@ -38,15 +59,19 @@ export function validateStatusTransition(
 	const isStartable = existingStatus === "backlog" || existingStatus === "pending" || existingStatus === "blocked";
 
 	if (isStartable && newStatus === "completed") {
-		// FIX-022 decision: explicit guidance over silent state manipulation.
-		// We do NOT auto-insert the `in_progress` hop behind the caller's back
-		// (that would fabricate a transition the caller never requested and
-		// could mask a real workflow mistake). Instead we return a
-		// VALIDATION_ERROR that NAMES the exact required sequence
-		// (`<from> -> in_progress -> completed`) and the calls needed to
-		// complete it. The `Must go through 'in_progress' first` substring is
-		// retained for existing consumers/tests.
-		return `Cannot transition from '${existingStatus}' directly to 'completed'. Required sequence: ${existingStatus} -> in_progress -> completed. Must go through 'in_progress' first. — call task-write(${codeArg}, status: "in_progress", comment: "...") first, then status: "completed"`;
+		// FIX-022 decision (reaffirmed by FIX-033): explicit guidance over silent
+		// state manipulation. We do NOT auto-insert the `in_progress` hop behind
+		// the caller's back (that would fabricate a transition the caller never
+		// requested and could mask a real workflow mistake). Instead we return a
+		// VALIDATION_ERROR that:
+		//   1. names the exact required sequence (`<from> -> in_progress -> completed`),
+		//   2. ENUMERATES the states actually reachable from `<from>` so the caller
+		//      is never left with a bare "Cannot transition" (FIX-033), and
+		//   3. gives the exact retry calls to complete the hop.
+		// The `Must go through 'in_progress' first` + `Required sequence` substrings
+		// are retained for existing consumers/tests.
+		const allowedNext = TASK_STATUSES.filter((s) => s !== existingStatus && s !== "completed");
+		return `Cannot transition from '${existingStatus}' directly to 'completed'. Required sequence: ${existingStatus} -> in_progress -> completed. Must go through 'in_progress' first. Allowed next states from '${existingStatus}': ${allowedNext.join(", ")}. — call task-write(${codeArg}, status: "in_progress", comment: "...") first, then status: "completed"`;
 	}
 
 	return null;
