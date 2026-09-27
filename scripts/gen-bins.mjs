@@ -25,6 +25,16 @@ const SHEBANG = "#!/usr/bin/env node\n";
 
 const SERVER_BIN = `${SHEBANG}import { ensureDashboardBuild } from "./ensure-dashboard-build.mjs";
 
+// FEAT-DAEMON-002A: merge file-based config (<configDir>/config.jsonc then
+// <configDir>/.env) into process.env BEFORE any bundled module is imported.
+// utils/constants.ts reads process.env at module-evaluation time, so this MUST
+// run before the first "../dist/mcp/server.js" import. A missing/malformed
+// file is a silent no-op and an explicit env var always wins (see
+// src/mcp/utils/config-file.ts for the precedence rules). The import is
+// dynamic so it executes here at the top, not hoisted past this point.
+const { loadConfigFileEnv } = await import("../dist/mcp/utils/config-file.js");
+loadConfigFileEnv();
+
 process.env.MCP_SERVER = "true";
 
 const sub = process.argv[2];

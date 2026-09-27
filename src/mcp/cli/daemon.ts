@@ -38,6 +38,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
+import { loadConfigFileEnv, resolveConfigDir } from "../utils/config-file";
 
 /** Absolute paths the daemon manages. */
 export interface DaemonPaths {
@@ -197,17 +198,11 @@ export function removeLock(lockFile: string): void {
  * platform-standard config dir is used (Linux `~/.config/local-memory-mcp`).
  */
 export function resolveDaemonDir(env: NodeJS.ProcessEnv = process.env): string {
-	const explicit = env.LOCAL_MEMORY_DAEMON_DIR?.trim();
-	if (explicit) return explicit;
-
-	const dbPath = env.MEMORY_DB_PATH?.trim();
-	if (dbPath && dbPath !== ":memory:") return path.dirname(dbPath);
-
-	if (process.platform === "win32") return path.join(os.homedir(), ".local-memory-mcp");
-	if (process.platform === "darwin") {
-		return path.join(os.homedir(), "Library", "Application Support", "local-memory-mcp");
-	}
-	return path.join(os.homedir(), ".config", "local-memory-mcp");
+	// Single source of truth: `utils/config-file.ts` (FEAT-DAEMON-002A) owns the
+	// config-dir resolution because the file-based config loader reads
+	// `config.jsonc` / `.env` from the same directory. Delegating keeps the
+	// PID/log/lock files and the config files co-located by construction.
+	return resolveConfigDir(env);
 }
 
 /** Resolve the PID + log + lock file paths for the daemon. */
@@ -320,6 +315,14 @@ export function startDaemon(options: { paths?: DaemonPaths; io?: Partial<DaemonI
 
 	// 3. Fork. On any spawn failure the lock must be released so a retry works.
 	fs.mkdirSync(paths.dir, { recursive: true });
+
+	// FEAT-DAEMON-002A: merge file-based config (config.jsonc then .env) from the
+	// resolved config dir into process.env so the forked worker inherits it.
+	// Explicit env vars always win; a missing/malformed file is a silent no-op.
+	// This also guarantees the child sees the config even when it is re-exec'd
+	// through a code path that does not load it itself.
+	loadConfigFileEnv({ configDir: paths.dir });
+
 	let child: ChildProcess;
 	try {
 		const logFd = fs.openSync(paths.logFile, "a");
