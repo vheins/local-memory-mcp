@@ -91,7 +91,7 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
-		"@fast-check/vitest": "^0.3.0",
+		"@fast-check/vitest": "^0.5.0",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@types/better-sqlite3": "^7.6.13",
 		"@types/dompurify": "^3.0.5",
@@ -100,7 +100,7 @@
 		"@types/node": "^22.19.7",
 		"@typescript-eslint/eslint-plugin": "^8.58.1",
 		"@typescript-eslint/parser": "^8.58.1",
-		"@vitest/coverage-v8": "^4.1.11",
+		"@vitest/coverage-v8": "^5.0.1",
 		"eslint": "^10.2.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-prettier": "^5.5.5",
