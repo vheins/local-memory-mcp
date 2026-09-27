@@ -75,7 +75,7 @@
 		"compromise": "^14.15.1",
 		"compromise-dates": "^3.8.0",
 		"dompurify": "^3.4.13",
-		"esbuild": "0.28.1",
+		"esbuild": "0.28.2",
 		"express": "^5.2.1",
 		"fast-glob": "^3.3.3",
 		"gray-matter": "^4.0.3",
@@ -139,7 +139,7 @@
 		"brace-expansion": "^5.0.9",
 		"sharp": "^0.35.4",
 		"devalue": "^5.9.2",
-		"esbuild": "0.28.1",
+		"esbuild": "0.28.2",
 		"tree-sitter-c": "^0.24.1",
 		"tree-sitter-javascript": "^0.25.0",
 		"js-yaml": "^3.15.2"
