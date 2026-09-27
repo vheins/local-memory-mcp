@@ -10,7 +10,7 @@
 		"sweetalert2": "^11.26.25"
 	},
 	"devDependencies": {
-		"@testing-library/jest-dom": "^7.0.0",
+		"@testing-library/jest-dom": "^7.0.1",
 		"@testing-library/svelte": "^5.4.2",
 		"jsdom": "^30.0.0",
 		"vitest": "^4.1.7"
