@@ -709,6 +709,24 @@ export const MCP_HTTP_ALLOW_INSECURE = envBool("MCP_HTTP_ALLOW_INSECURE", false)
 // overridable so operators can tune the window without a code change.
 export const MCP_HTTP_SESSION_IDLE_TTL_MS = envInt("MCP_HTTP_SESSION_IDLE_TTL_MS", 30 * 60 * 1000);
 
+// Daemon/remote default for the SAME `MCP_HTTP_SESSION_IDLE_TTL_MS` env var
+// (FIX-110-C). A remote client (e.g. Zed 1.21) holds one `Mcp-Session-Id` for
+// its whole lifetime; evicting it makes the next call hit an unknown session.
+// The daemon therefore keeps sessions alive far longer (2h) so evictions are
+// rare — while a standalone/one-shot HTTP server keeps the shorter 30-min
+// window. Both read the SAME env var, so an explicit `MCP_HTTP_SESSION_IDLE_TTL_MS`
+// overrides BOTH defaults.
+export const MCP_DAEMON_SESSION_IDLE_TTL_MS = envInt("MCP_HTTP_SESSION_IDLE_TTL_MS", 2 * TTL_MS_PER_HOUR);
+
+// Stateless session recovery (FIX-110-C). When ON (default), a non-initialize
+// request carrying an unknown/absent `mcp-session-id` is served by a fresh
+// short-lived stateless transport instead of returning 404/400 — so a client
+// that cached an evicted id self-heals WITHOUT stalling (it never has to
+// re-initialize). When OFF, the historical 404/-32001 / 400/-32000 bodies are
+// returned so the client's transport can recover by re-initializing. Env-
+// overridable escape hatch for operators who prefer the strict contract.
+export const MCP_HTTP_STATELESS_RECOVERY = envBool("MCP_HTTP_STATELESS_RECOVERY", true);
+
 // Idle timeout for a legacy session's standalone SSE (`GET`) stream (FIX-028).
 // The SDK transport serves the GET stream with NO idle/keep-alive/timeout at
 // all, so an open stream is held for the client's ENTIRE session lifetime. On a

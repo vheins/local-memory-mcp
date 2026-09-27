@@ -20,7 +20,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { createTestStore, type SQLiteStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import { createServerFactory } from "../transport/factory";
-import { createDualHandler, type DualHandler } from "../transport/http";
+import { createDualHandler, type DualHandler, type DualHandlerOptions } from "../transport/http";
 import { MCP_HTTP_SESSION_IDLE_TTL_MS } from "../utils/constants";
 
 const ENDPOINT = "http://localhost/mcp";
@@ -34,10 +34,10 @@ const SCOPED = { owner: "debt423-dual", repo: "proj-a" };
 const active: Array<{ store: SQLiteStore; handler: DualHandler }> = [];
 
 /** Start a dual handler on a fresh in-memory store + stub vectors. */
-async function startHarness(): Promise<{ store: SQLiteStore; handler: DualHandler }> {
+async function startHarness(options?: DualHandlerOptions): Promise<{ store: SQLiteStore; handler: DualHandler }> {
 	const store = await createTestStore();
 	const vectors = new StubVectorStore(store);
-	const handler = createDualHandler(createServerFactory(store, vectors, "http"));
+	const handler = createDualHandler(createServerFactory(store, vectors, "http"), undefined, options);
 	const harness = { store, handler };
 	active.push(harness);
 	return harness;
@@ -121,10 +121,10 @@ describe("createDualHandler — legacy session retention (DEBT-423)", () => {
 		expect(list.headers.get("mcp-session-id")).toBe(sessionId);
 		expect(await list.text()).toContain('"tools"');
 
-		// 4. The same call WITHOUT the session id is refused with a clean,
-		// actionable error — proving the session state is genuinely keyed and
-		// retained, not reconstructed, and that the client is told to send the
-		// header rather than being left with an un-actionable dead end.
+		// 4. The same call WITHOUT the session id is now RECOVERED (FIX-110-C):
+		// a fresh stateless transport serves it instead of a 400/404, so a client
+		// that cached an evicted id self-heals without re-initializing. The
+		// response must be a successful tools/list, never "Server not initialized".
 		const noSession = await handler.fetch(
 			new Request(ENDPOINT, {
 				method: "POST",
@@ -132,10 +132,11 @@ describe("createDualHandler — legacy session retention (DEBT-423)", () => {
 				body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} })
 			})
 		);
-		expect(noSession.status).toBe(400);
+		expect(noSession.status).toBe(200);
 		const noSessionBody = await noSession.text();
-		expect(noSessionBody).toContain("Mcp-Session-Id header is required");
+		expect(noSessionBody).toContain('"tools"');
 		expect(noSessionBody).not.toContain("Server not initialized");
+		expect(noSessionBody).not.toContain("Mcp-Session-Id header is required");
 	});
 });
 
@@ -249,13 +250,12 @@ describe("createDualHandler — idle legacy session eviction", () => {
 	/**
 	 * The SDK client's normal `close()` never sends a `DELETE`, so an abandoned
 	 * legacy session would pin its server + transport forever without an idle
-	 * sweep. Driving the sweep past the TTL must evict the session, and a
-	 * subsequent request on that id must get the clean "Session not found"
-	 * (404) that tells a recovering client to re-`initialize` — the id is no
-	 * longer retained, so the exchange must NOT be answered by a freshly-minted
-	 * un-initialized server.
+	 * sweep. Driving the sweep past the TTL must evict the session. With
+	 * stateless recovery ON (default, FIX-110-C) a subsequent request on that
+	 * evicted id is RECOVERED by a fresh stateless transport (200) rather than
+	 * stalling the client — the eviction no longer produces a dead end.
 	 */
-	it("evicts a session idle past the TTL and a later request finds no session", async () => {
+	it("evicts a session idle past the TTL and a later request is recovered statelessly", async () => {
 		const { handler } = await startHarness();
 
 		const sessionId = await openLegacySession(handler);
@@ -265,14 +265,15 @@ describe("createDualHandler — idle legacy session eviction", () => {
 		// Drive the sweep just past the TTL using an injected clock.
 		handler.sweepIdleLegacySessions(Date.now() + MCP_HTTP_SESSION_IDLE_TTL_MS + 1);
 
-		// The id is gone: the request must get the clean "Session not found"
-		// (404) that a recovering client acts on, NOT a fresh un-initialized
-		// server's "Server not initialized" dead end.
+		// The id is gone, but the request is served by a fresh stateless
+		// transport (FIX-110-C) — NOT a 404 dead end, and never the
+		// un-initialized server's "Server not initialized".
 		const afterEviction = await listOnSession(handler, sessionId);
-		expect(afterEviction.status).toBe(404);
+		expect(afterEviction.status).toBe(200);
 		const afterEvictionBody = await afterEviction.text();
-		expect(afterEvictionBody).toContain("Session not found");
+		expect(afterEvictionBody).toContain('"tools"');
 		expect(afterEvictionBody).not.toContain("Server not initialized");
+		expect(afterEvictionBody).not.toContain("Session not found");
 	});
 
 	it("keeps a recently-used session alive", async () => {
@@ -324,11 +325,12 @@ describe("createDualHandler — SSE stream lifetime + sweep exemption (FIX-028)"
 
 	/**
 	 * The exemption is released once the stream closes: an idle session is then
-	 * swept normally and a later request gets the clean 404 (the negative case
-	 * proving the exemption is scoped to the open stream, not permanent).
+	 * swept normally and a later request is recovered statelessly (FIX-110-C) —
+	 * the negative case proving the exemption is scoped to the open stream, not
+	 * permanent. Here recovery is DISABLED to assert the raw sweep/404 contract.
 	 */
 	it("sweeps the session again once its SSE stream is closed", async () => {
-		const { handler } = await startHarness();
+		const { handler } = await startHarness({ statelessRecovery: false });
 		const sessionId = await openLegacySession(handler);
 
 		const sse = await handler.fetch(
@@ -351,17 +353,104 @@ describe("createDualHandler — SSE stream lifetime + sweep exemption (FIX-028)"
 	});
 });
 
+describe("createDualHandler — stateless session recovery (FIX-110-C)", () => {
+	/**
+	 * A NON-initialize request carrying an UNKNOWN session id is served by a
+	 * fresh stateless transport (200) instead of the historical 404 — so a
+	 * remote client that cached an evicted id self-heals with no re-initialize
+	 * and no >60s stall.
+	 */
+	it("serves an unknown session id with a stateless recovery (200, not 404)", async () => {
+		const { handler } = await startHarness();
+
+		const response = await handler.fetch(
+			new Request(ENDPOINT, {
+				method: "POST",
+				headers: { ...JSON_HEADERS, "mcp-session-id": "evicted-session-id" },
+				body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} })
+			})
+		);
+
+		expect(response.status).toBe(200);
+		const body = await response.text();
+		expect(body).toContain('"tools"');
+		expect(body).not.toContain("Session not found");
+		expect(body).not.toContain("Server not initialized");
+	});
+
+	/**
+	 * A NON-initialize request with an ABSENT session id is likewise recovered
+	 * (200) rather than 400 — the same stall-free behavior for a client that
+	 * dropped the header.
+	 */
+	it("serves an absent session id with a stateless recovery (200, not 400)", async () => {
+		const { handler } = await startHarness();
+
+		const response = await handler.fetch(
+			new Request(ENDPOINT, {
+				method: "POST",
+				headers: JSON_HEADERS,
+				body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} })
+			})
+		);
+
+		expect(response.status).toBe(200);
+		const body = await response.text();
+		expect(body).toContain('"tools"');
+		expect(body).not.toContain("Mcp-Session-Id header is required");
+	});
+
+	/**
+	 * Fallback path: with recovery DISABLED the strict 404/-32001 body is
+	 * returned again, so a client whose transport re-initializes on 404 still
+	 * recovers (the escape hatch).
+	 */
+	it("returns the strict 404 when stateless recovery is disabled", async () => {
+		const { handler } = await startHarness({ statelessRecovery: false });
+
+		const response = await handler.fetch(
+			new Request(ENDPOINT, {
+				method: "POST",
+				headers: { ...JSON_HEADERS, "mcp-session-id": "evicted-session-id" },
+				body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} })
+			})
+		);
+
+		expect(response.status).toBe(404);
+		expect(await response.text()).toContain("Session not found");
+	});
+
+	/** Fallback path: absent id + recovery disabled → the strict 400 body. */
+	it("returns the strict 400 when stateless recovery is disabled and no id is sent", async () => {
+		const { handler } = await startHarness({ statelessRecovery: false });
+
+		const response = await handler.fetch(
+			new Request(ENDPOINT, {
+				method: "POST",
+				headers: JSON_HEADERS,
+				body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} })
+			})
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.text()).toContain("Mcp-Session-Id header is required");
+	});
+});
+
 describe("createDualHandler — session-rejection reporting (PERF-009)", () => {
 	/**
-	 * An unknown session id must still return the canonical 404 body, but the
-	 * `onerror` report must name the offending id and the recovery so the daemon
-	 * log explains the wedge instead of showing a bare "Session not found".
+	 * An unknown session id must still report the offending id + recovery via
+	 * `onerror` so the daemon log explains the wedge. Recovery is DISABLED here
+	 * to assert the raw fallback contract (404 body) alongside the report; with
+	 * recovery ON the same report fires but the response is a 200 (FIX-110-C).
 	 */
 	it("reports the unknown session id + re-initialize hint on the 404 path", async () => {
 		const store = await createTestStore();
 		const vectors = new StubVectorStore(store);
 		const reported: Error[] = [];
-		const handler = createDualHandler(createServerFactory(store, vectors, "http"), (error) => reported.push(error));
+		const handler = createDualHandler(createServerFactory(store, vectors, "http"), (error) => reported.push(error), {
+			statelessRecovery: false
+		});
 		active.push({ store, handler });
 
 		const response = await handler.fetch(
@@ -386,7 +475,9 @@ describe("createDualHandler — session-rejection reporting (PERF-009)", () => {
 		const store = await createTestStore();
 		const vectors = new StubVectorStore(store);
 		const reported: Error[] = [];
-		const handler = createDualHandler(createServerFactory(store, vectors, "http"), (error) => reported.push(error));
+		const handler = createDualHandler(createServerFactory(store, vectors, "http"), (error) => reported.push(error), {
+			statelessRecovery: false
+		});
 		active.push({ store, handler });
 
 		const response = await handler.fetch(
@@ -401,5 +492,31 @@ describe("createDualHandler — session-rejection reporting (PERF-009)", () => {
 		expect(await response.text()).toContain("Mcp-Session-Id header is required");
 		expect(reported).toHaveLength(1);
 		expect(reported[0].message).toContain("Mcp-Session-Id header is required");
+	});
+
+	/**
+	 * With recovery ON, an unknown session id is still REPORTED (observability)
+	 * even though the response is a successful 200 — so the daemon log explains
+	 * every stateless recovery.
+	 */
+	it("still reports the unknown session id when stateless recovery serves it", async () => {
+		const store = await createTestStore();
+		const vectors = new StubVectorStore(store);
+		const reported: Error[] = [];
+		const handler = createDualHandler(createServerFactory(store, vectors, "http"), (error) => reported.push(error));
+		active.push({ store, handler });
+
+		const response = await handler.fetch(
+			new Request(ENDPOINT, {
+				method: "POST",
+				headers: { ...JSON_HEADERS, "mcp-session-id": "evicted-session-id" },
+				body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} })
+			})
+		);
+
+		expect(response.status).toBe(200);
+		await response.text();
+		expect(reported).toHaveLength(1);
+		expect(reported[0].message).toContain("evicted-session-id");
 	});
 });

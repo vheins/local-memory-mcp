@@ -54,7 +54,8 @@ import {
 	MCP_HTTP_PORT,
 	MCP_HTTP_SESSION_IDLE_TTL_MS,
 	MCP_HTTP_SSE_IDLE_TIMEOUT_MS,
-	MCP_HTTP_SSE_KEEPALIVE_INTERVAL_MS
+	MCP_HTTP_SSE_KEEPALIVE_INTERVAL_MS,
+	MCP_HTTP_STATELESS_RECOVERY
 } from "../utils/constants";
 import { logger } from "../utils/logger";
 
@@ -520,6 +521,78 @@ function missingSessionIdResponse(): Response {
 	return jsonRpcErrorResponse(400, -32000, "Bad Request: Mcp-Session-Id header is required");
 }
 
+/**
+ * Serve a NON-initialize legacy request with a fresh short-lived STATELESS
+ * transport (FIX-110-C).
+ *
+ * This is the safest auto-create point: the transport is constructed with
+ * `sessionIdGenerator: undefined`, so the SDK's `validateSession` returns early
+ * — no "Server not initialized" and no "Session not found" — and the request is
+ * served in place. Because `Protocol` does not require an `initialize` before
+ * handling requests, a tool call with an unknown/evicted session id succeeds.
+ *
+ * Mirrors the SDK's own `legacyStatelessFallback` teardown so neither the
+ * server nor the transport leaks: the exchange is torn down once the (possibly
+ * streaming) response body completes, errors, or the request aborts.
+ */
+async function serveLegacyStateless(factory: McpServerFactory, request: Request): Promise<Response> {
+	const product = await factory({ era: "legacy", requestInfo: request });
+	const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+	await product.connect(transport);
+
+	let toreDown = false;
+	const teardown = () => {
+		if (toreDown) return;
+		toreDown = true;
+		void transport.close().catch(() => {});
+		void product.close().catch(() => {});
+	};
+	request.signal?.addEventListener("abort", teardown, { once: true });
+
+	let response: Response;
+	try {
+		response = await transport.handleRequest(request);
+	} catch (error) {
+		teardown();
+		throw error;
+	}
+
+	// Non-streaming response: the exchange is complete, so tear down now.
+	if (response.body === null || !isStreamingResponse(response)) {
+		teardown();
+		return response;
+	}
+
+	// Streaming response: keep the transport alive until the body is fully
+	// consumed (or cancelled), then tear down exactly once.
+	const reader = response.body.getReader();
+	const monitoredBody = new ReadableStream({
+		pull: async (controller) => {
+			try {
+				const { done, value } = await reader.read();
+				if (done) {
+					teardown();
+					controller.close();
+					return;
+				}
+				if (value !== undefined) controller.enqueue(value);
+			} catch (error) {
+				teardown();
+				controller.error(error);
+			}
+		},
+		cancel: (reason) => {
+			teardown();
+			return reader.cancel(reason).catch(() => {});
+		}
+	});
+	return new Response(monitoredBody, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: response.headers
+	});
+}
+
 /** The web-standard face returned by {@link createDualHandler}. */
 export interface DualHandler {
 	/** Serve one HTTP request, routing by protocol era (modern vs legacy). */
@@ -532,6 +605,28 @@ export interface DualHandler {
 	 * handler also calls it lazily on every `serveLegacy` and on a timer.
 	 */
 	sweepIdleLegacySessions: (now?: number) => void;
+}
+
+/**
+ * Options for {@link createDualHandler} (FIX-110-C).
+ */
+export interface DualHandlerOptions {
+	/**
+	 * Idle TTL (ms) for a retained legacy session. Defaults to
+	 * {@link MCP_HTTP_SESSION_IDLE_TTL_MS}; the daemon passes the longer
+	 * {@link MCP_DAEMON_SESSION_IDLE_TTL_MS} so remote clients that hold one
+	 * session id for their whole lifetime are evicted far less often.
+	 */
+	sessionIdleTtlMs?: number;
+	/**
+	 * Stateless session recovery. When ON (default, or via
+	 * `MCP_HTTP_STATELESS_RECOVERY`), a non-initialize request carrying an
+	 * unknown/absent `mcp-session-id` is served by a fresh short-lived stateless
+	 * transport instead of a 404/400 — so a client that cached an evicted id
+	 * self-heals WITHOUT re-initializing (no >60s stall). When OFF, the
+	 * historical 404/-32001 / 400/-32000 bodies are returned.
+	 */
+	statelessRecovery?: boolean;
 }
 
 /**
@@ -559,10 +654,17 @@ export interface DualHandler {
  * @param onerror - Reporting callback for out-of-band errors on either leg
  *   (never alters the response). The same callback serves both the modern
  *   handler and each legacy session's transport.
+ * @param options - TTL + recovery tuning (see {@link DualHandlerOptions}).
  * @returns A {@link DualHandler} exposing `fetch` and a `close()` that tears
  *   down both legs.
  */
-export function createDualHandler(factory: McpServerFactory, onerror?: (error: Error) => void): DualHandler {
+export function createDualHandler(
+	factory: McpServerFactory,
+	onerror?: (error: Error) => void,
+	options?: DualHandlerOptions
+): DualHandler {
+	const sessionIdleTtlMs = options?.sessionIdleTtlMs ?? MCP_HTTP_SESSION_IDLE_TTL_MS;
+	const statelessRecovery = options?.statelessRecovery ?? MCP_HTTP_STATELESS_RECOVERY;
 	// Modern (2026-07-28) face. Strict: 2025-era traffic is routed by hand
 	// (below) rather than served by the SDK's throwaway stateless fallback.
 	const modernHandler = createMcpHandler(factory, { legacy: "reject", onerror });
@@ -595,7 +697,7 @@ export function createDualHandler(factory: McpServerFactory, onerror?: (error: E
 			// storm). `lastSeen` is also refreshed on every stream chunk, so a
 			// busy stream keeps the session warm regardless.
 			if (session.openStreams > 0) continue;
-			if (now - session.lastSeen > MCP_HTTP_SESSION_IDLE_TTL_MS) {
+			if (now - session.lastSeen > sessionIdleTtlMs) {
 				legacySessions.delete(id);
 				try {
 					void session.transport.close().catch(() => {});
@@ -614,7 +716,7 @@ export function createDualHandler(factory: McpServerFactory, onerror?: (error: E
 	// Idle eviction also runs on a timer so an abandoned session is reclaimed
 	// even when no further traffic arrives. `unref()` keeps the timer from
 	// holding the process open; it is cleared in `close()`.
-	const idleSweepTimer = setInterval(() => sweepIdleLegacySessions(), MCP_HTTP_SESSION_IDLE_TTL_MS);
+	const idleSweepTimer = setInterval(() => sweepIdleLegacySessions(), sessionIdleTtlMs);
 	idleSweepTimer.unref?.();
 
 	/**
@@ -641,17 +743,31 @@ export function createDualHandler(factory: McpServerFactory, onerror?: (error: E
 			return trackOpenSseStream(existing, webRequest, response);
 		}
 
-		// Unknown (or absent) session id on a NON-initialize exchange. Minting a
-		// fresh server here would leave it un-initialized, so the SDK would
-		// answer `Bad Request: Server not initialized` (-32000) — a dead end the
-		// client cannot act on. Answer the SESSION error instead, which every
-		// streamable-HTTP client understands as "re-initialize": a 404 tells a
-		// recovering client (OpenCode's patched transport) to re-`initialize`
-		// and retry the same message, and a 400 tells one that simply omitted
-		// the header to send it. An `initialize` still mints a fresh session
-		// below, so re-initialization and first contact both work.
+		// Unknown (or absent) session id on a NON-initialize exchange.
 		const isInitialize = await isInitializeExchange(webRequest);
 		if (isInitialize === false) {
+			// FIX-110-C: stateless recovery. A remote client (e.g. Zed) caches
+			// ONE session id for its whole lifetime; when the idle sweep evicts
+			// it the next call carries an unknown id. Returning 404/400 makes a
+			// client that never re-initializes stall. Serving the request with a
+			// fresh stateless transport lets it succeed with NO re-initialize and
+			// NO stall. This branch is POST-only in practice (non-initialize
+			// requests are POSTs); a stateless transport would 405 a GET/DELETE,
+			// which is the same contract the SDK's own stateless fallback uses.
+			if (statelessRecovery) {
+				// Preserve observability: report the eviction so the daemon log
+				// explains WHY a stateless recovery happened (PERF-009).
+				onerror?.(sessionRecoveryError(sessionId !== null ? "unknown_session" : "missing_session_id", sessionId));
+				try {
+					return await serveLegacyStateless(factory, webRequest);
+				} catch (error) {
+					onerror?.(error instanceof Error ? error : new Error(String(error)));
+					return jsonRpcErrorResponse(500, -32603, "Internal error");
+				}
+			}
+			// Recovery disabled: preserve the strict 404/400 contract so a
+			// client whose transport re-initializes on 404 still recovers.
+			//
 			// Preserve the observability the SDK provided: it reported these
 			// session rejections through `onerror` (the daemon logs them). The
 			// message names the offending id + the recovery path so the daemon

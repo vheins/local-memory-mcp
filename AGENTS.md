@@ -106,6 +106,23 @@ export LOCAL_MEMORY_DEFAULT_OWNER=vheins
 export LOCAL_MEMORY_DEFAULT_REPO=local-memory-mcp
 ```
 
+**Cause 4 — stale/evicted session id stalls the client >60s (FIX-110-C).** A
+remote client caches one `Mcp-Session-Id` for its whole lifetime; when the
+daemon's idle sweep evicts it, the next non-initialize call carries an unknown
+id. Historically that returned `404/-32001 "Session not found"` and a client
+that never re-initializes (Zed) stalled. Two mitigations ship together:
+
+- The daemon keeps sessions alive far longer by default (2h vs the standalone
+  30 min) — same `MCP_HTTP_SESSION_IDLE_TTL_MS` env var overrides BOTH.
+- Stateless session recovery (`MCP_HTTP_STATELESS_RECOVERY`, default ON): a
+  non-initialize request with an unknown/absent `mcp-session-id` is served by a
+  fresh short-lived stateless transport instead of returning `404/400`, so the
+  client self-heals with NO re-initialize and NO stall. Set
+  `MCP_HTTP_STATELESS_RECOVERY=false` to restore the strict `404/-32001` /
+  `400/-32000` contract (a client whose transport re-initializes on `404` still
+  recovers). Reconnect guidance: if a client still wedges, restart the client
+  once; do NOT delete `memory.db`.
+
 ## Install
 
 ```bash
