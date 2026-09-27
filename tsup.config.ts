@@ -4,7 +4,12 @@ import { readFileSync } from "fs";
 const { version } = JSON.parse(readFileSync("./package.json", "utf8"));
 
 export default defineConfig({
-	entry: ["src/mcp/server.ts", "src/dashboard/server.ts"],
+	// `config-file` is a standalone entry (not just a bundled dependency of
+	// server.ts) so the generated `bin/mcp-memory-server.js` can import it at
+	// the very top — BEFORE any module that reads process.env at eval time
+	// (FEAT-DAEMON-002A). It imports only Node built-ins, so it never drags in
+	// `utils/constants.ts`.
+	entry: ["src/mcp/server.ts", "src/dashboard/server.ts", "src/mcp/utils/config-file.ts"],
 	format: ["esm"],
 	define: {
 		__PKG_VERSION__: JSON.stringify(version)
