@@ -16,6 +16,14 @@ export default defineConfig({
 		testTimeout: 30_000,
 		hookTimeout: 30_000,
 
+		// Vitest 5 flipped the default of `clearMocks` from false -> true, so
+		// `vi.clearAllMocks()` now runs before every test and would wipe mock
+		// call history produced at MODULE IMPORT time (e.g. the
+		// `RealVectorStore.initialize` call recorded while
+		// `src/dashboard/lib/context.ts` is evaluated). Keep the pre-vitest-5
+		// behavior so import-time call assertions stay observable.
+		clearMocks: false,
+
 		// ------------------------------------------------------------------
 		// @testing-library/svelte — inline required so vite-node transforms
 		// svelte-core's runtime `import('./wrapper-scaffold.svelte')` (the
