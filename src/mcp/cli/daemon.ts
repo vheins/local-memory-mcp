@@ -8,6 +8,8 @@
  *   daemon stop       → SIGTERM the PID from the file, delete it, print
  *   daemon status     → print "running (pid N)" or "not running"
  *   daemon install    → register the worker with the OS service manager
+ *                       (`--force` overwrites; `--working-dir <path>` seeds the
+ *                        service WorkingDirectory — FIX-110-B)
  *   daemon uninstall  → deregister it again
  *
  * `install`/`uninstall` are cross-platform (FEAT-DAEMON-001 extension):
@@ -524,8 +526,15 @@ function systemdArg(arg: string): string {
 	return /\s/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg;
 }
 
-/** Build the systemd user-unit file body. */
-export function buildSystemdUnit(command: ServiceCommand): string {
+/**
+ * Build the systemd user-unit file body.
+ *
+ * `workingDir` (FIX-110-B) seeds `WorkingDirectory=` so a daemon started by
+ * systemd does NOT inherit `/` as its CWD — which would leave owner/repo
+ * unresolvable for a rootless HTTP client (see FIX-110-A). Omitted when not
+ * provided (back-compat for callers that build a unit without a seed).
+ */
+export function buildSystemdUnit(command: ServiceCommand, workingDir?: string): string {
 	return [
 		"[Unit]",
 		"Description=local-memory-mcp daemon (combined dashboard + MCP HTTP)",
@@ -534,6 +543,7 @@ export function buildSystemdUnit(command: ServiceCommand): string {
 		"[Service]",
 		"Type=simple",
 		`ExecStart=${[command.program, ...command.args].map(systemdArg).join(" ")}`,
+		...(workingDir ? [`WorkingDirectory=${workingDir}`] : []),
 		"Restart=on-failure",
 		"RestartSec=5",
 		"",
@@ -548,8 +558,14 @@ function escapeXml(value: string): string {
 	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/** Build the launchd LaunchAgent plist body. */
-export function buildLaunchdPlist(command: ServiceCommand, logFile: string): string {
+/**
+ * Build the launchd LaunchAgent plist body.
+ *
+ * `workingDir` (FIX-110-B) seeds `<key>WorkingDirectory</key>` so launchd
+ * starts the daemon with the operator's project directory as its CWD rather
+ * than `/`. Omitted when not provided.
+ */
+export function buildLaunchdPlist(command: ServiceCommand, logFile: string, workingDir?: string): string {
 	const args = [command.program, ...command.args].map((arg) => `\t\t<string>${escapeXml(arg)}</string>`).join("\n");
 	return [
 		'<?xml version="1.0" encoding="UTF-8"?>',
@@ -562,6 +578,7 @@ export function buildLaunchdPlist(command: ServiceCommand, logFile: string): str
 		"\t<array>",
 		args,
 		"\t</array>",
+		...(workingDir ? ["\t<key>WorkingDirectory</key>", `\t<string>${escapeXml(workingDir)}</string>`] : []),
 		"\t<key>RunAtLoad</key>",
 		"\t<true/>",
 		"\t<key>KeepAlive</key>",
@@ -576,7 +593,15 @@ export function buildLaunchdPlist(command: ServiceCommand, logFile: string): str
 	].join("\n");
 }
 
-/** Build the `schtasks /tr` command string (`"<program>" <args>`). */
+/**
+ * Build the `schtasks /tr` command string (`"<program>" <args>`).
+ *
+ * NOTE (FIX-110-B): Windows Task Scheduler has no direct WorkingDirectory
+ * equivalent in `schtasks /create`. The scheduled task inherits its start-in
+ * directory from the task definition, which this CLI does not set; operators
+ * needing a project CWD on Windows should set `LOCAL_MEMORY_DEFAULT_OWNER`/
+ * `_REPO` (FIX-110-A) or `GITHUB_REPOSITORY` instead.
+ */
 export function buildSchtasksCommand(command: ServiceCommand): string {
 	return `"${command.program}" ${command.args.join(" ")}`.trim();
 }
@@ -591,17 +616,42 @@ export function launchdPlistPath(homedir: string): string {
 	return path.join(homedir, "Library", "LaunchAgents", `${LAUNCHD_LABEL}.plist`);
 }
 
-/** Install the daemon as an OS-managed service (Linux systemd / macOS launchd / Windows Task Scheduler). */
+/**
+ * Resolve the WorkingDirectory seed for the service definition (FIX-110-B).
+ * Precedence: explicit option → the install-time process CWD → `os.homedir()`.
+ * `process.cwd()` is wrapped so a deleted CWD (common when installing from a
+ * removed shell) degrades to the home directory rather than throwing.
+ */
+function resolveWorkingDir(explicit?: string): string {
+	if (explicit && explicit.trim().length > 0) return explicit;
+	try {
+		const cwd = process.cwd();
+		if (cwd && cwd !== "/") return cwd;
+	} catch {
+		/* CWD unavailable — fall through to homedir */
+	}
+	return os.homedir();
+}
+
+/**
+ * Install the daemon as an OS-managed service (Linux systemd / macOS launchd / Windows Task Scheduler).
+ *
+ * `workingDir` (FIX-110-B) seeds the service's working directory (systemd
+ * `WorkingDirectory=`, launchd `WorkingDirectory`). Defaults to the install-
+ * time CWD, falling back to `os.homedir()` — so a service-started daemon does
+ * not inherit `/` as its CWD and can still resolve owner/repo (FIX-110-A).
+ */
 export function installDaemon(
-	options: { force?: boolean; paths?: DaemonPaths; io?: Partial<ServiceIo> } = {}
+	options: { force?: boolean; workingDir?: string; paths?: DaemonPaths; io?: Partial<ServiceIo> } = {}
 ): InstallDaemonResult {
 	const io = { ...defaultServiceIo(), ...options.io };
 	const paths = options.paths ?? resolveDaemonPaths();
 	const force = options.force === true;
+	const workingDir = resolveWorkingDir(options.workingDir);
 
-	if (io.platform === "darwin") return installLaunchd(io, paths, force);
+	if (io.platform === "darwin") return installLaunchd(io, paths, force, workingDir);
 	if (io.platform === "win32") return installWindows(io, force);
-	return installSystemd(io, force);
+	return installSystemd(io, force, workingDir);
 }
 
 /** Remove the daemon's OS-managed service definition. */
@@ -613,7 +663,7 @@ export function uninstallDaemon(options: { io?: Partial<ServiceIo> } = {}): Unin
 	return uninstallSystemd(io);
 }
 
-function installSystemd(io: ServiceIo, force: boolean): InstallDaemonResult {
+function installSystemd(io: ServiceIo, force: boolean, workingDir?: string): InstallDaemonResult {
 	const unitPath = systemdUnitPath(io.homedir);
 	if (fs.existsSync(unitPath) && !force) {
 		io.log(`Daemon service already installed (${unitPath}). Use --force to overwrite.`);
@@ -629,7 +679,7 @@ function installSystemd(io: ServiceIo, force: boolean): InstallDaemonResult {
 	}
 
 	fs.mkdirSync(path.dirname(unitPath), { recursive: true });
-	fs.writeFileSync(unitPath, buildSystemdUnit(command), "utf8");
+	fs.writeFileSync(unitPath, buildSystemdUnit(command, workingDir), "utf8");
 	io.run("systemctl", ["--user", "daemon-reload"]);
 	io.run("systemctl", ["--user", "enable", "--now", SYSTEMD_UNIT_NAME]);
 	io.log(`Daemon service installed (systemd user unit: ${unitPath})`);
@@ -656,7 +706,7 @@ function uninstallSystemd(io: ServiceIo): UninstallDaemonResult {
 	return { uninstalled: true, platform: io.platform, servicePath: unitPath };
 }
 
-function installLaunchd(io: ServiceIo, paths: DaemonPaths, force: boolean): InstallDaemonResult {
+function installLaunchd(io: ServiceIo, paths: DaemonPaths, force: boolean, workingDir?: string): InstallDaemonResult {
 	const plistPath = launchdPlistPath(io.homedir);
 	if (fs.existsSync(plistPath) && !force) {
 		io.log(`Daemon service already installed (${plistPath}). Use --force to overwrite.`);
@@ -672,7 +722,7 @@ function installLaunchd(io: ServiceIo, paths: DaemonPaths, force: boolean): Inst
 	}
 
 	fs.mkdirSync(path.dirname(plistPath), { recursive: true });
-	fs.writeFileSync(plistPath, buildLaunchdPlist(command, paths.logFile), "utf8");
+	fs.writeFileSync(plistPath, buildLaunchdPlist(command, paths.logFile, workingDir), "utf8");
 	io.run("launchctl", ["load", "-w", plistPath]);
 	io.log(`Daemon service installed (launchd LaunchAgent: ${plistPath})`);
 	return { installed: true, platform: io.platform, servicePath: plistPath };
@@ -746,6 +796,26 @@ function uninstallWindows(io: ServiceIo): UninstallDaemonResult {
 }
 
 /**
+ * Extract the `--working-dir <path>` value from `daemon install` args
+ * (FIX-110-B). Supports both `--working-dir <path>` and `--working-dir=<path>`.
+ * Returns `undefined` when absent so `installDaemon` applies its own default
+ * (install-time CWD → `os.homedir()`).
+ */
+function parseWorkingDirArg(argv: string[]): string | undefined {
+	const eqForm = argv.find((a) => a.startsWith("--working-dir="));
+	if (eqForm) {
+		const value = eqForm.slice("--working-dir=".length).trim();
+		return value.length > 0 ? value : undefined;
+	}
+	const idx = argv.indexOf("--working-dir");
+	if (idx !== -1) {
+		const value = argv[idx + 1];
+		return value && !value.startsWith("--") ? value : undefined;
+	}
+	return undefined;
+}
+
+/**
  * Dispatch the `daemon` subcommand. Always exits the parent process:
  * `start` forks and returns to the shell, `stop`/`status` complete inline.
  *
@@ -759,7 +829,7 @@ export function runDaemonCli(argv: string[] = process.argv.slice(3)): void {
 		} else if (sub === "status") {
 			statusDaemon();
 		} else if (sub === "install") {
-			installDaemon({ force: argv.includes("--force") });
+			installDaemon({ force: argv.includes("--force"), workingDir: parseWorkingDirArg(argv) });
 		} else if (sub === "uninstall") {
 			uninstallDaemon();
 		} else if (sub === undefined || sub === "start") {

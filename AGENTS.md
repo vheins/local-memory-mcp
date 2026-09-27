@@ -83,6 +83,29 @@ If the client still holds an evicted id after a guarded restart it self-heals on
 the first `404`; if it does not, restart the client once. Do not delete
 `memory.db` — the wedge is a process/build problem, never a data problem.
 
+**Cause 3 — rootless client + no project CWD (FIX-110-A/B).** A remote HTTP
+client that does NOT advertise MCP roots (e.g. Zed 1.21) plus a daemon whose
+CWD is `/` cannot infer owner/repo, so every scoped tool call fails with a
+"configure MCP workspace roots" style message. Fix it by EITHER seeding the
+daemon's working directory at install time:
+
+```bash
+local-memory-mcp daemon install --working-dir /path/to/your/project
+# → launchd WorkingDirectory / systemd WorkingDirectory= are written so the
+#   daemon's CWD is your project (not "/") on every (re)start.
+```
+
+OR by setting an explicit scope default in the daemon environment (takes effect
+after a daemon restart):
+
+```bash
+# Highest-priority env tier (FIX-110-A); GITHUB_REPOSITORY="owner/repo" is the
+# lower-priority fallback. Precedence: explicit args > MCP roots/session
+# inference > LOCAL_MEMORY_DEFAULT_* > GITHUB_REPOSITORY > daemon cwd.
+export LOCAL_MEMORY_DEFAULT_OWNER=vheins
+export LOCAL_MEMORY_DEFAULT_REPO=local-memory-mcp
+```
+
 ## Install
 
 ```bash
