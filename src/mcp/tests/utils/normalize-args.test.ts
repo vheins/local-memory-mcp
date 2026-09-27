@@ -358,6 +358,110 @@ describe("normalizeToolArguments", () => {
 			expect(warnSpy).toHaveBeenCalled();
 		});
 	});
+
+	// ── FIX-110-A: env-default scope resolution tier ───────────────────────
+	// A rootless HTTP client (no MCP roots) + a daemon whose CWD is `/` used to
+	// fail with "configure MCP workspace roots". The env tier now sits AFTER
+	// roots/session inference and BEFORE the CWD fallback:
+	//   explicit args > roots/session inference > LOCAL_MEMORY_DEFAULT_* >
+	//   GITHUB_REPOSITORY > daemon cwd.
+	describe("env-default scope tier (FIX-110-A)", () => {
+		it("resolves repo/owner from LOCAL_MEMORY_DEFAULT_* when roots are empty", () => {
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_OWNER", "env-owner");
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_REPO", "env-repo");
+			const session = makeSession({ roots: [], transport: "http" });
+			const result = normalizeToolArguments({ query: "q" }, session);
+			expect(result.owner).toBe("env-owner");
+			expect(result.repo).toBe("env-repo");
+		});
+
+		it("resolves from GITHUB_REPOSITORY (owner/repo) when LOCAL_MEMORY_DEFAULT_* are unset", () => {
+			vi.stubEnv("GITHUB_REPOSITORY", "octo/widget");
+			const session = makeSession({ roots: [], transport: "http" });
+			const result = normalizeToolArguments({ query: "q" }, session);
+			expect(result.owner).toBe("octo");
+			expect(result.repo).toBe("widget");
+		});
+
+		it("LOCAL_MEMORY_DEFAULT_* wins over GITHUB_REPOSITORY", () => {
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_OWNER", "local-owner");
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_REPO", "local-repo");
+			vi.stubEnv("GITHUB_REPOSITORY", "octo/widget");
+			const session = makeSession({ roots: [], transport: "http" });
+			const result = normalizeToolArguments({ query: "q" }, session);
+			expect(result.owner).toBe("local-owner");
+			expect(result.repo).toBe("local-repo");
+		});
+
+		it("explicit args win over the env tier", () => {
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_OWNER", "env-owner");
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_REPO", "env-repo");
+			const session = makeSession({ roots: [], transport: "http" });
+			const result = normalizeToolArguments({ repo: "explicit-repo", owner: "explicit-owner" }, session);
+			expect(result.owner).toBe("explicit-owner");
+			expect(result.repo).toBe("explicit-repo");
+		});
+
+		it("roots/session inference wins over the env tier", () => {
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_OWNER", "env-owner");
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_REPO", "env-repo");
+			vi.mocked(inferRepoFromSession).mockReturnValue("rootrepo");
+			vi.mocked(inferOwnerFromSession).mockReturnValue("root-owner");
+			const root = path.resolve("/Users", "alice", "rootrepo");
+			const session = makeSession({ roots: [{ uri: pathToFileURL(root).href }], transport: "http" });
+			const result = normalizeToolArguments({ query: "q" }, session);
+			expect(result.owner).toBe("root-owner");
+			expect(result.repo).toBe("rootrepo");
+		});
+
+		it("env tier wins over the CWD-derived session defaults", () => {
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_REPO", "env-repo");
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_OWNER", "env-owner");
+			const session = makeSession({ roots: [], repo: "cwd-repo", owner: "cwd-owner", transport: "http" });
+			const result = normalizeToolArguments({ query: "q" }, session);
+			expect(result.repo).toBe("env-repo");
+			expect(result.owner).toBe("env-owner");
+		});
+
+		it("env-resolved repo suppresses the write fail-loud guard (rootless HTTP WRITE)", () => {
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_OWNER", "env-owner");
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_REPO", "env-repo");
+			const session = makeSession({ roots: [], repo: "cwd-repo", owner: "cwd-owner", transport: "http" });
+			const result = normalizeToolArguments({ content: "x" }, session, { toolName: "memory-write" });
+			expect(result.repo).toBe("env-repo");
+			expect(result.owner).toBe("env-owner");
+		});
+
+		it("WRITE with no env and no roots still fails loud (guard preserved)", () => {
+			// No env tier resolves → the CWD fallback guard MUST still fire.
+			const session = makeSession({ roots: [], repo: "cwd-repo", owner: "cwd-owner", transport: "http" });
+			expect(() => normalizeToolArguments({ content: "x" }, session, { toolName: "memory-write" })).toThrow(
+				/owner\/repo could not be determined for a write operation/
+			);
+		});
+
+		it("logs the resolving env source at debug level, rate-limited", () => {
+			const debugSpy = vi.spyOn(logger, "debug").mockImplementation(() => {});
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_OWNER", "env-owner");
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_REPO", "env-repo");
+			const session = makeSession({ roots: [], transport: "http", sessionId: "sess-env" });
+			normalizeToolArguments({ query: "q" }, session);
+			normalizeToolArguments({ query: "q" }, session);
+			// Rate-limited: the same (source, scope, session) logs once.
+			const envCalls = debugSpy.mock.calls.filter((c) => String(c[0]).includes("local-memory-default"));
+			expect(envCalls).toHaveLength(1);
+		});
+
+		it("ignores an empty LOCAL_MEMORY_DEFAULT_REPO and falls through to GITHUB_REPOSITORY", () => {
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_OWNER", "");
+			vi.stubEnv("LOCAL_MEMORY_DEFAULT_REPO", "");
+			vi.stubEnv("GITHUB_REPOSITORY", "octo/widget");
+			const session = makeSession({ roots: [], transport: "http" });
+			const result = normalizeToolArguments({ query: "q" }, session);
+			expect(result.owner).toBe("octo");
+			expect(result.repo).toBe("widget");
+		});
+	});
 });
 
 describe("owner-inference warning is rate-limited per (owner, repo, session) (FIX-029)", () => {

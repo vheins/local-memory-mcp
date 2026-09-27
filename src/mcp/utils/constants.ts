@@ -38,6 +38,19 @@ function envBool(name: string, fallback: boolean): boolean {
 	return /^(true|1|yes)$/i.test(raw.trim());
 }
 
+/**
+ * Read a string env var, trimmed; an empty/whitespace-only value is treated as
+ * "not set" so it can never shadow a lower-priority fallback. Exported so
+ * call-time readers (e.g. scope-default resolution in normalize-args.ts) can
+ * share the exact same semantics as the module-load constants.
+ */
+export function envStr(name: string, fallback?: string): string | undefined {
+	const raw = process.env[name];
+	if (raw === undefined) return fallback;
+	const trimmed = raw.trim();
+	return trimmed === "" ? fallback : trimmed;
+}
+
 // ── Table names (single source of truth for SQL) ────────────────────────
 // Canonical SQLite table names. Use these in ALL SQL strings (entities,
 // migrations, services, tools) — never inline the literal. Virtual/aux
@@ -657,6 +670,22 @@ export const SQLITE_WRITE_RETRY_ATTEMPTS = envInt("SQLITE_WRITE_RETRY_ATTEMPTS",
 export const SQLITE_WRITE_RETRY_BASE_MS = envInt("SQLITE_WRITE_RETRY_BASE_MS", 25);
 // Ceiling for a single retry backoff, bounding worst-case blocking time.
 export const SQLITE_WRITE_RETRY_MAX_MS = 1_000;
+
+// ── Default owner/repo scope (FIX-110-A) ─────────────────────────────────
+// Rootless clients (e.g. a remote HTTP MCP client that does NOT advertise MCP
+// roots) cannot supply a workspace root, and a daemon whose CWD is `/` derives
+// no plausible scope segment — so owner/repo resolution used to fail with
+// "configure MCP workspace roots". These env defaults sit AFTER the roots/
+// session inference tier and BEFORE the CWD fallback in the resolution chain:
+//   explicit args > roots/session inference > LOCAL_MEMORY_DEFAULT_* >
+//   GITHUB_REPOSITORY > daemon cwd.
+// Read at module load here (snapshot constants) and re-read at call time in
+// normalize-args.ts so tests can stub the env without a module reload.
+export const LOCAL_MEMORY_DEFAULT_OWNER = envStr("LOCAL_MEMORY_DEFAULT_OWNER");
+export const LOCAL_MEMORY_DEFAULT_REPO = envStr("LOCAL_MEMORY_DEFAULT_REPO");
+// Lower-priority fallback: GitHub Actions exports `GITHUB_REPOSITORY` as
+// "owner/repo". Accepted as a single combined source (split on the first "/").
+export const GITHUB_REPOSITORY = envStr("GITHUB_REPOSITORY");
 
 // ── MCP Streamable HTTP transport (opt-in) ────────────────────────────────
 // A single long-lived daemon can serve MANY MCP clients over Streamable HTTP

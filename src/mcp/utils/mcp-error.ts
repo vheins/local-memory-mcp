@@ -250,7 +250,15 @@ export function formatZodError(error: ZodError): string {
 		.map((issue) => issue.message)
 		.filter((message): message is string => Boolean(message));
 	if (missing.length > 0) {
-		return `Missing required fields: ${missing.join("; ")}. Pass owner/repo explicitly or configure MCP workspace roots so they can be auto-inferred.`;
+		return (
+			`Missing required fields: ${missing.join("; ")}. Owner/repo could not be auto-inferred ` +
+			`(no explicit args, no MCP workspace roots, and no daemon working directory). Resolve it by any ONE of: ` +
+			`(1) pass owner/repo explicitly in the tool call; ` +
+			`(2) configure MCP workspace roots (a roots-capable client); ` +
+			`(3) set LOCAL_MEMORY_DEFAULT_OWNER and LOCAL_MEMORY_DEFAULT_REPO in the daemon environment; ` +
+			`(4) set GITHUB_REPOSITORY="owner/repo"; ` +
+			`(5) start the daemon with a WorkingDirectory that points at the project.`
+		);
 	}
 	return `Validation error: ${error.message}`;
 }
