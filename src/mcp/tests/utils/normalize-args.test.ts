@@ -14,6 +14,24 @@ vi.mock("../../session", async (importOriginal) => {
 	};
 });
 
+// FIX-110-A: `utils/constants.ts` captures GITHUB_REPOSITORY /
+// LOCAL_MEMORY_DEFAULT_* as MODULE-LOAD snapshot constants. GitHub Actions
+// exports GITHUB_REPOSITORY=<owner>/<repo> for the repo being built, so in CI
+// the snapshot is populated and would otherwise activate the env-default
+// scope tier in EVERY test that does not stub the env explicitly, overriding
+// the session/CWD scope these tests assert. Neutralize the snapshot to
+// `undefined`; the env-tier tests below still stub `process.env` per-test via
+// `vi.stubEnv`, which `envStr` reads at call time.
+vi.mock("../../utils/constants", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../utils/constants")>();
+	return {
+		...actual,
+		GITHUB_REPOSITORY: undefined,
+		LOCAL_MEMORY_DEFAULT_OWNER: undefined,
+		LOCAL_MEMORY_DEFAULT_REPO: undefined
+	};
+});
+
 const ROOT = process.cwd();
 
 function makeSession(overrides: Partial<SessionContext> = {}): SessionContext {
@@ -35,6 +53,12 @@ beforeEach(() => {
 	// FIX-029: the owner-inference advisory is rate-limited per
 	// (owner, repo, session) via module-level state; reset it between tests so
 	// each test observes the first emission deterministically.
+	// FIX-110-A: clear the ambient env so the (snapshot-neutralized) env-default
+	// tier stays inert unless a test opts in via `vi.stubEnv`. `envStr` treats
+	// "" as unset and returns the (now undefined) snapshot fallback.
+	vi.stubEnv("GITHUB_REPOSITORY", "");
+	vi.stubEnv("LOCAL_MEMORY_DEFAULT_OWNER", "");
+	vi.stubEnv("LOCAL_MEMORY_DEFAULT_REPO", "");
 	resetOwnerWarnDedup();
 });
 
