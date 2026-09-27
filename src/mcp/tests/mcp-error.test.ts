@@ -233,7 +233,13 @@ describe("mcp-error — canonical error envelope (OPT-CODE-01)", () => {
 		if (!result.success) {
 			const text = formatZodError(result.error);
 			expect(text).toContain("Missing required fields");
-			expect(text).toContain("Pass owner/repo explicitly or configure MCP workspace roots");
+			// FIX-110-A: the message must ENUMERATE concrete options for
+			// roots-less clients, not just "configure MCP workspace roots".
+			expect(text).toContain("pass owner/repo explicitly");
+			expect(text).toContain("configure MCP workspace roots");
+			expect(text).toContain("LOCAL_MEMORY_DEFAULT_OWNER and LOCAL_MEMORY_DEFAULT_REPO");
+			expect(text).toContain('GITHUB_REPOSITORY="owner/repo"');
+			expect(text).toContain("WorkingDirectory");
 		}
 	});
 

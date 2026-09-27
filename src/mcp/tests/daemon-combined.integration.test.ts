@@ -125,9 +125,8 @@ describe("combined server — MCP face", () => {
 	 * must be served by a PER-SESSION stateful transport — not the SDK's
 	 * throwaway stateless fallback. A raw `initialize` POST must issue an
 	 * `Mcp-Session-Id` that is then REUSED; a `tools/list` on that id succeeds,
-	 * while the same call WITHOUT the id is refused with a clean
-	 * "Mcp-Session-Id header is required" instead of the un-actionable
-	 * "Server not initialized" dead end (PERF-006).
+	 * while the same call WITHOUT the id is recovered statelessly (FIX-110-C)
+	 * instead of the un-actionable "Server not initialized" dead end (PERF-006).
 	 */
 	it("retains a legacy (2025-era) session across requests keyed by Mcp-Session-Id", async () => {
 		const jsonHeaders = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
@@ -173,19 +172,22 @@ describe("combined server — MCP face", () => {
 			headers: jsonHeaders,
 			body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} })
 		});
-		expect(noSession.status).toBe(400);
+		// FIX-110-C: an absent session id is RECOVERED statelessly (200) rather
+		// than refused, so a client that dropped the header never stalls.
+		expect(noSession.status).toBe(200);
 		const noSessionBody = await noSession.text();
-		expect(noSessionBody).toContain("Mcp-Session-Id header is required");
+		expect(noSessionBody).toContain('"tools"');
 		expect(noSessionBody).not.toContain("Server not initialized");
+		expect(noSessionBody).not.toContain("Mcp-Session-Id header is required");
 	});
 
 	/**
-	 * PERF-006: the live failure was a `tools/call` POSTed with a session id the
-	 * daemon no longer recognized, which the daemon answered by minting a fresh
-	 * un-initialized server and returning `Server not initialized` (-32000). The
-	 * fix answers the SESSION error (404 "Session not found") instead, which a
-	 * streamable-HTTP client treats as "re-initialize and retry" — so a normal
-	 * client recovers without a restart. This drives the full handshake first
+	 * PERF-006 + FIX-110-C: the live failure was a `tools/call` POSTed with a
+	 * session id the daemon no longer recognized, which the daemon answered by
+	 * minting a fresh un-initialized server and returning `Server not initialized`
+	 * (-32000). The fix now serves such a request with a fresh STATELESS
+	 * transport (FIX-110-C) — the client never stalls and never has to
+	 * re-initialize. This drives the full handshake first
 	 * (initialize → tools/list → tools/call) to prove the healthy path, then
 	 * sends the stale id.
 	 */
@@ -248,7 +250,10 @@ describe("combined server — MCP face", () => {
 		expect(callBody).toContain('"result"');
 		expect(callBody).not.toContain('"isError":true');
 
-		// A stale/unknown session id must get the clean, retryable session error.
+		// A stale/unknown session id must be RECOVERED statelessly (FIX-110-C):
+		// the daemon serves the tool call with a fresh stateless transport (200)
+		// rather than returning 404/-32001, so a remote client that cached an
+		// evicted id self-heals with NO re-initialize and NO >60s stall.
 		const unknown = await fetch(`${handle.url}/mcp`, {
 			method: "POST",
 			headers: { ...jsonHeaders, "mcp-session-id": "00000000-0000-4000-8000-000000000000" },
@@ -256,12 +261,13 @@ describe("combined server — MCP face", () => {
 				jsonrpc: "2.0",
 				id: 4,
 				method: "tools/call",
-				params: { name: "memory-read", arguments: {} }
+				params: { name: "memory-read", arguments: { owner: "perf006", repo: "daemon-handshake", query: "x" } }
 			})
 		});
-		expect(unknown.status).toBe(404);
+		expect(unknown.status).toBe(200);
 		const unknownBody = await unknown.text();
-		expect(unknownBody).toContain("Session not found");
+		expect(unknownBody).toContain('"result"');
+		expect(unknownBody).not.toContain("Session not found");
 		expect(unknownBody).not.toContain("Server not initialized");
 	});
 });

@@ -517,7 +517,7 @@ describe("daemon install — Linux systemd", () => {
 			binaryPath: "/usr/local/bin/local-memory-mcp"
 		});
 
-		const result = installDaemon({ io });
+		const result = installDaemon({ io, workingDir: "/projects/widget" });
 
 		expect(result).toEqual({
 			installed: true,
@@ -527,6 +527,8 @@ describe("daemon install — Linux systemd", () => {
 		const unit = fs.readFileSync(systemdUnitPath(home), "utf8");
 		expect(unit).toContain("ExecStart=/usr/local/bin/local-memory-mcp daemon --daemon-worker");
 		expect(unit).toContain("WantedBy=default.target");
+		// FIX-110-B: the seeded WorkingDirectory line must be present.
+		expect(unit).toContain("WorkingDirectory=/projects/widget");
 		expect(calls).toContainEqual({ command: "systemctl", args: ["--user", "daemon-reload"] });
 		expect(calls).toContainEqual({ command: "systemctl", args: ["--user", "enable", "--now", SYSTEMD_UNIT_NAME] });
 		expect(lines.some((line) => line.includes("systemd user unit"))).toBe(true);
@@ -568,6 +570,21 @@ describe("daemon install — Linux systemd", () => {
 		expect(result.installed).toBe(false);
 		expect(fs.existsSync(systemdUnitPath(home))).toBe(false);
 		expect(lines.some((line) => line.startsWith("@reboot "))).toBe(true);
+	});
+
+	it("seeds WorkingDirectory from the install-time CWD by default (FIX-110-B)", () => {
+		const home = makeHome();
+		const { io } = fakeServiceIo("linux", home, {
+			available: ["systemctl"],
+			binaryPath: "/usr/local/bin/local-memory-mcp"
+		});
+
+		installDaemon({ io });
+
+		const unit = fs.readFileSync(systemdUnitPath(home), "utf8");
+		// The test process CWD is the repo checkout (never "/"), so the default
+		// seed must be the resolved process.cwd().
+		expect(unit).toContain(`WorkingDirectory=${process.cwd()}`);
 	});
 });
 
@@ -613,7 +630,7 @@ describe("daemon install/uninstall — macOS launchd", () => {
 			lockFile: path.join(home, "daemon.lock")
 		};
 
-		const result = installDaemon({ io, paths });
+		const result = installDaemon({ io, paths, workingDir: "/projects/widget" });
 
 		expect(result.installed).toBe(true);
 		const plist = fs.readFileSync(launchdPlistPath(home), "utf8");
@@ -622,6 +639,9 @@ describe("daemon install/uninstall — macOS launchd", () => {
 		expect(plist).toContain("<key>KeepAlive</key>");
 		expect(plist).toContain(`<string>${paths.logFile}</string>`);
 		expect(plist).toContain("<string>--daemon-worker</string>");
+		// FIX-110-B: the seeded WorkingDirectory key must be present.
+		expect(plist).toContain("<key>WorkingDirectory</key>");
+		expect(plist).toContain("<string>/projects/widget</string>");
 		expect(calls).toContainEqual({ command: "launchctl", args: ["load", "-w", launchdPlistPath(home)] });
 		expect(lines.some((line) => line.includes("launchd LaunchAgent"))).toBe(true);
 	});
@@ -753,9 +773,30 @@ describe("daemon install — unit/plist builders", () => {
 		expect(unit).toContain('ExecStart=/usr/bin/node "/a b/server.js" daemon');
 	});
 
+	it("omits WorkingDirectory from the systemd unit when not seeded (back-compat)", () => {
+		const unit = buildSystemdUnit({ program: "/usr/bin/node", args: ["daemon"] });
+		expect(unit).not.toContain("WorkingDirectory=");
+	});
+
+	it("emits WorkingDirectory in the systemd unit when seeded (FIX-110-B)", () => {
+		const unit = buildSystemdUnit({ program: "/usr/bin/node", args: ["daemon"] }, "/projects/widget");
+		expect(unit).toContain("WorkingDirectory=/projects/widget");
+	});
+
 	it("escapes XML in plist values", () => {
 		const plist = buildLaunchdPlist({ program: "/usr/bin/node", args: ["/a&b.js"] }, "/log&dir/daemon.log");
 		expect(plist).toContain("<string>/a&amp;b.js</string>");
 		expect(plist).toContain("<string>/log&amp;dir/daemon.log</string>");
+	});
+
+	it("omits the WorkingDirectory key from the plist when not seeded (back-compat)", () => {
+		const plist = buildLaunchdPlist({ program: "/usr/bin/node", args: ["daemon"] }, "/log/daemon.log");
+		expect(plist).not.toContain("<key>WorkingDirectory</key>");
+	});
+
+	it("emits an escaped WorkingDirectory key in the plist when seeded (FIX-110-B)", () => {
+		const plist = buildLaunchdPlist({ program: "/usr/bin/node", args: ["daemon"] }, "/log/daemon.log", "/a&b");
+		expect(plist).toContain("<key>WorkingDirectory</key>");
+		expect(plist).toContain("<string>/a&amp;b</string>");
 	});
 });

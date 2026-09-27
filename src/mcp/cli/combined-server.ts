@@ -46,7 +46,7 @@ import { reuseTelemetry } from "../utils/reuse-telemetry";
 import { runStartupMaintenance } from "../services/maintenance-job";
 import { runStartupVacuum } from "../services/vacuum";
 import { scheduleDeferredSemanticWarmup } from "../services/startup-warmup";
-import { EMBEDDING_LAZY_WARMUP, VACUUM_ON_STARTUP } from "../utils/constants";
+import { EMBEDDING_LAZY_WARMUP, MCP_DAEMON_SESSION_IDLE_TTL_MS, VACUUM_ON_STARTUP } from "../utils/constants";
 import { autoIndexIfStale } from "../codebase-index/services/indexing-service";
 import { evaluateAutoIndexTarget } from "../codebase-index/services/project-detection";
 import { getCodebaseParserPool } from "../codebase-index/parser/singleton";
@@ -266,8 +266,14 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
 	// transport so MCP roots applied on `oninitialized` survive into later tool
 	// calls. Without this the daemon (the PRIMARY deployment) fell back to the
 	// SDK's throwaway stateless legacy serving and roots never reached tools.
-	const mcpHandler = createDualHandler(createServerFactory(db, vectors, "http"), (error) =>
-		logger.warn("[Daemon] MCP handler error", { error: error.message })
+	const mcpHandler = createDualHandler(
+		createServerFactory(db, vectors, "http"),
+		(error) => logger.warn("[Daemon] MCP handler error", { error: error.message }),
+		// FIX-110-C: the daemon keeps legacy sessions alive far longer (2h
+		// default) so a remote client that holds one session id for its whole
+		// lifetime is evicted far less often; stateless recovery (default ON)
+		// covers any eviction that still happens.
+		{ sessionIdleTtlMs: MCP_DAEMON_SESSION_IDLE_TTL_MS }
 	);
 	const mcpMount = createMcpPreRoute(mcpHandler, host);
 	const { app } = createExpressApp({ db, vectors, preRoutes: [mcpMount] });

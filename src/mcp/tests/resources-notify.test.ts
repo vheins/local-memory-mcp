@@ -27,6 +27,19 @@ import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 
+// FIX-110-A: GitHub Actions exports GITHUB_REPOSITORY=<owner>/<repo>, and
+// utils/constants.ts captures it (plus LOCAL_MEMORY_DEFAULT_*) as module-load
+// snapshot constants. Left in place, the env-default scope tier resolves a repo
+// for the scope-less standard-read below, so the router emits repository://index
+// and the "no repo scope" assertion becomes environment-dependent. Delete the
+// vars before any module is imported (vi.hoisted runs above the static imports)
+// so the tier is inert: the snapshot constants are undefined and envStr()
+// returns undefined at call time.
+vi.hoisted(() => {
+	delete process.env.GITHUB_REPOSITORY;
+	delete process.env.LOCAL_MEMORY_DEFAULT_OWNER;
+	delete process.env.LOCAL_MEMORY_DEFAULT_REPO;
+});
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ENTITY_URI_RE = /^(memory|task):\/\//;
 

@@ -7,6 +7,7 @@ import {
 	inferRepoFromSession,
 	isPathWithinRoots
 } from "../session";
+import { GITHUB_REPOSITORY, LOCAL_MEMORY_DEFAULT_OWNER, LOCAL_MEMORY_DEFAULT_REPO, envStr } from "./constants";
 import { logger } from "./logger";
 import { parseRepoInput } from "./normalize";
 import { WRITE_TOOLS } from "./tool-plumbing";
@@ -52,6 +53,7 @@ const ownerWarnTimestamps = new Map<string, number>();
  */
 export function resetOwnerWarnDedup(): void {
 	ownerWarnTimestamps.clear();
+	envScopeLogTimestamps.clear();
 }
 
 /**
@@ -77,6 +79,63 @@ function warnOwnerInferred(owner: string, repo: string, session?: SessionContext
 
 	logger.warn(
 		`[normalize-args] owner inferred from session (${owner}) — may be incorrect. Agents should pass explicit owner/repo.`
+	);
+}
+
+// ── Env-default scope resolution (FIX-110-A) ─────────────────────────────
+// A remote HTTP client that does NOT advertise MCP roots cannot supply a
+// workspace root, and a daemon whose CWD is `/` derives no plausible scope —
+// so resolution used to fail with "configure MCP workspace roots". This tier
+// sits AFTER roots/session inference and BEFORE the CWD fallback:
+//   explicit args > roots/session inference > LOCAL_MEMORY_DEFAULT_OWNER/REPO
+//   > GITHUB_REPOSITORY ("owner/repo") > daemon cwd.
+// Values are read at CALL TIME (live `process.env` via `envStr`, falling back
+// to the module-load snapshot) so tests can stub the env without a reload.
+export type EnvScopeDefaults = {
+	owner?: string;
+	repo?: string;
+	source?: "local-memory-default" | "github-repository";
+};
+
+/** Resolve the env-default owner/repo tier (see {@link EnvScopeDefaults}). */
+export function resolveEnvScopeDefaults(): EnvScopeDefaults {
+	const owner = envStr("LOCAL_MEMORY_DEFAULT_OWNER", LOCAL_MEMORY_DEFAULT_OWNER);
+	const repo = envStr("LOCAL_MEMORY_DEFAULT_REPO", LOCAL_MEMORY_DEFAULT_REPO);
+	if (owner || repo) {
+		return { owner, repo, source: "local-memory-default" };
+	}
+	const combined = envStr("GITHUB_REPOSITORY", GITHUB_REPOSITORY);
+	if (combined && combined.includes("/")) {
+		const idx = combined.indexOf("/");
+		const ghOwner = combined.slice(0, idx).trim();
+		const ghRepo = combined.slice(idx + 1).trim();
+		if (ghOwner && ghRepo) return { owner: ghOwner, repo: ghRepo, source: "github-repository" };
+	}
+	return {};
+}
+
+/** Dedup keys for the env-scope debug log (mirrors the owner-warn limiter). */
+const envScopeLogTimestamps = new Map<string, number>();
+
+/**
+ * Emits, at most once per `OWNER_WARN_INTERVAL_MS` per `(source, scope,
+ * session)`, a debug line naming which env tier resolved the scope. Rate-
+ * limited so a busy rootless daemon does not log on every tool call.
+ */
+function logEnvScopeResolved(env: EnvScopeDefaults, owner?: string, repo?: string, session?: SessionContext): void {
+	const key = `${env.source}\u0000${owner ?? ""}\u0000${repo ?? ""}\u0000${session?.sessionId ?? ""}`;
+	const now = Date.now();
+	const last = envScopeLogTimestamps.get(key);
+	if (last !== undefined && now - last < OWNER_WARN_INTERVAL_MS) return;
+
+	if (!envScopeLogTimestamps.has(key) && envScopeLogTimestamps.size >= OWNER_WARN_MAX_KEYS) {
+		const oldest = envScopeLogTimestamps.keys().next().value;
+		if (oldest !== undefined) envScopeLogTimestamps.delete(oldest);
+	}
+	envScopeLogTimestamps.set(key, now);
+
+	logger.debug(
+		`[normalize-args] owner/repo resolved from env default (${env.source}): owner=${owner ?? "(none)"} repo=${repo ?? "(none)"}`
 	);
 }
 
@@ -260,12 +319,24 @@ export function normalizeToolArguments(
 		isNonEmptyString(scope?.owner);
 	const rootsEmpty = getFilesystemRoots(session).length === 0;
 
-	// ── Repo resolution: roots-derived first, then the CWD session default ───
+	// Env-default tier (FIX-110-A) — resolved once, applied only where the
+	// roots/session inference above yielded nothing. `envRepoApplied` records
+	// whether the WRITE DESTINATION (repo) came from env, which suppresses the
+	// CWD-fallback write guard below (the scope is no longer CWD-derived).
+	const envDefaults = resolveEnvScopeDefaults();
+	let envRepoApplied = false;
+
+	// ── Repo resolution: roots-derived, then env default, then CWD session ───
 	// `inferRepoFromSession` reads the declared MCP roots (single-root →
-	// basename). Only when it yields nothing do we fall back to the session's
-	// CWD-derived `repo` (TASK-420 priority inversion).
+	// basename). Only when it yields nothing do we consult the env-default tier
+	// (LOCAL_MEMORY_DEFAULT_REPO > GITHUB_REPOSITORY), and only then the
+	// session's CWD-derived `repo` (TASK-420 priority inversion + FIX-110-A).
 	if (!nextArgs.repo) {
 		nextArgs.repo = inferRepoFromSession(session);
+	}
+	if (!nextArgs.repo && envDefaults.repo) {
+		nextArgs.repo = envDefaults.repo;
+		envRepoApplied = true;
 	}
 	if (!nextArgs.repo && session?.repo) {
 		nextArgs.repo = session.repo;
@@ -286,14 +357,15 @@ export function normalizeToolArguments(
 		delete nextArgs.owner;
 	}
 
-	// Owner resolution mirrors the repo rule (TASK-420): an explicit `owner`
-	// (or the owner segment of an `owner/repo` string) wins, then the
-	// roots-derived owner (`inferOwnerFromSession`), and only then the
+	// Owner resolution mirrors the repo rule (TASK-420 + FIX-110-A): an explicit
+	// `owner` (or the owner segment of an `owner/repo` string) wins, then the
+	// roots-derived owner (`inferOwnerFromSession`), then the env-default owner
+	// (LOCAL_MEMORY_DEFAULT_OWNER > GITHUB_REPOSITORY), and only then the
 	// CWD-derived `session.owner`.
 	if (!ownerExplicit && !nextArgs.owner) {
 		const repoVal = (nextArgs.repo as string) || "";
 		const parsed = parseRepoInput(repoVal, undefined);
-		const inferredOwner = parsed.owner || inferOwnerFromSession(session) || session?.owner;
+		const inferredOwner = parsed.owner || inferOwnerFromSession(session) || envDefaults.owner || session?.owner;
 		if (inferredOwner !== undefined) {
 			nextArgs.owner = inferredOwner;
 			if (!repoVal.includes("/")) {
@@ -361,11 +433,19 @@ export function normalizeToolArguments(
 		}
 	}
 
-	// ── Scope-provenance guard (TASK-420) ────────────────────────────────────
+	// ── Scope-provenance guard (TASK-420 + FIX-110-A) ────────────────────────
 	// The scope is "CWD-derived only" when the caller supplied no explicit
-	// owner/repo AND the session declared no MCP roots. In that case every
-	// resolved value came from the process working directory.
-	const scopeFromCwdFallback = !explicitScopeArg && rootsEmpty;
+	// owner/repo, the session declared no MCP roots, AND the env-default tier
+	// did not resolve the repo. When env resolved the repo, the destination is
+	// operator-configured — not the daemon CWD — so the write guard must NOT
+	// fire (FIX-110-A).
+	const scopeFromCwdFallback = !explicitScopeArg && rootsEmpty && !envRepoApplied;
+
+	// Emit the resolution provenance (rate-limited) so operators can see WHICH
+	// tier supplied the scope when debugging a rootless client.
+	if (envRepoApplied || (envDefaults.owner && nextArgs.owner === envDefaults.owner)) {
+		logEnvScopeResolved(envDefaults, nextArgs.owner as string, nextArgs.repo as string, session);
+	}
 
 	// The fail-loud guard fires for HTTP/daemon serving ONLY. Under HTTP the
 	// process CWD is the daemon's working directory, NOT the caller's project,

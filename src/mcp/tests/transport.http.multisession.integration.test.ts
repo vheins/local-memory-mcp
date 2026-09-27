@@ -360,8 +360,9 @@ describe("TASK-423 — HTTP multi-session project isolation", () => {
 		 * transport, not a throwaway stateless instance: the `initialize` POST
 		 * returns an `Mcp-Session-Id` which is then REUSED, and a subsequent
 		 * `tools/list` on that id succeeds — while the SAME request without the id
-		 * is refused with a clean "Mcp-Session-Id header is required" (a stateless
-		 * fallback would have answered it). `isLegacyRequest` routes this traffic
+		 * is RECOVERED statelessly (FIX-110-C) — a stateless fallback answers it
+		 * instead of returning "Mcp-Session-Id header is required". `isLegacyRequest`
+		 * routes this traffic
 		 * (2025-06-18 initialize) to the stateful path, keeping the initialized
 		 * server — and the roots it applied — alive across the session's requests.
 		 */
@@ -409,30 +410,32 @@ describe("TASK-423 — HTTP multi-session project isolation", () => {
 			expect(list.headers.get("mcp-session-id")).toBe(sessionId);
 			expect(await list.text()).toContain('"tools"');
 
-			// 4. The same call WITHOUT the session id is refused with a clean,
-			// actionable error — proving the session state is genuinely keyed and
-			// retained, not reconstructed.
+			// 4. The same call WITHOUT the session id is RECOVERED (FIX-110-C): a
+			// fresh stateless transport serves it instead of a 400, so a client
+			// that dropped the header self-heals with no stall.
 			const noSession = await fetch(endpoint, {
 				method: "POST",
 				headers: jsonHeaders,
 				body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} })
 			});
-			expect(noSession.status).toBe(400);
+			expect(noSession.status).toBe(200);
 			const noSessionBody = await noSession.text();
-			expect(noSessionBody).toContain("Mcp-Session-Id header is required");
+			expect(noSessionBody).toContain('"tools"');
 			expect(noSessionBody).not.toContain("Server not initialized");
+			expect(noSessionBody).not.toContain("Mcp-Session-Id header is required");
 
-			// 5. An UNKNOWN session id gets the clean "Session not found" (404) that
-			// a recovering client re-initializes from (PERF-006) — never the
-			// "Server not initialized" dead end.
+			// 5. An UNKNOWN session id is likewise RECOVERED statelessly (200) —
+			// never the "Server not initialized" dead end, and never a 404 that
+			// would stall a client which does not re-initialize (FIX-110-C).
 			const unknown = await fetch(endpoint, {
 				method: "POST",
 				headers: { ...jsonHeaders, "mcp-session-id": "00000000-0000-4000-8000-000000000000" },
 				body: JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/list", params: {} })
 			});
-			expect(unknown.status).toBe(404);
+			expect(unknown.status).toBe(200);
 			const unknownBody = await unknown.text();
-			expect(unknownBody).toContain("Session not found");
+			expect(unknownBody).toContain('"tools"');
+			expect(unknownBody).not.toContain("Session not found");
 			expect(unknownBody).not.toContain("Server not initialized");
 		});
 	});
