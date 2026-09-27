@@ -701,6 +701,17 @@ export const MCP_HTTP_SSE_IDLE_TIMEOUT_MS = envInt("MCP_HTTP_SSE_IDLE_TIMEOUT_MS
 // the stream is still bounded. Env-overridable; `0` disables the pings.
 export const MCP_HTTP_SSE_KEEPALIVE_INTERVAL_MS = envInt("MCP_HTTP_SSE_KEEPALIVE_INTERVAL_MS", 25 * 1000);
 
+// ── Generic worker_threads pool (FEAT-DAEMON-002B) ────────────────────────
+// Size of the generic bounded `node:worker_threads` pool (src/mcp/workers/
+// pool.ts). A pool of N keeps N OS threads busy on CPU-bound work (tree-sitter
+// parsing, embeddings) without starving the event loop. Default 2 keeps an idle
+// daemon quiet; operators can raise it via `WORKER_POOL_SIZE`. The value is
+// always capped at `os.availableParallelism()` inside the pool (see
+// resolvePoolSize), so an over-large setting degrades to "all cores" rather
+// than oversubscribing the host. An explicit per-pool `size` option takes
+// precedence over this env var.
+export const WORKER_POOL_SIZE = envInt("WORKER_POOL_SIZE", 2);
+
 // ── Local bug telemetry ───────────────────────────────────────────────────
 // Automatic capture of runtime errors (uncaught/unhandled, error-level logs,
 // tool failures, dashboard 5xx) into the local `bug_reports` table. Local-only
