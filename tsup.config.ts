@@ -15,11 +15,18 @@ export default defineConfig({
 	// server bundle. It must exist as a plain-JS file at a stable path
 	// (`dist/mcp/workers/parser.worker.js`) that `resolve-parser-worker.ts`
 	// can locate in production (where no TypeScript loader is available).
+	//
+	// `embedding.worker` (FEAT-DAEMON-002D) is a standalone entry because it is
+	// loaded by a `node:worker_threads` Worker at RUNTIME, not imported by the
+	// server bundle. It must exist as a plain-JS file at a stable path
+	// (`dist/mcp/workers/embedding.worker.js`) that `resolve-embedding-worker.ts`
+	// can locate in production (where no TypeScript loader is available).
 	entry: [
 		"src/mcp/server.ts",
 		"src/dashboard/server.ts",
 		"src/mcp/utils/config-file.ts",
-		"src/mcp/workers/parser.worker.ts"
+		"src/mcp/workers/parser.worker.ts",
+		"src/mcp/workers/embedding.worker.ts"
 	],
 	format: ["esm"],
 	define: {
