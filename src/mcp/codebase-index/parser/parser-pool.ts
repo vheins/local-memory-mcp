@@ -1,47 +1,64 @@
 /**
- * ParserPool — manages the lifecycle of tree-sitter WASM parsers for multiple
- * languages.
+ * ParserPool — dispatches tree-sitter parsing to the bounded worker pool.
  *
- * Architecture (v2):
+ * Architecture (v3, FEAT-DAEMON-002C):
  * - Language registry lives in language-routing.ts (declarative config per
  *   language).
- * - Worker pool / concurrency control lives in worker-pool.ts.
- * - This file owns the TreeSitterParserPool class: lazy init, grammar caching,
- *   parse dispatch, and timeout enforcement.
+ * - Concurrency configuration lives in worker-pool.ts.
+ * - The ACTUAL parsing (web-tree-sitter WASM init, lazy grammar loading, the
+ *   synchronous `parser.parse()`, and visitor extraction) runs in a
+ *   `node:worker_threads` worker owned by the generic WorkerPool
+ *   (src/mcp/workers/pool.ts) — see workers/parser.worker.ts.
  *
  * Key design decisions:
- * - Concurrent access: tree-sitter Parser is NOT reentrant, so we use a semaphore
- *   to limit concurrent parse operations. Each concurrent slot creates its own
- *   Parser instance, sharing the Language objects loaded once at init.
- * - Per-file timeout: each file parse has a configurable deadline (default 10s).
- * - Graceful degradation: parse errors are captured in ParseResult.error, never thrown.
+ * - Off-main-thread: the former in-process `parser.parse()` blocked the event
+ *   loop (and the HTTP initialize handshake) for tens of minutes on a large
+ *   repo. Parsing now runs on a bounded pool of worker threads so the server
+ *   stays responsive.
+ * - Bounded concurrency: the WorkerPool caps in-flight parses at the resolved
+ *   worker count (`CODEBASE_INDEX_WORKERS`, capped at os.availableParallelism).
+ *   The pool owns the queue; this class no longer needs a semaphore.
+ * - Identical results: the worker reuses the SAME registry + visitors, so
+ *   symbols/references are byte-identical to the previous in-process path.
+ * - Per-file timeout: the in-worker `progressCallback` aborts a parse past the
+ *   deadline; the pool task timeout is set above it as a backstop.
+ * - Graceful degradation: parse errors are captured in ParseResult.error, never
+ *   thrown — a worker crash/timeout also degrades to a per-file error.
  */
 
 import { performance } from "node:perf_hooks";
-import path from "node:path";
-import { Parser, Language, type Tree } from "web-tree-sitter";
 import type { ParseResult, ParserPool } from "./language-visitor";
+import { WorkerPool, WorkerPoolError, WorkerTaskTimeoutError, WorkerTaskCrashError } from "../../workers/pool";
+import { resolveParserWorkerPath } from "../../workers/resolve-parser-worker";
 import {
-	type LanguageConfig,
-	getWasmPath,
-	createRegistry,
-	buildGenericCatchAll,
-	buildRegistryMaps,
-	removeConfigsForWasm,
-	extensionlessLookupKey
-} from "./language-routing";
-import { Semaphore, resolveParseTimeoutMs, resolveConcurrency } from "./worker-pool";
+	PARSE_WORKER_TASK_SLACK_MS,
+	PARSE_WORKER_WARMUP_TIMEOUT_MS,
+	resolveParseTimeoutMs,
+	resolveConcurrency
+} from "./worker-pool";
 import { logger } from "../../utils/logger";
 import { FatalError } from "../types/errors";
-import { TREE_SITTER_PARSE_ERROR } from "./parse-error-classifier";
 
 // ── Pool options ─────────────────────────────────────────────────────
 
 export interface ParserPoolOptions {
 	/** Maximum time per file parse in milliseconds (default: 10_000). */
 	parseTimeoutMs?: number;
-	/** Number of concurrent parse operations (default: 4). Each slot gets its own Parser instance. */
+	/** Number of concurrent parse workers (default: CODEBASE_INDEX_WORKERS / 4, capped at os.availableParallelism). */
 	concurrency?: number;
+}
+
+// ── Worker request/response shapes (mirrors workers/parser.worker.ts) ──
+
+interface ParserWorkerParseRequest {
+	op: "parse";
+	filePath: string;
+	sourceCode: string;
+	parseTimeoutMs: number;
+}
+
+interface ParserWorkerWarmupRequest {
+	op: "warmup";
 }
 
 // ── Implementation ───────────────────────────────────────────────────
@@ -50,33 +67,13 @@ export class TreeSitterParserPool implements ParserPool {
 	private initialized = false;
 	private initPromise: Promise<void> | null = null;
 	private initError: Error | null = null;
-	private semaphore: Semaphore;
-	private parseTimeoutMs: number;
-
-	// Grammar cache: WASM file path → loaded Language
-	private loadedGrammars = new Map<string, Language>();
-
-	// In-flight grammar loads: WASM file path → pending load promise (Fix #5).
-	// Concurrent parse slots can request the same grammar simultaneously;
-	// deduping guarantees Language.load(wasmPath) is instantiated only once.
-	private inFlightGrammars = new Map<string, Promise<Language>>();
-
-	// Cached registry built once at construction time
-	private registry: LanguageConfig[] = createRegistry();
-
-	// Reverse maps
-	private extToConfig = new Map<string, LanguageConfig>();
-	/** Fallback map for extensionless files (keyed by lowercase basename). */
-	private basenameToConfig = new Map<string, LanguageConfig>();
+	private readonly parseTimeoutMs: number;
+	private readonly concurrency: number;
+	private pool: WorkerPool | null = null;
 
 	constructor(options: ParserPoolOptions = {}) {
 		this.parseTimeoutMs = resolveParseTimeoutMs(options.parseTimeoutMs);
-		this.semaphore = new Semaphore(resolveConcurrency(options.concurrency));
-		// Append the generic catch-all for any extension not handled by a tree-sitter grammar
-		this.registry.push(buildGenericCatchAll(this.registry));
-		const maps = buildRegistryMaps(this.registry);
-		this.extToConfig = maps.extToConfig;
-		this.basenameToConfig = maps.basenameToConfig;
+		this.concurrency = resolveConcurrency(options.concurrency);
 	}
 
 	// ── ParserPool contract ───────────────────────────────────────
@@ -110,83 +107,8 @@ export class TreeSitterParserPool implements ParserPool {
 		// Lazy-init on first call
 		await this.initialize();
 
-		// Acquire a concurrency slot
-		await this.semaphore.acquire();
-
 		try {
-			return await this._parseWithTimeout(filePath, sourceCode, startTime);
-		} finally {
-			this.semaphore.release();
-		}
-	}
-
-	// ── Private methods ───────────────────────────────────────────
-
-	private async _doInitialize(): Promise<void> {
-		const wasmPath = getWasmPath();
-		logger.debug("[ParserPool] Initializing web-tree-sitter", { wasmPath });
-
-		try {
-			await Parser.init({
-				locateFile(): string {
-					return wasmPath;
-				}
-			});
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			logger.error("[ParserPool] WASM init failed", { wasmPath, error: message });
-			throw new FatalError(`WASM initialization failed: ${message}`, {
-				operation: "Parser.init",
-				wasmPath
-			});
-		}
-
-		logger.debug("[ParserPool] WASM initialized, grammars will be loaded lazily");
-
-		this.initialized = true;
-	}
-
-	/**
-	 * Lazy-load a tree-sitter grammar WASM on first use.
-	 * Subsequent calls for the same WASM path return the cached Language.
-	 * Concurrent calls for the same path share a single in-flight load.
-	 */
-	private async getOrLoadGrammar(wasmPath: string): Promise<Language> {
-		const existing = this.loadedGrammars.get(wasmPath);
-		if (existing) return existing;
-
-		// Dedup concurrent loads of the same grammar (Fix #5): multiple parse
-		// slots may hit an uncached grammar at once — without this they would
-		// double-instantiate the WASM module.
-		const inFlight = this.inFlightGrammars.get(wasmPath);
-		if (inFlight) return inFlight;
-
-		const loading = this._loadGrammar(wasmPath);
-		this.inFlightGrammars.set(wasmPath, loading);
-		try {
-			return await loading;
-		} finally {
-			this.inFlightGrammars.delete(wasmPath);
-		}
-	}
-
-	private async _loadGrammar(wasmPath: string): Promise<Language> {
-		try {
-			const lang = await Language.load(wasmPath);
-			this.loadedGrammars.set(wasmPath, lang);
-			logger.debug("[ParserPool] Grammar loaded", { wasmPath });
-			return lang;
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			logger.warn("[ParserPool] Grammar load failed — skipping language", { wasmPath, error: message });
-			removeConfigsForWasm(this.extToConfig, wasmPath);
-			throw new Error(`Failed to load grammar: ${wasmPath} — ${message}`, { cause: err });
-		}
-	}
-
-	private async _parseWithTimeout(filePath: string, sourceCode: string, startTime: number): Promise<ParseResult> {
-		try {
-			const result = await this._doParse(filePath, sourceCode);
+			const result = await this._dispatchParse(filePath, sourceCode);
 			const durationMs = Math.round(performance.now() - startTime);
 			result.durationMs = durationMs;
 			return result;
@@ -194,104 +116,95 @@ export class TreeSitterParserPool implements ParserPool {
 			const durationMs = Math.round(performance.now() - startTime);
 			const message = err instanceof Error ? err.message : String(err);
 			logger.warn("[ParserPool] Parse failed", { filePath, error: message, durationMs });
-			return {
-				symbols: [],
-				error: message,
-				durationMs
-			};
+			return { symbols: [], error: message, durationMs };
 		}
 	}
 
-	private async _doParse(filePath: string, sourceCode: string): Promise<ParseResult> {
-		const ext = path.extname(filePath).toLowerCase();
-		let config = this.extToConfig.get(ext);
+	/**
+	 * Gracefully stop the worker pool. Idempotent and safe to call when the pool
+	 * was never initialized. Provided for tests / process teardown; the
+	 * process-wide singleton lives for the process lifetime.
+	 */
+	async close(): Promise<void> {
+		const pool = this.pool;
+		this.pool = null;
+		this.initialized = false;
+		this.initPromise = null;
+		this.initError = null;
+		if (pool) await pool.close({ mode: "cancel" });
+	}
 
-		// Fallback: extensionless files (Dockerfile, Makefile, Justfile, Containerfile)
-		if (!config && ext === "") {
-			config = this.basenameToConfig.get(extensionlessLookupKey(filePath));
-		}
+	// ── Private methods ───────────────────────────────────────────
 
-		if (!config) {
-			return { symbols: [], error: `Unsupported extension: ${ext || "(none)"}`, durationMs: 0 };
-		}
+	private async _doInitialize(): Promise<void> {
+		this.pool ??= new WorkerPool({
+			workerPath: resolveParserWorkerPath(),
+			size: this.concurrency,
+			// Backstop only: the in-worker progressCallback aborts the parse at
+			// `parseTimeoutMs`; the pool ceiling sits above it so a slow grammar
+			// load never gets killed before the graceful in-parse timeout fires.
+			taskTimeoutMs: this.parseTimeoutMs > 0 ? this.parseTimeoutMs + PARSE_WORKER_TASK_SLACK_MS : 0
+		});
 
-		// Non-tree-sitter visitors: no grammar wasm needed, create visitor directly
-		if (config.grammarWasms.length === 0) {
-			const visitor = config.createVisitor();
-			const symbols = visitor.extractSymbols(null, sourceCode);
-			const references = (visitor.extractReferences?.(null, sourceCode) ?? []).map((r) => ({
-				...r,
-				callerFile: filePath
-			}));
-			return { symbols, references, error: null, durationMs: 0 };
-		}
+		logger.debug("[ParserPool] Initializing worker pool", {
+			workers: this.concurrency,
+			parseTimeoutMs: this.parseTimeoutMs
+		});
 
-		// Find the grammar WASM for this config
-		// (pick the first one — works for single-grammar languages; for TS, both
-		// TS and TSX grammars are loaded separately as distinct configs)
-		const wasmPath = config.grammarWasms[0];
-		if (!wasmPath) {
-			return { symbols: [], error: `No grammar configured for: ${config.languageId}`, durationMs: 0 };
-		}
-
-		// Lazy-load the grammar on first use
-		let language: Language;
 		try {
-			language = await this.getOrLoadGrammar(wasmPath);
+			await this.pool.run<ParserWorkerWarmupRequest, { warmed: true }>(
+				{ op: "warmup" },
+				{ timeoutMs: Math.max(this.parseTimeoutMs, PARSE_WORKER_WARMUP_TIMEOUT_MS) }
+			);
 		} catch (err) {
+			// A failed warm-up means the WASM runtime could not initialize in a
+			// worker (bad path, missing bootstrap, crashed worker). Surface it as
+			// a FatalError — matching the former in-process contract — and tear
+			// the pool down so a retry starts clean.
+			const pool = this.pool;
+			this.pool = null;
+			void pool?.close({ mode: "cancel" });
 			const message = err instanceof Error ? err.message : String(err);
-			// Error already logged (warn) by getOrLoadGrammar — this catch
-			// converts the thrown error into the graceful per-file fallback.
-			logger.debug("[ParserPool] Grammar unavailable — graceful fallback", { filePath, error: message });
-			return { symbols: [], error: message, durationMs: 0 };
+			logger.error("[ParserPool] Worker pool warm-up failed", { error: message });
+			throw new FatalError(`WASM initialization failed: ${message}`, { operation: "Parser.init" });
 		}
 
-		// The Parser instance is created OUTSIDE the try/finally guard — if
-		// `new Parser()` itself throws there is no resource to free yet. The
-		// guard starts immediately after creation so a synchronous throw from
-		// setLanguage (invalid grammar binding), parse (WASM OOM / timeout
-		// internals), or the visitor ALWAYS releases the WASM heap: tree (when
-		// produced) and parser are deleted in finally regardless of the throw
-		// point (TASK-053). _parseWithTimeout swallows errors into a graceful
-		// ParseResult, but the resources must still be freed or the WASM heap
-		// grows monotonically.
-		const parser = new Parser();
-		let tree: Tree | null = null;
+		logger.debug("[ParserPool] Worker pool ready, grammars will be loaded lazily per worker");
+		this.initialized = true;
+	}
+
+	/** Dispatch one parse task to the worker pool and normalize the outcome. */
+	private async _dispatchParse(filePath: string, sourceCode: string): Promise<ParseResult> {
+		const pool = this.pool;
+		if (!pool) {
+			return { symbols: [], error: "Parser pool not initialized", durationMs: 0 };
+		}
+
+		const request: ParserWorkerParseRequest = {
+			op: "parse",
+			filePath,
+			sourceCode,
+			parseTimeoutMs: this.parseTimeoutMs
+		};
+
 		try {
-			parser.setLanguage(language);
-
-			const parseStart = Date.now();
-			tree = parser.parse(sourceCode, null, {
-				progressCallback: (): boolean => {
-					return Date.now() - parseStart > this.parseTimeoutMs;
-				}
-			});
-			if (!tree) {
-				return {
-					symbols: [],
-					error: "Parse timeout or parser returned null tree",
-					durationMs: 0
-				};
+			const result = await pool.run<ParserWorkerParseRequest, ParseResult>(request);
+			// The worker always returns a well-formed ParseResult; normalize the
+			// optional references field so callers see a stable shape.
+			return { ...result, references: result.references ?? [] };
+		} catch (err) {
+			// A worker crash / task timeout is a RETRYABLE infrastructure fault,
+			// not a parse error. Degrade gracefully to a per-file error so the
+			// index run continues (the pool respawns the worker automatically).
+			if (err instanceof WorkerTaskTimeoutError || err instanceof WorkerTaskCrashError) {
+				logger.warn("[ParserPool] Worker task failed — degrading to per-file error", {
+					filePath,
+					retryable: (err as WorkerPoolError).retryable,
+					error: err.message
+				});
 			}
-
-			const hasErrors = tree.rootNode.hasError;
-
-			const visitor = config.createVisitor();
-			const symbols = visitor.extractSymbols(tree, sourceCode);
-			const references = (visitor.extractReferences?.(tree, sourceCode) ?? []).map((r) => ({
-				...r,
-				callerFile: filePath
-			}));
-
-			return {
-				symbols,
-				references,
-				error: hasErrors ? TREE_SITTER_PARSE_ERROR : null,
-				durationMs: 0
-			};
-		} finally {
-			tree?.delete();
-			parser.delete();
+			const message = err instanceof Error ? err.message : String(err);
+			return { symbols: [], error: message, durationMs: 0 };
 		}
 	}
 }
