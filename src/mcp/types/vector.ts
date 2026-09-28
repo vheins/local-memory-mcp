@@ -29,4 +29,10 @@ export interface VectorStore {
 	upsert(id: string, text: string, kind?: VectorEntityKind): Promise<void>;
 	remove(id: string, kind?: VectorEntityKind): Promise<void>;
 	search(query: string, limit: number, repo?: string, kind?: VectorEntityKind): Promise<VectorResult[]>;
+	/**
+	 * Release any process-owned resources (e.g. the off-main-thread embedding
+	 * worker pool). Optional and idempotent; called on graceful shutdown
+	 * (C1, FEAT-DAEMON-002 review). Safe to omit for stores that own nothing.
+	 */
+	close?(): Promise<void>;
 }

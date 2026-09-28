@@ -13,9 +13,11 @@ import { availableParallelism } from "node:os";
 import {
 	WorkerPool,
 	WorkerPoolClosedError,
+	WorkerPoolDisabledError,
 	WorkerTaskCrashError,
 	WorkerTaskError,
 	WorkerTaskTimeoutError,
+	CRASH_STORM_MAX_CONSECUTIVE,
 	clampPoolSize,
 	resolvePoolSize
 } from "../workers/pool";
@@ -177,6 +179,59 @@ describe("crash handling", () => {
 		const queued = pool.run<FixtureRequest, number>({ op: "add", a: 7, b: 8 });
 		expect(await crashed).toBeInstanceOf(WorkerTaskCrashError);
 		await expect(queued).resolves.toBe(15);
+	});
+});
+
+// ── Crash-storm guard (H1) ──────────────────────────────────────────────────
+
+describe("crash-storm guard (H1)", () => {
+	const CRASH_ON_LOAD = new URL("../workers/crash-on-load.worker.mjs", import.meta.url);
+
+	it("a deterministically-crashing worker trips the guard and rejects non-retryably", async () => {
+		const pool = new WorkerPool({ workerPath: CRASH_ON_LOAD, size: 1, taskTimeoutMs: 2_000 });
+		openPools.push(pool);
+		try {
+			// Drive enough tasks to exceed the crash threshold. Each task either
+			// crashes its worker (retryable WorkerTaskCrashError) or — once the
+			// guard trips — is rejected with the NON-retryable disabled error.
+			let sawDisabled = false;
+			let disabledError: unknown;
+			for (let i = 0; i < CRASH_STORM_MAX_CONSECUTIVE + 3; i++) {
+				const error = await pool.run<FixtureRequest, never>({ op: "echo", value: i }).catch((e) => e);
+				if (error instanceof WorkerPoolDisabledError) {
+					sawDisabled = true;
+					disabledError = error;
+					break;
+				}
+				expect(error).toBeInstanceOf(WorkerTaskCrashError);
+			}
+
+			expect(sawDisabled).toBe(true);
+			// NON-retryable so the parser degrades per-file and the embedding pool
+			// permanently disables instead of looping forever.
+			expect((disabledError as WorkerPoolDisabledError).retryable).toBe(false);
+
+			// The pool must have stopped respawning: no idle/active workers remain.
+			await waitFor(() => pool.metrics().active === 0 && pool.metrics().idle === 0);
+
+			// Every subsequent task is rejected immediately with the same class.
+			await expect(pool.run<FixtureRequest, never>({ op: "echo", value: 1 })).rejects.toBeInstanceOf(
+				WorkerPoolDisabledError
+			);
+		} finally {
+			await pool.close({ mode: "cancel" });
+		}
+	});
+
+	it("a single transient crash still respawns (guard does NOT trip)", async () => {
+		const pool = makePool(1);
+		// One crash — well under the threshold.
+		const error = await pool.run<FixtureRequest, never>({ op: "crash" }).catch((e) => e);
+		expect(error).toBeInstanceOf(WorkerTaskCrashError);
+
+		// The respawned worker serves the next task successfully.
+		await expect(pool.run<FixtureRequest, number>({ op: "add", a: 2, b: 3 })).resolves.toBe(5);
+		await waitFor(() => pool.metrics().idle === 1);
 	});
 });
 

@@ -598,4 +598,80 @@ describe("FileDiscoveryService", () => {
 			expect(result.skippedByExtension).toBe(1);
 		});
 	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// M5 (FEAT-DAEMON-002 review step 4): the gitignore discovery pass is now
+	// ASYNC (fg async API + fs.promises.readFile). These tests pin that the
+	// async path yields the SAME file set + ordering as the former sync pass,
+	// including the parent-before-child .gitignore ordering semantics.
+	// ══════════════════════════════════════════════════════════════════
+
+	describe("async gitignore discovery preserves results (M5)", () => {
+		it("applies nested gitignore rules collected across depths (parent-before-child)", async () => {
+			const root = path.join(tempDir, "async-gitignore-depth");
+			fs.mkdirSync(path.join(root, "a", "b"), { recursive: true });
+			// Root ignores *.ts everywhere.
+			fs.writeFileSync(path.join(root, ".gitignore"), "*.ts\n", "utf-8");
+			// A deeper .gitignore un-ignores ts under a/b only.
+			fs.writeFileSync(path.join(root, "a", "b", ".gitignore"), "!*.ts\n", "utf-8");
+
+			touch(path.join(root, "root.ts"));
+			touch(path.join(root, "a", "mid.ts"));
+			touch(path.join(root, "a", "b", "kept.ts"));
+			touch(path.join(root, "a", "b", "app.ts"));
+
+			const result = await discoverFiles({ projectPath: root });
+			const names = relativePaths(result);
+
+			// Root rule still ignores the shallow files; the nested negation keeps
+			// a/b/*.ts. This is only correct when BOTH .gitignore files were
+			// discovered and applied parent-before-child.
+			expect(names).toEqual(["a/b/app.ts", "a/b/kept.ts"]);
+			expect(names).not.toContain("root.ts");
+			expect(names).not.toContain("a/mid.ts");
+			expect(result.errors).toEqual([]);
+		});
+
+		it("produces a stable sorted file set across repeated async runs", async () => {
+			const root = path.join(tempDir, "async-stable");
+			fs.mkdirSync(root, { recursive: true });
+			fs.writeFileSync(path.join(root, ".gitignore"), "ignored.ts\n", "utf-8");
+			for (let i = 0; i < 25; i++) {
+				touch(path.join(root, `f${String(i).padStart(2, "0")}.ts`), `// ${i}`);
+			}
+			touch(path.join(root, "ignored.ts"));
+
+			const first = await discoverFiles({ projectPath: root });
+			const second = await discoverFiles({ projectPath: root });
+
+			expect(relativePaths(first)).toEqual(relativePaths(second));
+			expect(first.supportedFiles).toBe(25);
+			expect(first.files.every((f, i, arr) => i === 0 || arr[i - 1]!.path.localeCompare(f.path) <= 0)).toBe(true);
+		});
+
+		it("does not block the event loop on the gitignore scan (yields to a pending timer)", async () => {
+			const root = path.join(tempDir, "async-nonblocking");
+			fs.mkdirSync(path.join(root, "src"), { recursive: true });
+			fs.writeFileSync(path.join(root, ".gitignore"), "*.log\n", "utf-8");
+			for (let i = 0; i < 50; i++) {
+				touch(path.join(root, "src", `m${i}.ts`), `// ${i}`);
+			}
+
+			// Schedule a macrotask BEFORE discovery; if discovery blocked the event
+			// loop synchronously it would run first. With the async pass the timer
+			// fires before discovery resolves.
+			let timerFired = false;
+			const timer = new Promise<void>((resolve) => {
+				setTimeout(() => {
+					timerFired = true;
+					resolve();
+				}, 0);
+			});
+
+			const discovery = discoverFiles({ projectPath: root });
+			await timer;
+			expect(timerFired).toBe(true);
+			await discovery;
+		});
+	});
 });

@@ -282,10 +282,16 @@ const ALLOWED_DOT_DIRS: readonly string[] = Object.freeze([".agents"]);
  * Recursively locate all `.gitignore` files under `root`, sorted by
  * directory depth (parent before child) so the `ignore` library
  * applies overrides correctly.
+ *
+ * ASYNC (M5, FEAT-DAEMON-002 review step 4): this previously used `fg.sync`,
+ * a SYNCHRONOUS full-tree walk that blocked the event loop during a full index
+ * (the main `fg.stream` enumeration was already async). It now uses the async
+ * `fg` API — the SAME glob, options, and depth sort — so the file set and
+ * ordering are unchanged.
  */
-function findGitignoreFiles(root: string, tracker: SkippedDirectoryTracker): string[] {
+async function findGitignoreFiles(root: string, tracker: SkippedDirectoryTracker): Promise<string[]> {
 	try {
-		const files: string[] = fg.sync("**/.gitignore", {
+		const files: string[] = await fg("**/.gitignore", {
 			cwd: root,
 			dot: true,
 			absolute: false,
@@ -364,10 +370,15 @@ function transformGitignorePatterns(content: string, scopePrefix: string): strin
  * parse their rules, scope patterns correctly, and return a flat array of
  * root-relative ignore patterns ready for the `ignore` library.
  *
+ * ASYNC (M5, FEAT-DAEMON-002 review step 4): the walk (`fg`) and the per-file
+ * reads (`fs.promises.readFile`) are both asynchronous so a full index never
+ * blocks the main event loop on the gitignore scan. The pattern output is
+ * byte-identical to the former synchronous implementation.
+ *
  * @returns All gitignore patterns across the repo, parent-before-child ordered.
  */
-function collectAllGitignoreRules(root: string, tracker: SkippedDirectoryTracker): string[] {
-	const files = findGitignoreFiles(root, tracker);
+async function collectAllGitignoreRules(root: string, tracker: SkippedDirectoryTracker): Promise<string[]> {
+	const files = await findGitignoreFiles(root, tracker);
 	const allPatterns: string[] = [];
 
 	for (const relativePath of files) {
@@ -376,7 +387,7 @@ function collectAllGitignoreRules(root: string, tracker: SkippedDirectoryTracker
 		const absPath = path.join(root, relativePath);
 		let content: string;
 		try {
-			content = fs.readFileSync(absPath, "utf-8");
+			content = await fs.promises.readFile(absPath, "utf-8");
 		} catch {
 			continue;
 		}
@@ -419,7 +430,7 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 	// ── Parse .gitignore (root + nested) ──────────────────────────
 	let gitignoreFilter: ReturnType<typeof ignoreLib> | null = null;
 	if (respectGitignore) {
-		const allPatterns = collectAllGitignoreRules(root, skippedDirTracker);
+		const allPatterns = await collectAllGitignoreRules(root, skippedDirTracker);
 		if (allPatterns.length > 0) {
 			gitignoreFilter = ignoreLib().add(allPatterns as unknown as string);
 			logger.debug("[FileDiscovery] Parsed .gitignore files", {

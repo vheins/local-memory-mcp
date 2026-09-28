@@ -32,11 +32,35 @@
 import { Worker, type Transferable, type WorkerOptions } from "node:worker_threads";
 import { availableParallelism } from "node:os";
 import { WORKER_POOL_SIZE } from "../utils/constants";
+import { logger } from "../utils/logger";
+import { metrics, METRIC_WORKER_POOL_CRASH_STORM } from "../utils/metrics";
 
 // ── Defaults (module-local; only WORKER_POOL_SIZE is a shared constant) ──
 
 /** Default per-task wall-clock ceiling. `0` disables the timeout. */
 export const DEFAULT_WORKER_TASK_TIMEOUT_MS = 30_000;
+
+/**
+ * Crash-storm guard (H1, FEAT-DAEMON-002 review).
+ *
+ * A worker that crashes deterministically at startup (corrupt grammar WASM,
+ * OOM during init, a Node-version mismatch) would make the unconditional
+ * respawn in {@link WorkerPool.handleExit} an unbounded crash→respawn loop:
+ * for the parser it burns CPU across a full index, and for the embedding pool
+ * the crash is retryable so the pool would never disable. To contain it the
+ * pool records the timestamps of unexpected worker exits; once
+ * {@link CRASH_STORM_MAX_CONSECUTIVE} crashes occur within
+ * {@link CRASH_STORM_WINDOW_MS}, respawning STOPS and every subsequent task is
+ * rejected with a NON-retryable {@link WorkerPoolDisabledError} (the parser
+ * then degrades per-file; the embedding store disables its pool).
+ *
+ * Isolated/transient crashes are unaffected: any successful task clears the
+ * crash history (see {@link WorkerPool.handleMessage}), and crashes older than
+ * the window are discarded, so a healthy worker that later dies once still
+ * respawns.
+ */
+export const CRASH_STORM_WINDOW_MS = 30_000;
+export const CRASH_STORM_MAX_CONSECUTIVE = 5;
 
 // ── Errors ───────────────────────────────────────────────────────────────
 
@@ -86,6 +110,20 @@ export class WorkerTaskError extends WorkerPoolError {
 	constructor(message: string, workerStack?: string) {
 		super(message, false, workerStack);
 		this.name = "WorkerTaskError";
+	}
+}
+
+/**
+ * The pool tripped its crash-storm guard (H1): too many consecutive worker
+ * crashes within the window, so respawning stopped and the pool is DISABLED.
+ * NON-retryable on purpose — a caller must degrade (the parser yields a
+ * per-file error; the embedding store switches to its in-process fallback)
+ * rather than keep feeding a pool that cannot start a worker.
+ */
+export class WorkerPoolDisabledError extends WorkerPoolError {
+	constructor(message: string) {
+		super(message, false);
+		this.name = "WorkerPoolDisabledError";
 	}
 }
 
@@ -191,6 +229,15 @@ export class WorkerPool {
 	private closePromise?: Promise<void>;
 	private closeResolve?: () => void;
 
+	/**
+	 * Timestamps (ms) of recent UNEXPECTED worker exits, used by the crash-storm
+	 * guard (H1). Trimmed to the window on every crash; cleared on any
+	 * successful task so transient crashes never accumulate into a disable.
+	 */
+	private readonly recentCrashTimestamps: number[] = [];
+	/** Set once the crash-storm guard trips; from then on tasks reject. */
+	private disabled = false;
+
 	constructor(options: WorkerPoolOptions) {
 		this.workerPath = options.workerPath;
 		this.workerOptions = options.workerOptions;
@@ -204,10 +251,13 @@ export class WorkerPool {
 		return this.size;
 	}
 
-	/** Enqueue a task. Rejects immediately if the pool is closing/closed. */
+	/** Enqueue a task. Rejects immediately if the pool is closing/closed/disabled. */
 	run<Req, Res>(payload: Req, options?: WorkerPoolRunOptions): Promise<Res> {
 		if (this.closing || this.closed) {
 			return Promise.reject(new WorkerPoolClosedError());
+		}
+		if (this.disabled) {
+			return Promise.reject(this.disabledError());
 		}
 		return new Promise<Res>((resolve, reject) => {
 			const task: PendingTask = {
@@ -308,6 +358,10 @@ export class WorkerPool {
 		task.settled = true;
 
 		if (message && message.ok) {
+			// A worker completed a task → the pool is healthy. Clear the crash
+			// history so an isolated later crash cannot accumulate into a
+			// crash-storm disable (H1).
+			this.recentCrashTimestamps.length = 0;
 			task.resolve(message.result);
 		} else {
 			const detail = message?.error;
@@ -344,12 +398,62 @@ export class WorkerPool {
 			this.failTask(task, new WorkerTaskCrashError(reason));
 		}
 
-		// Respawn a replacement unless the pool is fully shut down.
+		// Respawn a replacement unless the pool is fully shut down — but first
+		// run the crash-storm guard (H1): a worker that dies deterministically at
+		// startup would otherwise respawn forever. On a storm, disable the pool
+		// and reject every queued task with a NON-retryable error.
 		if (!this.closed && this.workers.length < this.size) {
-			this.spawnWorker();
+			if (this.recordCrashAndShouldRespawn(error)) {
+				this.spawnWorker();
+			} else {
+				this.disable();
+			}
 		}
 		this.dispatch();
 		this.maybeFinishClose();
+	}
+
+	/**
+	 * Record an unexpected worker exit and decide whether respawning is still
+	 * safe. Returns `false` once {@link CRASH_STORM_MAX_CONSECUTIVE} crashes
+	 * occurred within {@link CRASH_STORM_WINDOW_MS} (a crash storm). Crashes
+	 * outside the window are discarded so a long-lived pool never trips on
+	 * isolated incidents.
+	 */
+	private recordCrashAndShouldRespawn(error: Error | undefined): boolean {
+		const now = Date.now();
+		this.recentCrashTimestamps.push(now);
+		// Drop timestamps older than the window (sliding window).
+		while (
+			this.recentCrashTimestamps.length > 0 &&
+			now - (this.recentCrashTimestamps[0] as number) > CRASH_STORM_WINDOW_MS
+		) {
+			this.recentCrashTimestamps.shift();
+		}
+		if (this.recentCrashTimestamps.length >= CRASH_STORM_MAX_CONSECUTIVE) {
+			logger.error("[WorkerPool] crash storm detected — disabling pool (no more respawns)", {
+				crashes: this.recentCrashTimestamps.length,
+				windowMs: CRASH_STORM_WINDOW_MS,
+				lastError: error?.message
+			});
+			return false;
+		}
+		return true;
+	}
+
+	/** Mark the pool disabled and reject every queued task (H1). Idempotent. */
+	private disable(): void {
+		if (this.disabled) return;
+		this.disabled = true;
+		metrics.incrementCounter(METRIC_WORKER_POOL_CRASH_STORM);
+		const pending = this.queue.splice(0, this.queue.length);
+		for (const task of pending) this.failTask(task, this.disabledError());
+	}
+
+	private disabledError(): WorkerPoolDisabledError {
+		return new WorkerPoolDisabledError(
+			`worker pool disabled after ${CRASH_STORM_MAX_CONSECUTIVE} crashes within ${CRASH_STORM_WINDOW_MS}ms`
+		);
 	}
 
 	/** Remove a worker from every tracking structure; return its in-flight task. */

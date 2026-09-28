@@ -25,6 +25,7 @@ import { kickOffStartupAutoIndex } from "./services/startup-auto-index";
 import { EMBEDDING_LAZY_WARMUP, VACUUM_ON_STARTUP } from "./utils/constants";
 import { runCliIndex } from "./codebase-index/cli";
 import { getCodebaseParserPool } from "./codebase-index/parser/singleton";
+import { closeProcessPools } from "./services/shutdown-teardown";
 import { FileWatcher } from "./codebase-index/services/file-watcher";
 import fs from "fs";
 import path from "path";
@@ -272,6 +273,11 @@ const shutdown = async (signal: string) => {
 	embeddingWorker.stop();
 	fileWatcher?.stop();
 	await handle?.close();
+	// C1 (FEAT-DAEMON-002 review): release the process-owned worker pools (the
+	// tree-sitter parser pool + the embedding worker pool) so their threads
+	// never keep the event loop alive after a graceful stop. Idempotent and
+	// failure-contained — shutdown always reaches db.close()/process.exit(0).
+	await closeProcessPools({ vectors: realVectors, logTag: "[Server]" });
 	reuseTelemetry.flush(db);
 	db.close();
 	process.exit(0);
