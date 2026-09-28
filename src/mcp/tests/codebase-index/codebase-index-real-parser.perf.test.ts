@@ -72,13 +72,17 @@ function createCountingParserPool(
 describe("Codebase index real parser — small fixture", () => {
 	let root: string;
 	let store: SQLiteStore;
+	// Pools own worker threads (FEAT-DAEMON-002C) — track and close them so the
+	// perf run never leaks workers between files.
+	const pools: TreeSitterParserPool[] = [];
 
 	beforeAll(() => {
 		root = fs.mkdtempSync(path.join(os.tmpdir(), "cbi-real-small-"));
 		generateSyntheticRepo(root, SAMPLE_FILE_COUNT);
 	}, 60_000);
 
-	afterAll(() => {
+	afterAll(async () => {
+		await Promise.all(pools.splice(0).map((pool) => pool.close()));
 		if (store) store.close();
 		fs.rmSync(root, { recursive: true, force: true });
 	});
@@ -86,6 +90,7 @@ describe("Codebase index real parser — small fixture", () => {
 	it("indexes a small real-parser fixture and skips unchanged files on re-index", async () => {
 		store = await createTestStore();
 		const realParser = new TreeSitterParserPool({ concurrency: 4 });
+		pools.push(realParser);
 		const state = { parseCount: 0, peakHeapBytes: 0 };
 		const parserPool = createCountingParserPool(realParser, state);
 		const service = createCodebaseIndexService(store, parserPool);

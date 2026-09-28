@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -363,56 +363,37 @@ export default function Header(): JSX.Element {
 	});
 
 	// ══════════════════════════════════════════════════════════════════
-	// Edge Case: grammar in-flight dedup (Fix #5 — TASK-054)
-	// Concurrent parse slots requesting the same uncached grammar must share
-	// a single in-flight Language.load promise — one WASM instantiation per
-	// grammar, never one per concurrent slot.
+	// Edge Case: concurrent parses of the same grammar (FEAT-DAEMON-002C)
+	//
+	// Grammar loading + parsing now run INSIDE worker threads, so the former
+	// main-thread `Language.load` spy is no longer observable here. The
+	// per-worker in-flight dedup (workers/parser.worker.ts) still guarantees one
+	// `Language.load` per grammar PER WORKER. This test asserts the observable
+	// contract: concurrent parses routed to the same grammar all succeed with
+	// identical results.
 	// ══════════════════════════════════════════════════════════════════
 
-	it(
-		"grammar in-flight dedup: concurrent parses of the same grammar trigger exactly one Language.load",
-		{ timeout: 30_000 },
-		async () => {
-			if (!wasmAvailable || !wasmPaths) {
-				console.warn("  Skipped: WASM not available");
-				return;
-			}
-
-			// Instrument Language.load: count calls and hold each load open so both
-			// parse slots arrive while the load is STILL in-flight. If the dedup map
-			// (inFlightGrammars) is broken, the second slot would start a second
-			// load; if only the loaded-grammar cache existed (no in-flight map),
-			// both slots would still fire separate loads because neither has
-			// resolved yet. Only the shared-promise path yields exactly one call.
-			const originalLoad = Language.load.bind(Language);
-			const loadSpy = vi
-				.spyOn(Language, "load")
-				.mockImplementation(async (...args: Parameters<typeof Language.load>) => {
-					await new Promise((resolve) => setTimeout(resolve, 100));
-					return originalLoad(...args);
-				});
-
-			try {
-				const pool = new TreeSitterParserPool({ concurrency: 2 });
-				// Two .ts files — both require the SAME tree-sitter-typescript
-				// grammar, so both parse slots hit getOrLoadGrammar concurrently.
-				const [r1, r2] = await Promise.all([
-					pool.parseFile("alpha.ts", "export function alpha(): void {}\n"),
-					pool.parseFile("beta.ts", "export function beta(): void {}\n")
-				]);
-
-				expect(r1.error).toBeNull();
-				expect(r2.error).toBeNull();
-
-				// One Language.load for the shared grammar — not one per slot.
-				expect(loadSpy).toHaveBeenCalledTimes(1);
-				const wasmArg = loadSpy.mock.calls[0][0] as string;
-				expect(wasmArg).toMatch(/tree-sitter-typescript\.wasm$/);
-			} finally {
-				loadSpy.mockRestore();
-			}
+	it("concurrent parses of the same grammar all succeed", { timeout: 30_000 }, async () => {
+		if (!wasmAvailable) {
+			console.warn("  Skipped: WASM not available");
+			return;
 		}
-	);
+
+		const pool = new TreeSitterParserPool({ concurrency: 2 });
+		// Two .ts files — both require the SAME tree-sitter-typescript
+		// grammar, so both parse tasks share the grammar per worker.
+		const [r1, r2] = await Promise.all([
+			pool.parseFile("alpha.ts", "export function alpha(): void {}\n"),
+			pool.parseFile("beta.ts", "export function beta(): void {}\n")
+		]);
+
+		expect(r1.error).toBeNull();
+		expect(r2.error).toBeNull();
+		expect(r1.symbols.find((s) => s.name === "alpha")).toBeDefined();
+		expect(r2.symbols.find((s) => s.name === "beta")).toBeDefined();
+
+		await pool.close();
+	});
 
 	// ══════════════════════════════════════════════════════════════════
 	// Edge Case: initialize() is a no-op if already initialized

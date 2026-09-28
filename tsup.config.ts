@@ -9,7 +9,18 @@ export default defineConfig({
 	// the very top — BEFORE any module that reads process.env at eval time
 	// (FEAT-DAEMON-002A). It imports only Node built-ins, so it never drags in
 	// `utils/constants.ts`.
-	entry: ["src/mcp/server.ts", "src/dashboard/server.ts", "src/mcp/utils/config-file.ts"],
+	//
+	// `parser.worker` (FEAT-DAEMON-002C) is a standalone entry because it is
+	// loaded by a `node:worker_threads` Worker at RUNTIME, not imported by the
+	// server bundle. It must exist as a plain-JS file at a stable path
+	// (`dist/mcp/workers/parser.worker.js`) that `resolve-parser-worker.ts`
+	// can locate in production (where no TypeScript loader is available).
+	entry: [
+		"src/mcp/server.ts",
+		"src/dashboard/server.ts",
+		"src/mcp/utils/config-file.ts",
+		"src/mcp/workers/parser.worker.ts"
+	],
 	format: ["esm"],
 	define: {
 		__PKG_VERSION__: JSON.stringify(version)
