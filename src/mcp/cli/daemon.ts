@@ -40,7 +40,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
-import { loadConfigFileEnv, resolveConfigDir } from "../utils/config-file";
+import { loadConfigFileEnv, resolveConfigDir, type EnvMap } from "../utils/config-file";
 
 /** Absolute paths the daemon manages. */
 export interface DaemonPaths {
@@ -530,14 +530,104 @@ function systemdArg(arg: string): string {
 }
 
 /**
+ * Non-secret performance/ops knobs that `daemon install` persists into the
+ * service definition so the daemon boots with the operator's tuning (thread /
+ * pool sizes, port, timeouts) after a reboot (FEAT-DAEMON-002F).
+ *
+ * SECURITY: only keys on this allowlist are ever written in PLAINTEXT into the
+ * systemd unit (`Environment=`) or the launchd plist (`EnvironmentVariables`).
+ * Secret-bearing keys (tokens, credentials) are deliberately excluded: on
+ * systemd they stay in the mode-restricted `.env` imported via
+ * `EnvironmentFile=`, and on EVERY platform the daemon also reads
+ * `<configDir>/config.jsonc` + `<configDir>/.env` itself at boot
+ * (FEAT-DAEMON-002A), so secrets are never duplicated into the unit/plist.
+ *
+ * Values are sourced from the SAME config-file loader — never a second reader.
+ */
+export const SERVICE_ENV_ALLOWLIST: readonly string[] = [
+	"WORKER_POOL_SIZE",
+	"EMBEDDING_WORKER_POOL_SIZE",
+	"EMBEDDING_ONNX_THREADS",
+	"OMP_NUM_THREADS",
+	"CODEBASE_INDEX_WORKERS",
+	"CODEBASE_INDEX_PARSE_CONCURRENCY",
+	"CODEBASE_INDEX_PARSE_TIMEOUT_MS",
+	"MCP_HTTP_PORT",
+	"MCP_HTTP_SESSION_IDLE_TTL_MS",
+	"MEMORY_DB_BUSY_TIMEOUT_MS"
+];
+
+/**
+ * Resolve the non-secret service environment to persist (FEAT-DAEMON-002F).
+ *
+ * Delegates to the FEAT-DAEMON-002A config-file loader so the values written
+ * into the service definition are exactly the ones the daemon resolves at boot
+ * from `<configDir>/config.jsonc` then `<configDir>/.env` (`config.jsonc` wins
+ * over `.env`). Only {@link SERVICE_ENV_ALLOWLIST} keys are returned, so a
+ * secret in `.env` is never copied into the unit/plist in plaintext.
+ *
+ * NOTE: config changes require re-running `daemon install` (or a restart of the
+ * installed service) — the service file is a snapshot, not a live reader.
+ */
+export function resolveServiceEnv(configDir: string): EnvMap {
+	const env: NodeJS.ProcessEnv = {};
+	// `createDir: false` — resolution must not have filesystem side effects.
+	loadConfigFileEnv({ configDir, env, createDir: false });
+	const resolved: EnvMap = {};
+	for (const key of SERVICE_ENV_ALLOWLIST) {
+		const value = env[key];
+		if (value !== undefined && value !== "") resolved[key] = value;
+	}
+	return resolved;
+}
+
+/** Render a single systemd `Environment=KEY=VALUE` assignment (quoted when needed). */
+function systemdEnvAssignment(key: string, value: string): string {
+	if (!/[\s"\\]/.test(value)) return `${key}=${value}`;
+	return `${key}="${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * Render a systemd `EnvironmentFile=` line. The leading `-` makes a missing
+ * file a non-fatal no-op, so the line is always safe to emit before the
+ * operator has created `<configDir>/.env`.
+ */
+function systemdEnvironmentFile(filePath: string): string {
+	const quoted = /[\s"\\]/.test(filePath) ? `"${filePath.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"` : filePath;
+	return `EnvironmentFile=-${quoted}`;
+}
+
+/** Environment entries to embed in a service definition (FEAT-DAEMON-002F). */
+export interface ServiceEnvOptions {
+	/** Absolute path of a systemd `EnvironmentFile=` (systemd only). */
+	environmentFile?: string;
+	/** Resolved non-secret keys (systemd `Environment=` / launchd dict). */
+	env?: EnvMap;
+}
+
+/**
  * Build the systemd user-unit file body.
  *
  * `workingDir` (FIX-110-B) seeds `WorkingDirectory=` so a daemon started by
  * systemd does NOT inherit `/` as its CWD — which would leave owner/repo
  * unresolvable for a rootless HTTP client (see FIX-110-A). Omitted when not
  * provided (back-compat for callers that build a unit without a seed).
+ *
+ * `serviceEnv` (FEAT-DAEMON-002F) seeds the environment block: an
+ * `EnvironmentFile=-<configDir>/.env` (secrets stay in the mode-restricted file)
+ * plus one `Environment=KEY=VALUE` line per resolved non-secret knob. Both are
+ * omitted when not provided (back-compat).
  */
-export function buildSystemdUnit(command: ServiceCommand, workingDir?: string): string {
+export function buildSystemdUnit(
+	command: ServiceCommand,
+	workingDir?: string,
+	serviceEnv: ServiceEnvOptions = {}
+): string {
+	const envLines: string[] = [];
+	if (serviceEnv.environmentFile) envLines.push(systemdEnvironmentFile(serviceEnv.environmentFile));
+	for (const [key, value] of Object.entries(serviceEnv.env ?? {})) {
+		envLines.push(`Environment=${systemdEnvAssignment(key, value)}`);
+	}
 	return [
 		"[Unit]",
 		"Description=local-memory-mcp daemon (combined dashboard + MCP HTTP)",
@@ -547,6 +637,7 @@ export function buildSystemdUnit(command: ServiceCommand, workingDir?: string): 
 		"Type=simple",
 		`ExecStart=${[command.program, ...command.args].map(systemdArg).join(" ")}`,
 		...(workingDir ? [`WorkingDirectory=${workingDir}`] : []),
+		...envLines,
 		"Restart=on-failure",
 		"RestartSec=5",
 		"",
@@ -567,9 +658,33 @@ function escapeXml(value: string): string {
  * `workingDir` (FIX-110-B) seeds `<key>WorkingDirectory</key>` so launchd
  * starts the daemon with the operator's project directory as its CWD rather
  * than `/`. Omitted when not provided.
+ *
+ * `serviceEnv` (FEAT-DAEMON-002F) seeds an `<key>EnvironmentVariables</key>`
+ * dict of the resolved non-secret knobs. launchd has no `EnvironmentFile`
+ * equivalent, so SECRETS ARE NEVER WRITTEN HERE — only allowlisted perf knobs;
+ * secret values remain in `<configDir>/.env`, which the daemon loads itself at
+ * boot (FEAT-DAEMON-002A). Omitted when not provided (back-compat).
  */
-export function buildLaunchdPlist(command: ServiceCommand, logFile: string, workingDir?: string): string {
+export function buildLaunchdPlist(
+	command: ServiceCommand,
+	logFile: string,
+	workingDir?: string,
+	serviceEnv: ServiceEnvOptions = {}
+): string {
 	const args = [command.program, ...command.args].map((arg) => `\t\t<string>${escapeXml(arg)}</string>`).join("\n");
+	const envEntries = Object.entries(serviceEnv.env ?? {});
+	const envDict =
+		envEntries.length > 0
+			? [
+					"\t<key>EnvironmentVariables</key>",
+					"\t<dict>",
+					...envEntries.flatMap(([key, value]) => [
+						`\t\t<key>${escapeXml(key)}</key>`,
+						`\t\t<string>${escapeXml(value)}</string>`
+					]),
+					"\t</dict>"
+				]
+			: [];
 	return [
 		'<?xml version="1.0" encoding="UTF-8"?>',
 		'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
@@ -582,6 +697,7 @@ export function buildLaunchdPlist(command: ServiceCommand, logFile: string, work
 		args,
 		"\t</array>",
 		...(workingDir ? ["\t<key>WorkingDirectory</key>", `\t<string>${escapeXml(workingDir)}</string>`] : []),
+		...envDict,
 		"\t<key>RunAtLoad</key>",
 		"\t<true/>",
 		"\t<key>KeepAlive</key>",
@@ -654,7 +770,7 @@ export function installDaemon(
 
 	if (io.platform === "darwin") return installLaunchd(io, paths, force, workingDir);
 	if (io.platform === "win32") return installWindows(io, force);
-	return installSystemd(io, force, workingDir);
+	return installSystemd(io, paths, force, workingDir);
 }
 
 /** Remove the daemon's OS-managed service definition. */
@@ -666,7 +782,7 @@ export function uninstallDaemon(options: { io?: Partial<ServiceIo> } = {}): Unin
 	return uninstallSystemd(io);
 }
 
-function installSystemd(io: ServiceIo, force: boolean, workingDir?: string): InstallDaemonResult {
+function installSystemd(io: ServiceIo, paths: DaemonPaths, force: boolean, workingDir?: string): InstallDaemonResult {
 	const unitPath = systemdUnitPath(io.homedir);
 	if (fs.existsSync(unitPath) && !force) {
 		io.log(`Daemon service already installed (${unitPath}). Use --force to overwrite.`);
@@ -681,8 +797,16 @@ function installSystemd(io: ServiceIo, force: boolean, workingDir?: string): Ins
 		return { installed: false, platform: io.platform, servicePath: unitPath, hint: true };
 	}
 
+	// FEAT-DAEMON-002F: persist the resolved non-secret knobs into the unit and
+	// import the config `.env` via EnvironmentFile= (secrets stay in that
+	// mode-restricted file, never copied into the unit in plaintext).
+	const serviceEnv: ServiceEnvOptions = {
+		environmentFile: path.join(paths.dir, ".env"),
+		env: resolveServiceEnv(paths.dir)
+	};
+
 	fs.mkdirSync(path.dirname(unitPath), { recursive: true });
-	fs.writeFileSync(unitPath, buildSystemdUnit(command, workingDir), "utf8");
+	fs.writeFileSync(unitPath, buildSystemdUnit(command, workingDir, serviceEnv), "utf8");
 	io.run("systemctl", ["--user", "daemon-reload"]);
 	io.run("systemctl", ["--user", "enable", "--now", SYSTEMD_UNIT_NAME]);
 	io.log(`Daemon service installed (systemd user unit: ${unitPath})`);
@@ -725,7 +849,14 @@ function installLaunchd(io: ServiceIo, paths: DaemonPaths, force: boolean, worki
 	}
 
 	fs.mkdirSync(path.dirname(plistPath), { recursive: true });
-	fs.writeFileSync(plistPath, buildLaunchdPlist(command, paths.logFile, workingDir), "utf8");
+	// FEAT-DAEMON-002F: launchd has no EnvironmentFile equivalent, so only the
+	// non-secret allowlisted knobs are written into EnvironmentVariables —
+	// secrets stay in `<configDir>/.env`, loaded by the daemon itself at boot.
+	fs.writeFileSync(
+		plistPath,
+		buildLaunchdPlist(command, paths.logFile, workingDir, { env: resolveServiceEnv(paths.dir) }),
+		"utf8"
+	);
 	io.run("launchctl", ["load", "-w", plistPath]);
 	io.log(`Daemon service installed (launchd LaunchAgent: ${plistPath})`);
 	return { installed: true, platform: io.platform, servicePath: plistPath };
