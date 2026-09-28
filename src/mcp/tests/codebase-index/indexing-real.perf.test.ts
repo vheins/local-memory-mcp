@@ -89,6 +89,9 @@ function measure<T>(
 describe("Codebase index real parser benchmarks", () => {
 	const temporaryRoots: string[] = [];
 	const stores: SQLiteStore[] = [];
+	// Pools own worker threads (FEAT-DAEMON-002C) — track and close them so the
+	// perf run never leaks workers between files.
+	const pools: TreeSitterParserPool[] = [];
 
 	beforeAll(() => {
 		for (const fileCount of fileCounts) {
@@ -98,7 +101,8 @@ describe("Codebase index real parser benchmarks", () => {
 		}
 	}, 120_000);
 
-	afterAll(() => {
+	afterAll(async () => {
+		await Promise.all(pools.splice(0).map((pool) => pool.close()));
 		for (const store of stores) store.close();
 		for (const root of temporaryRoots) fs.rmSync(root, { recursive: true, force: true });
 	});
@@ -111,6 +115,7 @@ describe("Codebase index real parser benchmarks", () => {
 			const store = await createTestStore();
 			stores.push(store);
 			const realParser = new TreeSitterParserPool({ concurrency: 4 });
+			pools.push(realParser);
 			const parseState = { count: 0 };
 			const parserPool = createCountingParserPool(realParser, () => {
 				parseState.count++;
