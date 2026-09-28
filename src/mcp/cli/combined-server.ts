@@ -21,7 +21,6 @@
  * `express.json()` would).
  */
 import http from "node:http";
-import path from "node:path";
 import type { AddressInfo } from "node:net";
 import { hostHeaderValidationResponse, originValidationResponse } from "@modelcontextprotocol/server";
 import { createServerFactory } from "../transport/factory";
@@ -46,11 +45,12 @@ import { reuseTelemetry } from "../utils/reuse-telemetry";
 import { runStartupMaintenance } from "../services/maintenance-job";
 import { runStartupVacuum } from "../services/vacuum";
 import { scheduleDeferredSemanticWarmup } from "../services/startup-warmup";
+import { scheduleDeferredStartupPasses } from "../services/startup-deferral";
+import type { DeferredStartupPass } from "../services/startup-deferral";
+import { kickOffStartupAutoIndex } from "../services/startup-auto-index";
 import { EMBEDDING_LAZY_WARMUP, MCP_DAEMON_SESSION_IDLE_TTL_MS, VACUUM_ON_STARTUP } from "../utils/constants";
-import { autoIndexIfStale } from "../codebase-index/services/indexing-service";
-import { evaluateAutoIndexTarget } from "../codebase-index/services/project-detection";
 import { getCodebaseParserPool } from "../codebase-index/parser/singleton";
-import { FileWatcher, registerRepo } from "../codebase-index/services/file-watcher";
+import { FileWatcher } from "../codebase-index/services/file-watcher";
 import { createExpressApp } from "../../dashboard/app";
 import type { ExpressPreRoute } from "../../dashboard/app";
 import type { SQLiteStore } from "../storage/sqlite";
@@ -80,6 +80,19 @@ export interface StartCombinedServerOptions {
 	 * hermetic.
 	 */
 	enableEngines?: boolean;
+	/**
+	 * Test-only seam (FEAT-DAEMON-002E) for the DEFERRED post-listen startup
+	 * passes. Production never sets it. Tests inject a capturing `schedule` to
+	 * prove the listener answers `initialize` BEFORE the heavy passes run, and
+	 * `extraPasses` to append a slow/observable pass. See
+	 * {@link ../services/startup-deferral}.
+	 */
+	startupDeferral?: {
+		/** Override the deferred-pass scheduler (default `setImmediate`). */
+		schedule?: (run: () => void) => void;
+		/** Extra passes appended after the built-in ones. */
+		extraPasses?: DeferredStartupPass[];
+	};
 }
 
 /**
@@ -222,16 +235,12 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
 
 	const { db, vectors, embeddingWorker, runtimeCapabilities } = await resolveRuntime();
 
-	// Optional operator-triggered space reclamation (TASK-047), gated off by
-	// default; mirrors the MCP server startup.
-	const startupVacuum = runStartupVacuum(db, VACUUM_ON_STARTUP);
-	if (startupVacuum) {
-		logger.info("[Daemon] VACUUM_ON_STARTUP ran", {
-			changed: startupVacuum.changed,
-			skipped: startupVacuum.skipped,
-			reason: startupVacuum.reason
-		});
-	}
+	// NOTE (FEAT-DAEMON-002E): the store was created (migrations + derived
+	// schema) INSIDE resolveRuntime() — those are REQUIRED for the DB to be
+	// usable and stay inline (cheap when already migrated; see
+	// services/startup-deferral.ts). Every OPTIONAL heavy pass — including the
+	// operator-gated startup VACUUM — is deferred until AFTER the listener is
+	// bound (see the post-listen block below).
 
 	const stopEngines = enableEngines ? registerEngines(db, runtimeCapabilities) : () => {};
 
@@ -297,57 +306,51 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
 	const boundPort = (server.address() as AddressInfo).port;
 	logger.info("[Daemon] listening", { host, port: boundPort, mcp: MCP_HTTP_DEFAULT_PATH });
 
-	// --- Warm up the runtime engines (full profile only), mirrors server.ts ---
+	// --- Deferred post-listen startup passes (FEAT-DAEMON-002E) ---
+	//
+	// The listener is BOUND (above). Every OPTIONAL heavy pass runs on a later
+	// event-loop turn so a cold start on a large DB can never block the
+	// `initialize` handshake:
+	//   - `vacuum`     — operator-gated full VACUUM (TASK-047), default off;
+	//   - `maintenance`— startup maintenance sweep;
+	//   - `semantic-warmup` — eager ONNX load (FIX-034), non-fatal;
+	//   - `auto-index` — codebase auto-index kickoff, fully failure-isolated.
+	// DB migrations + derived-schema setup stay INLINE in resolveRuntime()
+	// because a usable schema is required to serve ANY request (see
+	// services/startup-deferral.ts for the full rationale).
+	const startupPasses: DeferredStartupPass[] = [
+		{
+			name: "vacuum",
+			run: () => {
+				const result = runStartupVacuum(db, VACUUM_ON_STARTUP);
+				if (result) {
+					logger.info("[Daemon] VACUUM_ON_STARTUP ran", {
+						changed: result.changed,
+						skipped: result.skipped,
+						reason: result.reason
+					});
+				}
+			}
+		}
+	];
 	if (enableEngines && runtimeCapabilities.profile === "full") {
-		void runtimeCapabilities.ensure("maintenance");
-
-		// FIX-034: eager semantic (ONNX) warm-up, now DEFERRED until after the
-		// listener is ready (this code runs post-`listen`) and NON-FATAL — a
+		startupPasses.push({ name: "maintenance", run: () => runtimeCapabilities.ensure("maintenance") });
+		// FIX-034: eager semantic (ONNX) warm-up, DEFERRED and NON-FATAL — a
 		// timeout/load failure logs one WARN + bumps a counter and the server
 		// keeps serving; semantic loads lazily on first use. Mirrors server.ts.
 		if (!EMBEDDING_LAZY_WARMUP) {
-			scheduleDeferredSemanticWarmup(runtimeCapabilities);
+			startupPasses.push({
+				name: "semantic-warmup",
+				run: () => scheduleDeferredSemanticWarmup(runtimeCapabilities).settled
+			});
 		}
-
-		if (process.env.CODEBASE_AUTO_INDEX !== "false") {
-			// GUARD (project detection): the daemon auto-indexes its CWD, and
-			// `daemon start` forks the worker with the launching shell's CWD.
-			// Launching from a NON-project root (most commonly the user's HOME —
-			// `npx … daemon` run from `~`) enumerates the entire tree
-			// synchronously, blocks the event loop (starving the HTTP server →
-			// client socket timeouts), and — because the walk throws on a
-			// permission-denied child directory — never records a
-			// `last_indexed_at`, so the watcher re-triggers it every sweep
-			// forever. Only index a directory that is actually a project.
-			const repoPath = process.cwd();
-			const eligibility = evaluateAutoIndexTarget(repoPath);
-			if (!eligibility.eligible) {
-				logger.info("[Daemon] Auto-index skipped — working directory is not a project", {
-					cwd: repoPath,
-					reason: eligibility.reason
-				});
-			} else {
-				const repoName = path.basename(repoPath);
-				registerRepo(repoName, repoPath);
-				void runtimeCapabilities.ensure("indexing").then((ready) => {
-					if (!ready) return;
-					void autoIndexIfStale(repoName, repoPath, db, getCodebaseParserPool())
-						.then((result) => {
-							logger.info("[Daemon] Auto-index check complete", {
-								repo: repoName,
-								status: result.status,
-								reason: result.reason
-							});
-							void runtimeCapabilities.ensure("watcher");
-						})
-						.catch((err) => {
-							runtimeCapabilities.markDegraded("indexing", String(err));
-							logger.warn("[Daemon] Auto-index check failed", { error: String(err) });
-						});
-				});
-			}
-		}
+		startupPasses.push({
+			name: "auto-index",
+			run: () => kickOffStartupAutoIndex(db, runtimeCapabilities, { logTag: "[Daemon]" })
+		});
 	}
+	startupPasses.push(...(options.startupDeferral?.extraPasses ?? []));
+	scheduleDeferredStartupPasses(startupPasses, { schedule: options.startupDeferral?.schedule });
 
 	const close = async (): Promise<void> => {
 		try {

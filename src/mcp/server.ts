@@ -19,12 +19,13 @@ import { reuseTelemetry } from "./utils/reuse-telemetry";
 import { runStartupMaintenance } from "./services/maintenance-job";
 import { runStartupVacuum } from "./services/vacuum";
 import { scheduleDeferredSemanticWarmup } from "./services/startup-warmup";
+import { scheduleDeferredStartupPasses } from "./services/startup-deferral";
+import type { DeferredStartupPass } from "./services/startup-deferral";
+import { kickOffStartupAutoIndex } from "./services/startup-auto-index";
 import { EMBEDDING_LAZY_WARMUP, VACUUM_ON_STARTUP } from "./utils/constants";
 import { runCliIndex } from "./codebase-index/cli";
-import { autoIndexIfStale } from "./codebase-index/services/indexing-service";
-import { evaluateAutoIndexTarget } from "./codebase-index/services/project-detection";
 import { getCodebaseParserPool } from "./codebase-index/parser/singleton";
-import { FileWatcher, registerRepo } from "./codebase-index/services/file-watcher";
+import { FileWatcher } from "./codebase-index/services/file-watcher";
 import fs from "fs";
 import path from "path";
 
@@ -178,18 +179,10 @@ addLogSink(bugCapture.logSink);
 
 // Optional operator-triggered space reclamation (TASK-047). A full VACUUM is
 // too heavy to run implicitly (full write lock + ~2x free disk), so it is
-// gated behind VACUUM_ON_STARTUP (default off). When enabled, this converts the
-// store to auto_vacuum=INCREMENTAL and reclaims the freelist once, BEFORE the
-// server accepts requests — the shipped path for shrinking a bloated DB.
-// Disk-guarded, idempotent, and never throws (see services/vacuum.ts).
-const startupVacuum = runStartupVacuum(db, VACUUM_ON_STARTUP);
-if (startupVacuum) {
-	logger.info("[Server] VACUUM_ON_STARTUP ran", {
-		changed: startupVacuum.changed,
-		skipped: startupVacuum.skipped,
-		reason: startupVacuum.reason
-	});
-}
+// gated behind VACUUM_ON_STARTUP (default off). NOTE (FEAT-DAEMON-002E): it is
+// now run in the DEFERRED post-transport block at the bottom of this file
+// (never inline) so it can never delay the initialize handshake — a cold start
+// on a large DB previously ran it BEFORE the transport bound.
 
 // Start the embedding/KG outbox worker (TASK-013): drains queue_jobs with
 // batched ONNX inference + KG extraction OUTSIDE the write lock. Startup
@@ -241,63 +234,26 @@ logger.info("[Server] startup", {
 // reconcile/backfill/purge and the poll loop are unaffected. Default (false)
 // preserves eager warm-up.
 //
-// FIX-034: the eager warm-up is DEFERRED until AFTER the listener is ready
-// (scheduled at the bottom, next to `serverStarted = true`) and is NON-FATAL.
-// Previously it was awaited INLINE here against a hard-coded 30s cap, which on
-// a large DB (~897 MB codebase.db / ~2.7 GB memory.db) both exceeded the cap
-// (`Semantic warm-up timed out after 30s`) and sat on the critical path to the
-// first tool call. See services/startup-warmup.ts.
-if (runtimeCapabilities.profile === "full") {
-	if (EMBEDDING_LAZY_WARMUP) {
-		embeddingWorker.start();
-	}
-	void runtimeCapabilities.ensure("maintenance");
-}
-
-// Run startup auto-index: triggers codebase indexing for the current working
-// directory if the index has never been built or is older than TTL (default
-// 24h). Respects CODEBASE_AUTO_INDEX env var. The parser pool (hoisted above,
-// shared with the file watcher) is initialized asynchronously and indexing
-// runs in the background; the dashboard polls /api/codebase/index-status.
-// The repo is registered with the file watcher so the polling sweep keeps it
-// fresh after the first build (watch set = startup repo + tool-indexed repos).
+// FIX-034 / FEAT-DAEMON-002E: the eager warm-up, the embedding worker start
+// (lazy mode), the maintenance sweep, the operator-gated VACUUM and the startup
+// auto-index are ALL scheduled in the DEFERRED post-transport block at the
+// bottom of this file (after the listener is serving). Previously the worker
+// start + maintenance + auto-index kickoff (and, before FIX-034, an inline
+// awaited warm-up against a hard-coded 30s cap that on a large DB — ~897 MB
+// codebase.db / ~2.7 GB memory.db — both timed out and sat on the critical path
+// to the first tool call) ran INLINE here, BEFORE the transport bound, so a
+// cold start on a large DB could delay the initialize handshake. See
+// services/startup-deferral.ts for the ordering + failure-isolation contract.
 //
-// GUARD (project detection): the startup auto-index must only run when the CWD
-// is actually a project. Indexing a NON-project root (most commonly the user's
-// HOME — e.g. the stdio server spawned by a client whose CWD is `~`) enumerates
-// the entire tree synchronously, blocks the event loop, and — because the walk
-// throws on a permission-denied child directory — never records a
-// `last_indexed_at`, so the watcher re-triggers it forever. Explicit indexing
-// (the codebase-index tool, `--index`, the dashboard) is NOT gated here.
-if (runtimeCapabilities.profile === "full" && process.env.CODEBASE_AUTO_INDEX !== "false") {
-	const repoPath = process.cwd();
-	const eligibility = evaluateAutoIndexTarget(repoPath);
-	if (!eligibility.eligible) {
-		logger.info("[Server] Auto-index skipped — working directory is not a project", {
-			cwd: repoPath,
-			reason: eligibility.reason
-		});
-	} else {
-		const repoName = path.basename(repoPath);
-		registerRepo(repoName, repoPath);
-		void runtimeCapabilities.ensure("indexing").then((ready) => {
-			if (!ready) return;
-			void autoIndexIfStale(repoName, repoPath, db, getCodebaseParserPool())
-				.then((result) => {
-					logger.info("[Server] Auto-index check complete", {
-						repo: repoName,
-						status: result.status,
-						reason: result.reason
-					});
-					void runtimeCapabilities.ensure("watcher");
-				})
-				.catch((err) => {
-					runtimeCapabilities.markDegraded("indexing", String(err));
-					logger.warn("[Server] Auto-index check failed", { error: String(err) });
-				});
-		});
-	}
-}
+// Startup auto-index notes (preserved): triggers codebase indexing for the
+// current working directory if the index has never been built or is older than
+// TTL (default 24h); respects CODEBASE_AUTO_INDEX; the parser pool is shared
+// with the file watcher; the repo is registered with the watcher so the polling
+// sweep keeps it fresh. GUARD (project detection): only a real project CWD is
+// auto-indexed (indexing a NON-project root such as `~` enumerates the whole
+// tree synchronously and starves the event loop). The kickoff is fully
+// failure-isolated in services/startup-auto-index.ts — a failure degrades the
+// `indexing` capability and NEVER aborts readiness.
 
 // Ignore EPIPE errors on stdout/stderr (e.g. if the client disconnects prematurely)
 process.stdout.on("error", (err: unknown) => {
@@ -362,12 +318,51 @@ if (transportMode === "http") {
 	handle = serveStdio(createServerFactory(db, vectors, "stdio"));
 }
 
-// FIX-034: schedule the eager semantic (ONNX) warm-up ONLY NOW that the
-// listener is ready (the HTTP listener is bound / the stdio server is serving),
-// and on the next `setImmediate` tick — mirroring FIX-025's deferral of the
-// embedding backfill. The warm-up is non-fatal (see services/startup-warmup.ts):
-// a timeout or load failure logs one WARN and bumps a counter, but never blocks
-// or aborts startup — the capability still loads lazily on first semantic use.
-if (runtimeCapabilities.profile === "full" && !EMBEDDING_LAZY_WARMUP) {
-	scheduleDeferredSemanticWarmup(runtimeCapabilities);
+// --- Deferred post-transport startup passes (FEAT-DAEMON-002E) ---
+//
+// The transport is BOUND/SERVING (above). Every OPTIONAL heavy pass runs on a
+// later event-loop turn so a cold start on a large DB can never block the
+// `initialize` handshake:
+//   - `vacuum`          — operator-gated full VACUUM (TASK-047), default off;
+//   - `embedding-worker`— lazy-mode worker start (PERF-005), non-blocking;
+//   - `maintenance`     — startup maintenance sweep (FIX-025);
+//   - `semantic-warmup` — eager ONNX load (FIX-034), non-fatal;
+//   - `auto-index`      — codebase auto-index kickoff, fully failure-isolated.
+// DB migrations + derived-schema setup stay INLINE in SQLiteStore.create()
+// because a usable schema is required to serve ANY request (see
+// services/startup-deferral.ts for the full rationale).
+const startupPasses: DeferredStartupPass[] = [
+	{
+		name: "vacuum",
+		run: () => {
+			const result = runStartupVacuum(db, VACUUM_ON_STARTUP);
+			if (result) {
+				logger.info("[Server] VACUUM_ON_STARTUP ran", {
+					changed: result.changed,
+					skipped: result.skipped,
+					reason: result.reason
+				});
+			}
+		}
+	}
+];
+if (runtimeCapabilities.profile === "full") {
+	if (EMBEDDING_LAZY_WARMUP) {
+		startupPasses.push({ name: "embedding-worker", run: () => embeddingWorker.start() });
+	}
+	startupPasses.push({ name: "maintenance", run: () => runtimeCapabilities.ensure("maintenance") });
+	// FIX-034: eager semantic (ONNX) warm-up, DEFERRED and NON-FATAL — a timeout
+	// or load failure logs one WARN and bumps a counter, but never blocks or
+	// aborts startup; the capability still loads lazily on first semantic use.
+	if (!EMBEDDING_LAZY_WARMUP) {
+		startupPasses.push({
+			name: "semantic-warmup",
+			run: () => scheduleDeferredSemanticWarmup(runtimeCapabilities).settled
+		});
+	}
+	startupPasses.push({
+		name: "auto-index",
+		run: () => kickOffStartupAutoIndex(db, runtimeCapabilities, { logTag: "[Server]" })
+	});
 }
+scheduleDeferredStartupPasses(startupPasses);
