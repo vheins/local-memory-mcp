@@ -2,54 +2,44 @@ import { VectorEntityKind, VectorStore, VectorResult } from "../types";
 import { SQLiteStore } from "./sqlite";
 import { logger } from "../utils/logger";
 import { cosineSimilarityArrays, decodeVector } from "../utils/vector";
-import { EMBEDDING_ONNX_THREADS } from "../utils/constants";
-import { currentEmbeddingModelVersion, EMBEDDING_MODEL_NAME } from "./embedding-model";
+import { currentEmbeddingModelVersion } from "./embedding-model";
+import {
+	applyOnnxThreadConfig,
+	createFeatureExtractor,
+	loadTransformersModule,
+	runFeatureExtraction,
+	type FeatureExtractionPipeline,
+	type OnnxThreadEnv
+} from "./embedding-runtime";
+import { WorkerPool, WorkerPoolError } from "../workers/pool";
+import { resolveEmbeddingWorkerPath, resolveEmbeddingPoolSize } from "../workers/resolve-embedding-worker";
+import type { EmbeddingWorkerRequest } from "../workers/embedding-worker-protocol";
 
-type FeatureExtractionPipeline = import("@xenova/transformers").FeatureExtractionPipeline;
-
-/**
- * Minimal structural view of the ONNX `env` object needed to cap its thread
- * pools (PERF-002). `@xenova/transformers` exposes it as
- * `env.backends.onnx` (typed as onnxruntime-common's `Env`), which carries
- * `wasm.numThreads` for the wasm backend and the native-session
- * `intraOpNumThreads` / `interOpNumThreads` knobs. The index signature keeps
- * the helper tolerant of the native runtime, where `intraOpNumThreads` /
- * `interOpNumThreads` are read straight off the env object (not declared on
- * `Env`) — we touch only the fields that are actually present.
- */
-export interface OnnxThreadEnv {
-	wasm?: { numThreads?: number };
-	intraOpNumThreads?: number;
-	interOpNumThreads?: number;
-	[name: string]: unknown;
-}
-
-/**
- * Apply the ONNX thread cap to a transformers `env.backends.onnx` object.
- *
- * Thread count affects only ORT's scheduling, never embedding values, so this
- * is output-neutral. Defensive by construction: it sets `wasm.numThreads` only
- * when a `wasm` object is present and only touches `interOpNumThreads` when the
- * native runtime already exposes that field, so it never throws on an env shape
- * that lacks either. Exported (pure) so it is directly unit-testable without
- * loading ONNX (see tests/vectors.threads.test.ts).
- */
-export function applyOnnxThreadConfig(env: OnnxThreadEnv, threads: number): void {
-	const n = Math.max(1, Math.floor(threads));
-	if (env.wasm && typeof env.wasm === "object") {
-		env.wasm.numThreads = n;
-	}
-	env.intraOpNumThreads = n;
-	if ("interOpNumThreads" in env) {
-		env.interOpNumThreads = 1;
-	}
-}
+// `applyOnnxThreadConfig` / `OnnxThreadEnv` now live in `./embedding-runtime`
+// (FEAT-DAEMON-002D) so the embedding worker can share them WITHOUT importing
+// SQLite. Re-exported here so existing importers — notably
+// tests/vectors.threads.test.ts — are unchanged.
+export { applyOnnxThreadConfig };
+export type { OnnxThreadEnv };
 
 export class RealVectorStore implements VectorStore {
 	private db: SQLiteStore;
 	private extractor: FeatureExtractionPipeline | null = null;
 	private extractorPromise: Promise<FeatureExtractionPipeline> | null = null;
 	private transformersModule: typeof import("@xenova/transformers") | null = null;
+	/**
+	 * Off-main-thread embedding pool (FEAT-DAEMON-002D). Lazily created on the
+	 * first `embed()` call so a store that never embeds a batch (e.g. a test
+	 * that only exercises `search`) never spawns a worker thread.
+	 */
+	private embeddingPool: WorkerPool | null = null;
+	/**
+	 * Set once the embedding pool is unusable (worker entry missing, pool closed,
+	 * or a non-retryable worker error). From then on `embed()` uses the
+	 * in-process extractor — the graceful fallback that guarantees backfill
+	 * correctness even when the worker path is broken.
+	 */
+	private embeddingPoolDisabled = false;
 
 	constructor(db: SQLiteStore) {
 		this.db = db;
@@ -63,22 +53,51 @@ export class RealVectorStore implements VectorStore {
 		await this.getExtractor();
 	}
 
+	/**
+	 * Gracefully stop the embedding worker pool (tests / process teardown).
+	 * Idempotent and safe to call when the pool was never created. After
+	 * `close()` the store permanently uses the in-process fallback.
+	 */
+	async close(): Promise<void> {
+		const pool = this.embeddingPool;
+		this.embeddingPool = null;
+		this.embeddingPoolDisabled = true;
+		if (pool) await pool.close({ mode: "cancel" });
+	}
+
+	/**
+	 * Lazily create (or reuse) the embedding worker pool, or `null` when the
+	 * worker path is unavailable (the caller then falls back to in-process ONNX).
+	 */
+	private getEmbeddingPool(): WorkerPool | null {
+		if (this.embeddingPoolDisabled) return null;
+		if (this.embeddingPool) return this.embeddingPool;
+		try {
+			this.embeddingPool = new WorkerPool({
+				workerPath: resolveEmbeddingWorkerPath(),
+				size: resolveEmbeddingPoolSize(),
+				// ONNX model load on first use can exceed any fixed ceiling (cold
+				// download), so the per-task timeout is DISABLED. The pool still
+				// detects a worker crash and respawns; the backfill is sequential,
+				// so the queue never accumulates.
+				taskTimeoutMs: 0
+			});
+		} catch (error) {
+			logger.warn("[Vectors] embedding worker unavailable — using in-process ONNX", {
+				error: String(error)
+			});
+			this.embeddingPoolDisabled = true;
+			return null;
+		}
+		return this.embeddingPool;
+	}
+
 	private async getTransformers(): Promise<typeof import("@xenova/transformers")> {
 		if (!this.transformersModule) {
-			// PERF-002: cap the native ONNX thread pool BEFORE the module is
-			// imported. onnxruntime-node loads its native binding (and reads
-			// OMP_NUM_THREADS) at import time, so setting it after the dynamic
-			// import below would be too late. Respect an operator-provided value.
-			if (!process.env.OMP_NUM_THREADS) {
-				process.env.OMP_NUM_THREADS = String(EMBEDDING_ONNX_THREADS);
-			}
-			this.transformersModule = await import("@xenova/transformers");
-			if (process.env.MCP_SERVER === "true") {
-				this.transformersModule.env.backends.onnx.logLevel = "error";
-			}
-			// Cover the wasm backend and the native session options too (the
-			// env var above only reaches the native OpenMP pool).
-			applyOnnxThreadConfig(this.transformersModule.env.backends.onnx, EMBEDDING_ONNX_THREADS);
+			// PERF-002 wiring (OMP_NUM_THREADS before import + ONNX thread cap) now
+			// lives in the shared `./embedding-runtime` module so the worker can
+			// reuse it verbatim.
+			this.transformersModule = await loadTransformersModule();
 		}
 		return this.transformersModule;
 	}
@@ -89,8 +108,7 @@ export class RealVectorStore implements VectorStore {
 
 		// PERF-004: load the pipeline from the shared model constant — this file
 		// no longer carries its own copy of the model name.
-		this.extractorPromise = this.getTransformers()
-			.then((tf) => tf.pipeline("feature-extraction", EMBEDDING_MODEL_NAME))
+		this.extractorPromise = createFeatureExtractor()
 			.then((extractor) => {
 				this.extractor = extractor;
 				return extractor;
@@ -102,26 +120,45 @@ export class RealVectorStore implements VectorStore {
 	}
 
 	/**
-	 * Batched embedding for the outbox worker (TASK-013). Runs a single ONNX
-	 * inference pass over all texts, sharing the process-wide extractor with
-	 * `upsert`/`search` so the model is loaded exactly once per process.
+	 * Batched embedding for the outbox worker (TASK-013).
+	 *
+	 * FEAT-DAEMON-002D: the single ONNX pass runs in a worker thread so a
+	 * backfill batch can never block the main event loop (the HTTP `initialize`
+	 * handshake in particular). The result is byte-identical to the in-process
+	 * path because the worker reuses the SAME `./embedding-runtime` code. If the
+	 * worker pool cannot be created or a non-retryable worker error occurs, the
+	 * method transparently falls back to in-process inference, so correctness is
+	 * never sacrificed for offloading.
+	 *
+	 * `upsert`/`search` intentionally stay in-process: they are single-text
+	 * passes on the request path and share the process-wide extractor, and
+	 * routing them through the pool would needlessly duplicate the model. Only
+	 * the backfill batch (`embed`) — the historical blocker — is offloaded.
 	 */
 	async embed(texts: string[]): Promise<number[][]> {
 		if (texts.length === 0) return [];
-		const extractor = await this.getExtractor();
-		const output = await extractor(texts, { pooling: "mean", normalize: true });
-		const data = output.data as Float32Array;
-		const dims = output.dims;
-		const perRow =
-			Array.isArray(dims) && dims.length > 1 && typeof dims[1] === "number"
-				? dims[1]
-				: Math.floor(data.length / texts.length);
-		const result: number[][] = [];
-		for (let i = 0; i < texts.length; i++) {
-			const start = i * perRow;
-			result.push(Array.from(data.subarray(start, start + perRow)));
+
+		const pool = this.getEmbeddingPool();
+		if (pool) {
+			try {
+				return await pool.run<EmbeddingWorkerRequest, number[][]>({ op: "embed", texts });
+			} catch (error) {
+				// Retryable faults (crash / timeout) are self-healing — the pool
+				// respawns its worker, so keep using it. A non-retryable fault
+				// (application error in the worker, or a closed pool) disables the
+				// pool permanently and degrades to in-process for this and all
+				// subsequent batches.
+				const retryable = error instanceof WorkerPoolError && error.retryable;
+				logger.warn("[Vectors] embedding worker task failed — falling back to in-process ONNX", {
+					retryable,
+					error: String(error)
+				});
+				if (!retryable) this.embeddingPoolDisabled = true;
+			}
 		}
-		return result;
+
+		const extractor = await this.getExtractor();
+		return runFeatureExtraction(extractor, texts);
 	}
 
 	async upsert(id: string, text: string, kind: VectorEntityKind = "memory"): Promise<void> {

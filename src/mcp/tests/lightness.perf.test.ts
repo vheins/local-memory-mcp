@@ -239,6 +239,9 @@ describe("PERF-008 — semantic recall regression guard", () => {
 					expect(result.recall).toBe(1);
 				}
 			} finally {
+				// FEAT-DAEMON-002D: `embed()` runs inference in a worker thread, so
+				// the pool must be closed or its worker would keep the process alive.
+				await vectors.close();
 				db.close();
 			}
 		},
