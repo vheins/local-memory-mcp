@@ -145,6 +145,7 @@ export class TreeSitterParserPool implements ParserPool {
 			// load never gets killed before the graceful in-parse timeout fires.
 			taskTimeoutMs: this.parseTimeoutMs > 0 ? this.parseTimeoutMs + PARSE_WORKER_TASK_SLACK_MS : 0
 		});
+		const pool = this.pool;
 
 		logger.debug("[ParserPool] Initializing worker pool", {
 			workers: this.concurrency,
@@ -152,18 +153,26 @@ export class TreeSitterParserPool implements ParserPool {
 		});
 
 		try {
-			await this.pool.run<ParserWorkerWarmupRequest, { warmed: true }>(
-				{ op: "warmup" },
-				{ timeoutMs: Math.max(this.parseTimeoutMs, PARSE_WORKER_WARMUP_TIMEOUT_MS) }
+			// Warm ALL workers (M3, FEAT-DAEMON-002 review): a single warmup task
+			// only instantiates WASM in ONE worker, so with the default 4 workers
+			// the other 3 paid the grammar-init cost lazily on the first real
+			// burst. Dispatching `poolSize` warmups lets the pool's FIFO queue
+			// assign exactly one to each worker (one in-flight task per worker),
+			// so every worker is ready before the first index batch. Bounded to
+			// the actual pool size.
+			const warmupTimeoutMs = Math.max(this.parseTimeoutMs, PARSE_WORKER_WARMUP_TIMEOUT_MS);
+			await Promise.all(
+				Array.from({ length: pool.poolSize }, () =>
+					pool.run<ParserWorkerWarmupRequest, { warmed: true }>({ op: "warmup" }, { timeoutMs: warmupTimeoutMs })
+				)
 			);
 		} catch (err) {
 			// A failed warm-up means the WASM runtime could not initialize in a
 			// worker (bad path, missing bootstrap, crashed worker). Surface it as
 			// a FatalError — matching the former in-process contract — and tear
 			// the pool down so a retry starts clean.
-			const pool = this.pool;
 			this.pool = null;
-			void pool?.close({ mode: "cancel" });
+			void pool.close({ mode: "cancel" });
 			const message = err instanceof Error ? err.message : String(err);
 			logger.error("[ParserPool] Worker pool warm-up failed", { error: message });
 			throw new FatalError(`WASM initialization failed: ${message}`, { operation: "Parser.init" });

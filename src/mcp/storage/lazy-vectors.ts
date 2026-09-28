@@ -29,6 +29,17 @@ export class CapabilityAwareVectorStore implements VectorStore {
 		await this.inner.remove(id, kind);
 	}
 
+	/**
+	 * Release the underlying store's process-owned resources (C1, FEAT-DAEMON-002
+	 * review). Delegates to the inner store's optional `close()` so a shutdown
+	 * that only knows about the capability-aware wrapper still tears down the
+	 * embedding worker pool. Idempotent.
+	 */
+	async close(): Promise<void> {
+		const closable = this.inner as VectorStore & { close?: () => Promise<void> };
+		if (typeof closable.close === "function") await closable.close();
+	}
+
 	async search(query: string, limit: number, repo?: string, kind?: VectorEntityKind): Promise<VectorResult[]> {
 		if (!(await this.capabilities.ensure("semantic"))) return [];
 		return this.inner.search(query, limit, repo, kind);

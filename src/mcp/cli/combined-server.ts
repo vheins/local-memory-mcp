@@ -50,6 +50,7 @@ import type { DeferredStartupPass } from "../services/startup-deferral";
 import { kickOffStartupAutoIndex } from "../services/startup-auto-index";
 import { EMBEDDING_LAZY_WARMUP, MCP_DAEMON_SESSION_IDLE_TTL_MS, VACUUM_ON_STARTUP } from "../utils/constants";
 import { getCodebaseParserPool } from "../codebase-index/parser/singleton";
+import { closeProcessPools } from "../services/shutdown-teardown";
 import { FileWatcher } from "../codebase-index/services/file-watcher";
 import { createExpressApp } from "../../dashboard/app";
 import type { ExpressPreRoute } from "../../dashboard/app";
@@ -360,6 +361,12 @@ export async function startCombinedServer(options: StartCombinedServerOptions = 
 		}
 		stopEngines();
 		await mcpHandler.close();
+		// C1 (FEAT-DAEMON-002 review): release the process-owned worker pools.
+		// `stopEngines()` only stops the file watcher; the shared parser pool and
+		// the embedding worker pool (behind the dashboard context's vector store)
+		// must be closed explicitly or their threads keep the event loop alive
+		// after the daemon is asked to stop. Idempotent + failure-contained.
+		await closeProcessPools({ vectors, logTag: "[Daemon]" });
 		const closed = new Promise<void>((resolve) => server.close(() => resolve()));
 		// Terminate lingering keep-alive / SSE connections so close() resolves.
 		server.closeAllConnections();

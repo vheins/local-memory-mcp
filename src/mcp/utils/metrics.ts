@@ -26,6 +26,12 @@ const MAX_SAMPLES = 1_000;
  */
 export const METRIC_SEMANTIC_WARMUP_FAILURES = "semantic_warmup_failures";
 export const METRIC_AUTOINDEX_FAILURES = "autoindex_failures";
+/**
+ * Counts the times a worker pool entered the crash-storm DISABLED state (H1,
+ * FEAT-DAEMON-002 review): N consecutive worker crashes within the window made
+ * the pool stop respawning and reject with a non-retryable error.
+ */
+export const METRIC_WORKER_POOL_CRASH_STORM = "worker_pool_crash_storm";
 
 export interface DurationStats {
 	/** Number of recorded samples. */
