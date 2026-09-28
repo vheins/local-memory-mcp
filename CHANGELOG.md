@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.51.0] — 2026-09-28
+
+Daemon responsiveness + worker-thread offload release (`FEAT-DAEMON-002`): the tree-sitter parse and ONNX embedding hot paths move off the main event loop into bounded `worker_threads` pools, the HTTP listener binds before the heavy startup passes, a dependency-free file-based config loader centralizes `.env` + `config.jsonc`, and the issue #110 roots-less-client / session-recovery gaps are closed. Also ships an epic-review hardening pass and routine dependency bumps.
+
+### Added
+
+- **Generic bounded worker-thread pool (`FEAT-DAEMON-002B`):** `src/mcp/workers/pool.ts` — a framework-agnostic bounded pool over `node:worker_threads` with a FIFO task queue, structured-clone request/response, per-task timeout, crash detection with automatic respawn, and graceful shutdown (`drain` | `cancel`). Sizing is explicit override > `WORKER_POOL_SIZE` (default 2) > clamped to `[1, os.availableParallelism()]`. A crashed worker rejects its in-flight task with a retryable `WorkerTaskCrashError` and respawns a replacement; a timeout raises `WorkerTaskTimeoutError` and replaces the stuck worker; `metrics()` exposes active/idle/queued counts.
+- **tree-sitter parsing offloaded to the worker pool (`FEAT-DAEMON-002C`):** added a bundled tree-sitter parser worker (`parser.worker.ts` + a dev tsx bootstrap + a runtime resolver that anchors on the project root) and rewired `parser-pool.ts` to dispatch `parser.parse()` to the pool instead of the main event loop. tsup bundles the worker for production; the process-wide parser singleton gains `closeCodebaseParserPool()`; a test asserts the worker parses byte-identical to the in-process path.
+- **ONNX embedding offloaded to a worker thread (`FEAT-DAEMON-002D`):** `src/mcp/storage/embedding-runtime.ts` centralizes the feature-extraction pass so the worker path (`embedding.worker.ts`) is byte-identical to the in-process path (same checkpoint, `pooling: "mean"`, `normalize: true`, same Float32 → Number conversion); `vectors.ts` dispatches `embed()` through the embedding worker pool with an in-process fallback. The pool is sized by `EMBEDDING_WORKER_POOL_SIZE`.
+- **File-based config loader (`FEAT-DAEMON-002A`):** `src/mcp/utils/config-file.ts` reads `<configDir>/config.jsonc` (JSONC — comments + trailing commas) then `<configDir>/.env` and merges them into `process.env` for keys not already set — dependency-free, missing/malformed files a silent no-op, secret values never logged. The generated bin runs the loader at the very top (before `utils/constants.ts` is evaluated) and `startDaemon` merges the config dir before forking. The config dir defaults to the platform-standard location (Linux `~/.config/local-memory-mcp`).
+- **Listener binds before heavy startup passes (`FEAT-DAEMON-002E`):** `services/startup-deferral.ts` + `services/startup-auto-index.ts` schedule the optional heavy startup passes (including the operator-opt-in inline `runStartupVacuum`) with `setImmediate` AFTER `server.listen(...)`, and isolate failures so a failed optional pass never aborts an already-ready server. Migrations and derived-schema setup deliberately stay inline (a usable schema is required to serve any request).
+- **Service env persisted from the config file (`FEAT-DAEMON-002F`):** `daemon install` writes an allowlisted set of non-secret perf/ops knobs (`SERVICE_ENV_ALLOWLIST`: pool/thread sizes, port, timeouts) into the systemd unit (`Environment=`) / launchd plist (`EnvironmentVariables`), plus `EnvironmentFile=-<configDir>/.env` on systemd so secrets stay in the mode-restricted file. launchd receives only allowlisted knobs — never secrets.
+- **`initialize`-latency perf regression guard (`FEAT-DAEMON-002G`):** a perf test boots the real combined daemon against a large synthetic repo and asserts the MCP `initialize` handshake stays answerable (100% HTTP 200; p95 < 3s tight bound, well below the 30s client timeout) while a forced full index AND the startup embedding backfill run concurrently, with a negative control that proves the harness can observe main-loop starvation.
+- **`FIX-110-A` — env-default owner/repo scope tier for roots-less clients:** a remote client that does not advertise MCP roots (e.g. Zed 1.21) now inserts a new tier after roots/session inference: explicit args > roots/session > `LOCAL_MEMORY_DEFAULT_OWNER`/`LOCAL_MEMORY_DEFAULT_REPO` > `GITHUB_REPOSITORY` > daemon cwd; the missing-scope error now enumerates the concrete options.
+- **`FIX-110-B` — daemon `WorkingDirectory` on install:** `daemon install` emits `WorkingDirectory=` (systemd) / `<key>WorkingDirectory</key>` (launchd), seeded from the install-time cwd (`--working-dir <path>`, falling back to `os.homedir()`), so a service-started daemon no longer inherits `/` as its CWD.
+- **`FIX-110-C` — session recovery without a client stall:** `MCP_DAEMON_SESSION_IDLE_TTL_MS` (2h default) makes idle evictions rarer, and stateless session recovery (default on, `MCP_HTTP_STATELESS_RECOVERY` escape hatch) serves a non-initialize request carrying an unknown/absent `mcp-session-id` via a fresh short-lived stateless transport instead of `404`/`400`; with recovery off the strict `404`/`400` bodies are preserved.
+- **Epic-review hardening (`FEAT-DAEMON-002` review):** the process-owned worker pools are now closed on both shutdown paths (`services/shutdown-teardown.ts`); warm-up dispatches one task per pool worker so ALL workers are ready before the first index batch; a crash-storm guard disables a pool after N consecutive crashes; and `.gitignore` discovery (`file-discovery.ts`) is fully async (`fg` + `fs.promises.readFile`) so a full index never blocks the event loop on the ignore scan.
+
+### Changed
+
+- **`CODEBASE_INDEX_WORKERS` now sizes a REAL worker-thread pool (`FEAT-DAEMON-002C`):** it was previously a semaphore slot count for in-process parsing; `resolveConcurrency` now returns the actual number of `worker_threads` spawned, applying the precedence explicit override > `CODEBASE_INDEX_WORKERS` (`0` = auto) > legacy `CODEBASE_INDEX_PARSE_CONCURRENCY` > default `4`, clamped to `[1, os.availableParallelism()]` via the shared `clampPoolSize`.
+- **Explicit config precedence (`FEAT-DAEMON-002A`):** values resolve as explicit env > `config.jsonc` > `.env` > built-in default; config-file values are applied only for keys not already set in `process.env`.
+- **Dependency and CI bumps:** vitest `4.1.11 → 5.0.1` (with `@vitest/coverage-v8` / `@fast-check/vitest` aligned and `clearMocks=false` pinned for vitest 5 import-time mock history, `FIX-115`), eslint `10.2.1 → 10.11.0`, `@typescript-eslint/parser` `8.59.0 → 8.70.1`, vite `8.0.16 → 8.3.0`, prettier `3.8.3 → 3.9.9`, `prettier-plugin-svelte` `3.5.1 → 4.1.1`, `@testing-library/jest-dom` `7.0.0 → 7.0.1`, esbuild `0.28.1 → 0.28.2`, and GitHub Actions `actions/checkout` → 7, `actions/setup-node` → 7, `actions/upload-artifact` → 7, `softprops/action-gh-release` → 3. Dependabot now ignores TypeScript major 7+ (`FIX-110-D`).
+
+### Fixed
+
+- **Daemon no longer starves the MCP `initialize` handshake during a large re-index (`FEAT-DAEMON-002C`/`002D`/`002E`):** moving tree-sitter parsing and ONNX embedding to worker threads and binding the listener before the heavy startup passes keeps the handshake answerable while a full index + embedding backfill run.
+- **Worker pools closed on shutdown (`FEAT-DAEMON-002` review):** the parser pool and the embedding worker pool are released on both the stdio/HTTP `shutdown()` and the daemon `close()` paths, so worker threads no longer keep the event loop alive after a graceful stop (no thread leak).
+- **Crash-storm backoff (`FEAT-DAEMON-002` review):** a worker that crashes deterministically at startup no longer triggers an unbounded crash→respawn loop — after 5 consecutive crashes within 30s the pool is disabled and subsequent tasks reject with a non-retryable `WorkerPoolDisabledError` (parser degrades per-file; the embedding store uses its in-process fallback).
+
 ## [0.50.0] — 2026-09-26
 
 Coordination-DX and daemon-stability release — a 16-fix sweep driven by live runtime logs (task/handoff/standard tool ergonomics, daemon transport stability, SQLite write contention, indexer noise), one feature (explicit opt-in task owner move), plus CI supply-chain hardening.
@@ -413,11 +443,11 @@ developer/contributor docs tree is indexed so it is searchable like source code.
 ### Added
 
 - **`.agents/**`dot-directory indexing** (TASK-459) — the codebase indexer now
-discovers files under`.agents` (dev/contributor/AI documentation) via an
-explicit allowlist second stream; every other dot-directory (`.git`, `.github`,
-`.opencode`, `.cache`, …) stays excluded. Covers all entry points (MCP tool,
-dashboard, CLI, startup auto-index, file watcher) since they all funnel through
-`discoverFiles`.
+  discovers files under`.agents` (dev/contributor/AI documentation) via an
+  explicit allowlist second stream; every other dot-directory (`.git`, `.github`,
+  `.opencode`, `.cache`, …) stays excluded. Covers all entry points (MCP tool,
+  dashboard, CLI, startup auto-index, file watcher) since they all funnel through
+  `discoverFiles`.
 - **`doc_comment` surfaced in all 5 `codebase-read` text formatters** (TASK-460) —
   TRACE (new `Doc:` line), FILE, SEARCH, ARCHITECTURE (new `Top Exports` doc
   block, ~120 chars), and CODE/content modes (enclosing-symbol doc hint via
