@@ -149,6 +149,29 @@ The dashboard is available at `http://127.0.0.1:3456` — same port, no extra pr
 | `daemon install`   | Register as a system service for auto-start on boot   |
 | `daemon uninstall` | Remove the system service                             |
 
+#### Persisted configuration (survives reboot)
+
+`daemon install` snapshots your tuning into the service definition so the daemon
+boots with the configured knobs after a reboot:
+
+- **systemd (Linux):** the unit imports `<configDir>/.env` via
+  `EnvironmentFile=-…` and writes non-secret perf knobs as `Environment=…` lines.
+- **launchd (macOS):** non-secret perf knobs are written into the
+  `EnvironmentVariables` dict (launchd has no `EnvironmentFile` equivalent).
+
+Values are read from the **same** config files the daemon itself loads at boot —
+`<configDir>/config.jsonc` then `<configDir>/.env` (JSONC/dotenv; `config.jsonc`
+wins). `configDir` defaults to `~/.config/local-memory-mcp`.
+
+> **Secrets are never copied into the service file in plaintext.** On systemd the
+> secret-bearing `.env` is referenced (not inlined); on all platforms the daemon
+> re-reads `<configDir>/.env` itself at boot, so keep secrets there and
+> mode-restrict it (`chmod 600`).
+
+> **Regeneration:** the service file is a snapshot. After editing
+> `config.jsonc`/`.env`, re-run `local-memory-mcp daemon install --force` (or
+> restart the installed service) for the changes to take effect.
+
 #### Environment variables
 
 | Variable                    | Default | Description                                    |

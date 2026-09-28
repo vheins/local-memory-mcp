@@ -27,6 +27,7 @@ import {
 	resolveDaemonDir,
 	resolveDaemonPaths,
 	resolveServiceCommand,
+	resolveServiceEnv,
 	startDaemon,
 	statusDaemon,
 	stopDaemon,
@@ -34,6 +35,7 @@ import {
 	uninstallDaemon,
 	writeDaemonPid,
 	LAUNCHD_LABEL,
+	SERVICE_ENV_ALLOWLIST,
 	SYSTEMD_UNIT_NAME,
 	WINDOWS_TASK_NAME,
 	type DaemonIo,
@@ -512,12 +514,13 @@ describe("daemon install/uninstall — binary resolution", () => {
 describe("daemon install — Linux systemd", () => {
 	it("writes the unit, reloads, enables, and logs success", () => {
 		const home = makeHome();
+		const paths = makePaths();
 		const { io, calls, lines } = fakeServiceIo("linux", home, {
 			available: ["systemctl"],
 			binaryPath: "/usr/local/bin/local-memory-mcp"
 		});
 
-		const result = installDaemon({ io, workingDir: "/projects/widget" });
+		const result = installDaemon({ io, paths, workingDir: "/projects/widget" });
 
 		expect(result).toEqual({
 			installed: true,
@@ -550,11 +553,12 @@ describe("daemon install — Linux systemd", () => {
 
 	it("overwrites when --force is given", () => {
 		const home = makeHome();
+		const paths = makePaths();
 		fs.mkdirSync(path.dirname(systemdUnitPath(home)), { recursive: true });
 		fs.writeFileSync(systemdUnitPath(home), "existing\n", "utf8");
 		const { io } = fakeServiceIo("linux", home, { available: ["systemctl"] });
 
-		const result = installDaemon({ io, force: true });
+		const result = installDaemon({ io, paths, force: true });
 
 		expect(result.installed).toBe(true);
 		expect(fs.readFileSync(systemdUnitPath(home), "utf8")).toContain("ExecStart=");
@@ -562,9 +566,10 @@ describe("daemon install — Linux systemd", () => {
 
 	it("prints a cron @reboot hint when systemctl is unavailable", () => {
 		const home = makeHome();
+		const paths = makePaths();
 		const { io, lines } = fakeServiceIo("linux", home, { binaryPath: "/usr/local/bin/local-memory-mcp" });
 
-		const result = installDaemon({ io });
+		const result = installDaemon({ io, paths });
 
 		expect(result.hint).toBe(true);
 		expect(result.installed).toBe(false);
@@ -574,12 +579,13 @@ describe("daemon install — Linux systemd", () => {
 
 	it("seeds WorkingDirectory from the install-time CWD by default (FIX-110-B)", () => {
 		const home = makeHome();
+		const paths = makePaths();
 		const { io } = fakeServiceIo("linux", home, {
 			available: ["systemctl"],
 			binaryPath: "/usr/local/bin/local-memory-mcp"
 		});
 
-		installDaemon({ io });
+		installDaemon({ io, paths });
 
 		const unit = fs.readFileSync(systemdUnitPath(home), "utf8");
 		// The test process CWD is the repo checkout (never "/"), so the default
@@ -798,5 +804,204 @@ describe("daemon install — unit/plist builders", () => {
 		const plist = buildLaunchdPlist({ program: "/usr/bin/node", args: ["daemon"] }, "/log/daemon.log", "/a&b");
 		expect(plist).toContain("<key>WorkingDirectory</key>");
 		expect(plist).toContain("<string>/a&amp;b</string>");
+	});
+});
+
+describe("daemon install — service env persistence (FEAT-DAEMON-002F)", () => {
+	/** Fresh config dir (mirrors a real `<configDir>`) for env-resolution tests. */
+	function makeConfigDir(): string {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lmc-cfg-"));
+		tempDirs.push(dir);
+		return dir;
+	}
+
+	describe("resolveServiceEnv", () => {
+		it("reads non-secret knobs from config.jsonc (allowlisted keys only)", () => {
+			const dir = makeConfigDir();
+			fs.writeFileSync(
+				path.join(dir, "config.jsonc"),
+				'{ "WORKER_POOL_SIZE": 6, "EMBEDDING_ONNX_THREADS": 4, "MCP_HTTP_PORT": 4000 }'
+			);
+
+			expect(resolveServiceEnv(dir)).toEqual({
+				WORKER_POOL_SIZE: "6",
+				EMBEDDING_ONNX_THREADS: "4",
+				MCP_HTTP_PORT: "4000"
+			});
+		});
+
+		it("reads non-secret knobs from .env and lets config.jsonc win", () => {
+			const dir = makeConfigDir();
+			fs.writeFileSync(path.join(dir, "config.jsonc"), '{ "WORKER_POOL_SIZE": 6 }');
+			fs.writeFileSync(path.join(dir, ".env"), "WORKER_POOL_SIZE=2\nEMBEDDING_WORKER_POOL_SIZE=3\n");
+
+			expect(resolveServiceEnv(dir)).toEqual({
+				WORKER_POOL_SIZE: "6",
+				EMBEDDING_WORKER_POOL_SIZE: "3"
+			});
+		});
+
+		it("EXCLUDES a secret key (not on the allowlist) — never surfaced", () => {
+			const dir = makeConfigDir();
+			fs.writeFileSync(path.join(dir, ".env"), "WORKER_POOL_SIZE=8\nGITHUB_TOKEN=ghp_supersecret\nAPI_KEY=abc123\n");
+
+			const env = resolveServiceEnv(dir);
+			expect(env).toEqual({ WORKER_POOL_SIZE: "8" });
+			expect(JSON.stringify(env)).not.toContain("supersecret");
+			expect(JSON.stringify(env)).not.toContain("abc123");
+			// The allowlist itself must not contain obvious secret-bearing names.
+			for (const key of SERVICE_ENV_ALLOWLIST) {
+				expect(key).not.toMatch(/TOKEN|SECRET|PASSWORD|API_KEY|CREDENTIAL/i);
+			}
+		});
+
+		it("returns {} when no config files exist (defaults apply, no crash)", () => {
+			expect(resolveServiceEnv(makeConfigDir())).toEqual({});
+		});
+
+		it("ignores a malformed config.jsonc without crashing", () => {
+			const dir = makeConfigDir();
+			fs.writeFileSync(path.join(dir, "config.jsonc"), "{ this is not json");
+			expect(resolveServiceEnv(dir)).toEqual({});
+		});
+
+		it("drops empty-string values", () => {
+			const dir = makeConfigDir();
+			fs.writeFileSync(path.join(dir, ".env"), "WORKER_POOL_SIZE=\n");
+			expect(resolveServiceEnv(dir)).toEqual({});
+		});
+	});
+
+	describe("buildSystemdUnit env block", () => {
+		it("emits EnvironmentFile= plus Environment= lines for resolved knobs", () => {
+			const unit = buildSystemdUnit({ program: "/usr/bin/node", args: ["daemon"] }, undefined, {
+				environmentFile: "/home/u/.config/local-memory-mcp/.env",
+				env: { WORKER_POOL_SIZE: "6", MCP_HTTP_PORT: "4000" }
+			});
+			expect(unit).toContain("EnvironmentFile=-/home/u/.config/local-memory-mcp/.env");
+			expect(unit).toContain("Environment=WORKER_POOL_SIZE=6");
+			expect(unit).toContain("Environment=MCP_HTTP_PORT=4000");
+		});
+
+		it("quotes an Environment value containing whitespace", () => {
+			const unit = buildSystemdUnit({ program: "/usr/bin/node", args: ["daemon"] }, undefined, {
+				env: { LOCAL_MEMORY_DEFAULT_REPO: "a b" }
+			});
+			expect(unit).toContain('Environment=LOCAL_MEMORY_DEFAULT_REPO="a b"');
+		});
+
+		it("omits the env block when not provided (back-compat)", () => {
+			const unit = buildSystemdUnit({ program: "/usr/bin/node", args: ["daemon"] });
+			expect(unit).not.toContain("Environment=");
+			expect(unit).not.toContain("EnvironmentFile=");
+		});
+
+		it("never writes a secret value into the unit (only the EnvironmentFile reference)", () => {
+			const dir = makeConfigDir();
+			fs.writeFileSync(path.join(dir, ".env"), "GITHUB_TOKEN=ghp_supersecret\nWORKER_POOL_SIZE=6\n");
+			const unit = buildSystemdUnit({ program: "/usr/bin/node", args: ["daemon"] }, undefined, {
+				environmentFile: path.join(dir, ".env"),
+				env: resolveServiceEnv(dir)
+			});
+			expect(unit).toContain("Environment=WORKER_POOL_SIZE=6");
+			expect(unit).not.toContain("supersecret");
+			expect(unit).not.toContain("GITHUB_TOKEN");
+		});
+	});
+
+	describe("buildLaunchdPlist env block", () => {
+		it("emits an EnvironmentVariables dict with the resolved knobs", () => {
+			const plist = buildLaunchdPlist({ program: "/usr/bin/node", args: ["daemon"] }, "/log/daemon.log", undefined, {
+				env: { WORKER_POOL_SIZE: "6", EMBEDDING_ONNX_THREADS: "4" }
+			});
+			expect(plist).toContain("<key>EnvironmentVariables</key>");
+			expect(plist).toContain("<key>WORKER_POOL_SIZE</key>");
+			expect(plist).toContain("<string>6</string>");
+			expect(plist).toContain("<key>EMBEDDING_ONNX_THREADS</key>");
+			expect(plist).toContain("<string>4</string>");
+		});
+
+		it("escapes XML in env keys and values", () => {
+			const plist = buildLaunchdPlist({ program: "/usr/bin/node", args: ["daemon"] }, "/log/daemon.log", undefined, {
+				env: { LOCAL_MEMORY_DEFAULT_REPO: "a&b" }
+			});
+			expect(plist).toContain("<string>a&amp;b</string>");
+		});
+
+		it("omits the EnvironmentVariables dict when empty (back-compat)", () => {
+			const plist = buildLaunchdPlist({ program: "/usr/bin/node", args: ["daemon"] }, "/log/daemon.log");
+			expect(plist).not.toContain("<key>EnvironmentVariables</key>");
+		});
+
+		it("never writes a secret value into the plist", () => {
+			const dir = makeConfigDir();
+			fs.writeFileSync(path.join(dir, ".env"), "GITHUB_TOKEN=ghp_supersecret\nWORKER_POOL_SIZE=6\n");
+			const plist = buildLaunchdPlist({ program: "/usr/bin/node", args: ["daemon"] }, "/log/daemon.log", undefined, {
+				env: resolveServiceEnv(dir)
+			});
+			expect(plist).toContain("<string>6</string>");
+			expect(plist).not.toContain("supersecret");
+			expect(plist).not.toContain("GITHUB_TOKEN");
+		});
+	});
+
+	describe("installDaemon integration — env persisted to the service file", () => {
+		it("writes resolved knobs + EnvironmentFile= into the systemd unit", () => {
+			const home = makeHome();
+			const paths = makePaths();
+			fs.writeFileSync(path.join(paths.dir, "config.jsonc"), '{ "WORKER_POOL_SIZE": 6 }');
+			fs.writeFileSync(path.join(paths.dir, ".env"), "GITHUB_TOKEN=ghp_supersecret\nEMBEDDING_ONNX_THREADS=4\n");
+			const { io } = fakeServiceIo("linux", home, {
+				available: ["systemctl"],
+				binaryPath: "/usr/local/bin/local-memory-mcp"
+			});
+
+			installDaemon({ io, paths });
+
+			const unit = fs.readFileSync(systemdUnitPath(home), "utf8");
+			expect(unit).toContain(`EnvironmentFile=-${path.join(paths.dir, ".env")}`);
+			expect(unit).toContain("Environment=WORKER_POOL_SIZE=6");
+			expect(unit).toContain("Environment=EMBEDDING_ONNX_THREADS=4");
+			expect(unit).not.toContain("supersecret");
+			expect(unit).not.toContain("GITHUB_TOKEN");
+		});
+
+		it("writes resolved knobs into the launchd plist (no secrets)", () => {
+			const home = makeHome();
+			const paths: DaemonPaths = {
+				dir: home,
+				pidFile: path.join(home, "daemon.pid"),
+				logFile: path.join(home, "daemon.log"),
+				lockFile: path.join(home, "daemon.lock")
+			};
+			fs.writeFileSync(path.join(home, ".env"), "WORKER_POOL_SIZE=6\nGITHUB_TOKEN=ghp_supersecret\n");
+			const { io } = fakeServiceIo("darwin", home, {
+				available: ["launchctl"],
+				binaryPath: "/opt/homebrew/bin/local-memory-mcp"
+			});
+
+			installDaemon({ io, paths });
+
+			const plist = fs.readFileSync(launchdPlistPath(home), "utf8");
+			expect(plist).toContain("<key>EnvironmentVariables</key>");
+			expect(plist).toContain("<key>WORKER_POOL_SIZE</key>");
+			expect(plist).toContain("<string>6</string>");
+			expect(plist).not.toContain("supersecret");
+			expect(plist).not.toContain("GITHUB_TOKEN");
+		});
+
+		it("still installs (defaults, no crash) when the config dir has no files", () => {
+			const home = makeHome();
+			const paths = makePaths();
+			const { io } = fakeServiceIo("linux", home, { available: ["systemctl"] });
+
+			const result = installDaemon({ io, paths });
+
+			expect(result.installed).toBe(true);
+			const unit = fs.readFileSync(systemdUnitPath(home), "utf8");
+			// EnvironmentFile= is still emitted (leading `-` tolerates the missing file).
+			expect(unit).toContain(`EnvironmentFile=-${path.join(paths.dir, ".env")}`);
+			expect(unit).not.toMatch(/^Environment=/m);
+		});
 	});
 });
