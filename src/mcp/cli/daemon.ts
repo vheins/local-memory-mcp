@@ -581,6 +581,22 @@ export function resolveServiceEnv(configDir: string): EnvMap {
 	return resolved;
 }
 
+/**
+ * Resolve the `PATH` the generated service should run with (FIX-129).
+ *
+ * A launchd/systemd job inherits only a minimal `PATH`, so the global shim
+ * whose shebang is `#!/usr/bin/env node` cannot resolve `node` (nvm/fnm/volta/
+ * asdf), exits 127, and crash-loops under KeepAlive/Restart. Seed the
+ * installing Node's own directory first, then the operator's shell `PATH`,
+ * then the platform defaults — deduped, in that order.
+ */
+export function servicePath(io: ServiceIo): string {
+	const delimiter = io.platform === "win32" ? ";" : ":";
+	const fromEnv = (process.env.PATH ?? "").split(delimiter).filter((entry) => entry.length > 0);
+	const entries = [path.dirname(io.execPath), ...fromEnv, "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+	return [...new Set(entries)].join(delimiter);
+}
+
 /** Render a single systemd `Environment=KEY=VALUE` assignment (quoted when needed). */
 function systemdEnvAssignment(key: string, value: string): string {
 	if (!/[\s"\\]/.test(value)) return `${key}=${value}`;
@@ -802,7 +818,9 @@ function installSystemd(io: ServiceIo, paths: DaemonPaths, force: boolean, worki
 	// mode-restricted file, never copied into the unit in plaintext).
 	const serviceEnv: ServiceEnvOptions = {
 		environmentFile: path.join(paths.dir, ".env"),
-		env: resolveServiceEnv(paths.dir)
+		// FIX-129: seed PATH first so the `#!/usr/bin/env node` shim resolves
+		// under systemd's minimal PATH; an allowlisted PATH would still win.
+		env: { PATH: servicePath(io), ...resolveServiceEnv(paths.dir) }
 	};
 
 	fs.mkdirSync(path.dirname(unitPath), { recursive: true });
@@ -854,7 +872,11 @@ function installLaunchd(io: ServiceIo, paths: DaemonPaths, force: boolean, worki
 	// secrets stay in `<configDir>/.env`, loaded by the daemon itself at boot.
 	fs.writeFileSync(
 		plistPath,
-		buildLaunchdPlist(command, paths.logFile, workingDir, { env: resolveServiceEnv(paths.dir) }),
+		buildLaunchdPlist(command, paths.logFile, workingDir, {
+			// FIX-129: seed PATH first so the `#!/usr/bin/env node` shim resolves
+			// under launchd's minimal PATH; an allowlisted PATH would still win.
+			env: { PATH: servicePath(io), ...resolveServiceEnv(paths.dir) }
+		}),
 		"utf8"
 	);
 	io.run("launchctl", ["load", "-w", plistPath]);

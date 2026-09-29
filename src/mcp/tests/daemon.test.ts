@@ -28,6 +28,7 @@ import {
 	resolveDaemonPaths,
 	resolveServiceCommand,
 	resolveServiceEnv,
+	servicePath,
 	startDaemon,
 	statusDaemon,
 	stopDaemon,
@@ -807,6 +808,63 @@ describe("daemon install — unit/plist builders", () => {
 	});
 });
 
+describe("daemon install — PATH seeding (FIX-129)", () => {
+	/** A deterministic ServiceIo with the installing Node under an nvm-style dir. */
+	function pathIo(platform: NodeJS.Platform): ServiceIo {
+		return { ...fakeServiceIo(platform, makeHome()).io, execPath: "/opt/nvm/bin/node" };
+	}
+
+	it("servicePath puts the installing node's dir first, dedupes, and appends platform defaults", () => {
+		const io = pathIo("linux");
+		const parts = servicePath(io).split(":");
+
+		expect(parts[0]).toBe("/opt/nvm/bin");
+		// Platform defaults are always present.
+		for (const dir of ["/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]) {
+			expect(parts).toContain(dir);
+		}
+		// Deduped, first-seen order preserved.
+		expect(new Set(parts).size).toBe(parts.length);
+		// The node dir appears exactly once even if the host PATH already has it.
+		expect(parts.filter((part) => part === "/opt/nvm/bin")).toHaveLength(1);
+	});
+
+	it("uses `;` as the delimiter on Windows", () => {
+		const io = pathIo("win32");
+		expect(servicePath(io)).toContain(";");
+		expect(servicePath(io).split(";")[0]).toBe("/opt/nvm/bin");
+	});
+
+	it("seeds a PATH entry into the launchd plist starting with the node dir", () => {
+		const io = pathIo("darwin");
+		const plist = buildLaunchdPlist({ program: "/usr/bin/node", args: ["daemon"] }, "/log/daemon.log", undefined, {
+			env: { PATH: servicePath(io) }
+		});
+
+		expect(plist).toContain("<key>EnvironmentVariables</key>");
+		expect(plist).toContain("<key>PATH</key>");
+		const match = plist.match(/<key>PATH<\/key>\s*<string>([^<]*)<\/string>/);
+		expect(match?.[1].startsWith(path.dirname(io.execPath))).toBe(true);
+	});
+
+	it("seeds an Environment=PATH= line into the systemd unit starting with the node dir", () => {
+		const io = pathIo("linux");
+		const unit = buildSystemdUnit({ program: "/usr/bin/node", args: ["daemon"] }, undefined, {
+			env: { PATH: servicePath(io) }
+		});
+
+		const line = unit.split("\n").find((entry) => entry.startsWith("Environment=PATH="));
+		expect(line).toBeDefined();
+		const value = line!.slice("Environment=PATH=".length);
+		expect(value.startsWith(path.dirname(io.execPath))).toBe(true);
+	});
+
+	it("omits the EnvironmentVariables dict from the plist when no env is seeded (back-compat)", () => {
+		const plist = buildLaunchdPlist({ program: "/usr/bin/node", args: ["daemon"] }, "/log/daemon.log", undefined, {});
+		expect(plist).not.toContain("<key>EnvironmentVariables</key>");
+	});
+});
+
 describe("daemon install — service env persistence (FEAT-DAEMON-002F)", () => {
 	/** Fresh config dir (mirrors a real `<configDir>`) for env-resolution tests. */
 	function makeConfigDir(): string {
@@ -1001,7 +1059,10 @@ describe("daemon install — service env persistence (FEAT-DAEMON-002F)", () => 
 			const unit = fs.readFileSync(systemdUnitPath(home), "utf8");
 			// EnvironmentFile= is still emitted (leading `-` tolerates the missing file).
 			expect(unit).toContain(`EnvironmentFile=-${path.join(paths.dir, ".env")}`);
-			expect(unit).not.toMatch(/^Environment=/m);
+			// FIX-129: PATH is always seeded; no other knob is emitted when the
+			// config dir has no files.
+			expect(unit).toMatch(/^Environment=PATH=/m);
+			expect(unit).not.toMatch(/^Environment=(?!PATH=)/m);
 		});
 	});
 });
