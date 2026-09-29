@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.51.1] — 2026-09-29
+
+Patch release fixing `daemon install` on macOS and Linux (issue #129).
+
+### Fixed
+
+- **`daemon install` seeds `PATH` into the service environment (`FIX-129`):** the launchd plist (`EnvironmentVariables`) and systemd unit (`Environment=`) now carry a `PATH` built from the installing Node's own directory first, then the operator's shell `PATH`, then the platform defaults (`/usr/local/bin`, `/usr/bin`, `/bin`, `/usr/sbin`, `/sbin`), deduplicated in that order. Previously a service started by launchd/systemd inherited only `/usr/bin:/bin:/usr/sbin:/sbin`, so a global shim whose shebang is `#!/usr/bin/env node` could not resolve `node` (nvm/fnm/volta/asdf installs), exited 127, and crash-looped under `KeepAlive`/`Restart=on-failure`. `resolveServiceCommand()` and the Windows Task Scheduler path are unchanged.
+
 ## [0.51.0] — 2026-09-28
 
 Daemon responsiveness + worker-thread offload release (`FEAT-DAEMON-002`): the tree-sitter parse and ONNX embedding hot paths move off the main event loop into bounded `worker_threads` pools, the HTTP listener binds before the heavy startup passes, a dependency-free file-based config loader centralizes `.env` + `config.jsonc`, and the issue #110 roots-less-client / session-recovery gaps are closed. Also ships an epic-review hardening pass and routine dependency bumps.
