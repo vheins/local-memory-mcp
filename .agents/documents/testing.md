@@ -38,14 +38,18 @@ Fixed facts (do not change without an ADR):
   via `vi.setConfig({ testTimeout })` — `src/mcp/tests/e2e.e2e.test.ts` sets
   `90_000` (REQUIRED for its full-toolchain flows).
 - Excludes: `dist/**`, `node_modules/**`, `src/dashboard/ui/node_modules/**`.
-- Suite groups: `test.projects` (Vitest 4) defines four named projects —
-  `unit` / `integration` / `e2e` / `perf` — each `extends: true` (inherits
-  pool/environment/excludes/timeouts) with `include` patterns that PARTITION
-  the taxonomy (no file runs twice). Each project uses a **positive-only**
-  `include` + `exclude` split — no `!` negations inside `include` (FIX-381,
-  see §6.2/§7.0). The root config is NOT a project itself; only global
-  options (`reporters`, `coverage`) apply at root. Run one group with
-  `--project <name>` (see §6).
+- Suite groups: `test.projects` (Vitest 4) defines five named projects —
+  `unit` / `integration` / `e2e` / `perf` / `onnx` — each `extends: true`
+  (inherits pool/environment/excludes/timeouts) with `include` patterns that
+  PARTITION the taxonomy (no file runs twice). Each project uses a
+  **positive-only** `include` + `exclude` split — no `!` negations inside
+  `include` (FIX-381, see §6.2/§7.0). The root config is NOT a project itself;
+  only global options (`reporters`, `coverage`) apply at root. Run one group
+  with `--project <name>` (see §6). The `onnx` project (REL-051) holds the
+  real-ONNX tests, runs them one file at a time (`fileParallelism: false`) and
+  in a later `sequence.groupOrder` bucket so its forks never overlap any other
+  test process — a native ORT abort under concurrent load broke the Release
+  gate (see §6.2).
 - Coverage: `provider: "v8"` with `reporter: text / text-summary / json / html`,
   `include: ["src/**/*.{ts,tsx}"]`, global floors
   `lines/statements/functions 70, branches 60`. Flag-gated (`--coverage`) until
@@ -219,17 +223,18 @@ These land in the SAME file; empty it or drop either → review fail.
 
 ## 6. Running Tests
 
-| Command                        | Effect                                                                           |
-| ------------------------------ | -------------------------------------------------------------------------------- |
-| `npm run test`                 | Full suite (all projects), run once (`vitest --run`)                             |
-| `npm run test:watch`           | Watch mode (`vitest`)                                                            |
-| `npm run test:unit`            | `vitest --run --project unit` — only `*.test.ts` (non-integration/e2e/perf)      |
-| `npm run test:integration`     | `vitest --run --project integration` — only `*.integration.test.ts`              |
-| `npm run test:e2e`             | `vitest --run --project e2e` — only `*.e2e.test.ts`                              |
-| `npm run test:perf`            | `vitest --run --project perf` — only `*.perf.test.ts`                            |
-| `npx vitest run <file-or-dir>` | Scoped run (any path from §2)                                                    |
-| `npm run test -- --coverage`   | Full suite with V8 coverage report (reporter: text / text-summary / json / html) |
-| `npm run type-check`           | `tsc` (src + `tsconfig.test.json` incl. `src/**/*.test.ts`) + `svelte-check`     |
+| Command                           | Effect                                                                           |
+| --------------------------------- | -------------------------------------------------------------------------------- |
+| `npm run test`                    | Full suite (all projects), run once (`vitest --run`)                             |
+| `npm run test:watch`              | Watch mode (`vitest`)                                                            |
+| `npm run test:unit`               | `vitest --run --project unit` — only `*.test.ts` (non-integration/e2e/perf)      |
+| `npm run test:integration`        | `vitest --run --project integration` — only `*.integration.test.ts`              |
+| `npm run test:e2e`                | `vitest --run --project e2e` — only `*.e2e.test.ts`                              |
+| `npm run test:perf`               | `vitest --run --project perf` — only `*.perf.test.ts`                            |
+| `npx vitest --run --project onnx` | `onnx` project — the real-ONNX tests, serialized (REL-051, see §6.2)             |
+| `npx vitest run <file-or-dir>`    | Scoped run (any path from §2)                                                    |
+| `npm run test -- --coverage`      | Full suite with V8 coverage report (reporter: text / text-summary / json / html) |
+| `npm run type-check`              | `tsc` (src + `tsconfig.test.json` incl. `src/**/*.test.ts`) + `svelte-check`     |
 
 ### 6.1 Scoped-run recipes (all verified to resolve)
 
@@ -273,6 +278,44 @@ Caveats:
   local runs. Keep `.tmp/` free of test files; it is not part of the suite.
   (Early FIX-381 reports of "165 files" included several such probes that
   have since been cleaned — the reproducible suite size is 157.)
+
+#### 6.2.1 `onnx` project — real-ONNX isolation + serialization (REL-051)
+
+The GitHub Release gate failed at `npm run test` with a vitest fork worker
+aborting via SIGABRT (a native ONNX/ORT abort, not a JS throw) while running
+`src/mcp/tests/vectors.worker-parity.test.ts`; the same suite passed on a
+parallel CI run, i.e. a memory/native flake. Four files load REAL ONNX and are
+partitioned into the `onnx` project (excluded from `unit`/`perf` so each runs
+exactly once):
+
+| File                               | Why real ONNX                                                 |
+| ---------------------------------- | ------------------------------------------------------------- |
+| `vectors.worker-parity.test.ts`    | `createFeatureExtractor` + worker `RealVectorStore.embed`     |
+| `embedding-smoke.test.ts`          | `RealVectorStore.initialize` / `upsert`                       |
+| `lightness.perf.test.ts`           | `RealVectorStore.initialize` / `embed`                        |
+| `daemon-init-latency.perf.test.ts` | boots a daemon whose embedding worker backfills via real ONNX |
+
+Files that MOCK `@xenova/transformers` or inject a fake extractor do NOT load
+ONNX and stay in `unit`: `vectors.threads.test.ts`,
+`embedding-model.version.test.ts`, `vectors.blob-format.test.ts`.
+
+Serialization mechanism (Vitest 5.0.1):
+
+- `test.poolOptions` / `forks.singleFork` were REMOVED in Vitest 4 (they now
+  log a deprecation and are ignored). The supported equivalent is the
+  **top-level `fileParallelism: false`**, which resolves to `maxWorkers: 1`.
+- Projects run in PARALLEL with each other by default, so `fileParallelism:
+false` alone only serializes files WITHIN the project. The `onnx` project
+  therefore also sets `sequence: { groupOrder: 1 }` while `unit`/`integration`/
+  `e2e`/`perf` stay at the default `0`. Groups run lowest→highest and each
+  group fully settles before the next starts, so the single `onnx` worker
+  begins only AFTER every other project has finished.
+
+Guarantee: no real-ONNX fork ever overlaps another test process, under a single
+`npm run test` (no workflow edit, no separate gate step). `--project onnx`
+still works standalone. The parity test keeps its "ONNX unavailable →
+`ctx.skip()`" behavior and adds a REL-051 memory safety valve (skip when free
+memory is critically low).
 
 ## 7. Coverage Policy
 

@@ -19,6 +19,7 @@
 
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { createTestStore, type SQLiteStore } from "../storage/sqlite";
 import { RealVectorStore } from "../storage/vectors";
@@ -33,8 +34,32 @@ const SAMPLE_TEXTS = [
 	"Alice deployed the retrieval service to production on Friday."
 ];
 
+/**
+ * REL-051 memory safety valve. This file loads a real ONNX/ORT session BOTH
+ * in-process AND inside the embedding worker, and a runner under memory
+ * pressure can abort the whole fork with SIGABRT (a native ORT abort, not a JS
+ * throw) — the failure that broke the Release gate. The primary fix is
+ * isolation + serialization (the `onnx` vitest project, `vitest.config.ts`);
+ * this is the belt-and-braces guard: when the host is already critically low on
+ * memory, SKIP (mirroring the ONNX-unavailable skip) instead of risking an
+ * abort. Set `EMBEDDING_PARITY_SKIP_MEMORY_GUARD=1` to force the check off.
+ */
+const MIN_FREE_MEMORY_BYTES = 256 * 1024 * 1024; // 256 MiB — genuinely critical
+
+function hasCriticalMemoryPressure(): boolean {
+	if (process.env.EMBEDDING_PARITY_SKIP_MEMORY_GUARD === "1") return false;
+	const free = os.freemem();
+	if (free >= MIN_FREE_MEMORY_BYTES) return false;
+	console.warn(
+		`[FEAT-DAEMON-002D] only ${(free / 1024 / 1024).toFixed(0)} MiB free (< ${MIN_FREE_MEMORY_BYTES / 1024 / 1024} MiB); ` +
+			"skipping real-ONNX parity test to avoid a native abort"
+	);
+	return true;
+}
+
 /** Load the in-process reference embeddings, or `null` when ONNX is unavailable. */
 async function loadInProcessReference(texts: string[]): Promise<number[][] | null> {
+	if (hasCriticalMemoryPressure()) return null;
 	try {
 		const extractor = await createFeatureExtractor();
 		return await runFeatureExtraction(extractor, texts);

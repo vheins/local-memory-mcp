@@ -93,6 +93,55 @@ export default defineConfig({
 		// `!`-negations (e.g. "!**/*.integration.test.ts") which broke
 		// coverage collection entirely; the split is now positive-only
 		// `include` + `exclude` with identical partition semantics.
+		//
+		// ------------------------------------------------------------------
+		// `onnx` project — ISOLATED + SERIALIZED real-ONNX tests (REL-051).
+		//
+		// WHY: the GitHub Release gate failed at `npm run test` because a
+		// vitest fork worker aborted with SIGABRT (a native ONNX/ORT abort)
+		// while running `vectors.worker-parity.test.ts` — the embedding
+		// worker-parity suite, which loads REAL ONNX BOTH in-process AND in a
+		// worker thread. The identical suite passed on a parallel CI run, so
+		// it is a memory/native flake: several forks each holding a live ORT
+		// session (plus tree-sitter WASM, better-sqlite3, sharp) can exhaust
+		// the runner and abort. The fix is to stop ANY real-ONNX file from
+		// running concurrently with other test processes.
+		//
+		// Files that load REAL ONNX (verified by source inspection):
+		//   - vectors.worker-parity.test.ts  (createFeatureExtractor +
+		//     runFeatureExtraction in-process, RealVectorStore.embed worker)
+		//   - embedding-smoke.test.ts        (RealVectorStore.initialize/upsert)
+		//   - lightness.perf.test.ts         (RealVectorStore.initialize/embed)
+		//   - daemon-init-latency.perf.test.ts (boots a daemon whose embedding
+		//     worker backfills with real ONNX)
+		// NOT moved (they MOCK `@xenova/transformers` or inject a fake
+		// extractor, so no real ONNX loads): vectors.threads.test.ts,
+		// embedding-model.version.test.ts, vectors.blob-format.test.ts.
+		//
+		// CONCURRENCY MODEL (Vitest 5.0.1 — verified in the installed source,
+		// `vitest/dist/chunks/index.DzobfTyw.js`):
+		//   * `test.poolOptions` (and therefore `forks.singleFork`) was
+		//     REMOVED in Vitest 4 — it now logs a deprecation and is ignored.
+		//     The supported way to run a project's files one-at-a-time is the
+		//     TOP-LEVEL `fileParallelism: false`, which resolves to
+		//     `maxWorkers: 1` (see `resolveTestConfig`).
+		//   * By default ALL projects run in PARALLEL with each other, so
+		//     `fileParallelism: false` alone would only serialize the files
+		//     WITHIN this project — it would NOT stop this project's single
+		//     worker from overlapping the unit/perf workers.
+		//   * `sequence.groupOrder` (supported at project level) buckets
+		//     projects into groups that run lowest→highest; each group's
+		//     `Promise.allSettled` fully settles before the next group starts
+		//     (`executeTests` → `for (const { tasks } of taskGroups)`).
+		//
+		// GUARANTEE ACHIEVED: with the default groupOrder (0) on
+		// unit/integration/e2e/perf and `groupOrder: 1` here, the `onnx`
+		// project's single serial worker starts only AFTER every other
+		// project has finished — no ONNX fork ever overlaps another test
+		// process. Empirically verified: the last non-ONNX file's END
+		// precedes the first ONNX file's START. This is a single
+		// `npm run test` solution — no workflow edit and no separate gate
+		// step is required. `--project onnx` still works standalone.
 		// ------------------------------------------------------------------
 		projects: [
 			{
@@ -100,7 +149,15 @@ export default defineConfig({
 				test: {
 					name: "unit",
 					include: ["**/*.test.ts"],
-					exclude: ["**/*.integration.test.ts", "**/*.e2e.test.ts", "**/*.perf.test.ts"]
+					exclude: [
+						"**/*.integration.test.ts",
+						"**/*.e2e.test.ts",
+						"**/*.perf.test.ts",
+						// Real-ONNX files are partitioned into the `onnx` project
+						// (below) so each file runs in exactly ONE project.
+						"**/vectors.worker-parity.test.ts",
+						"**/embedding-smoke.test.ts"
+					]
 				}
 			},
 			{
@@ -121,7 +178,29 @@ export default defineConfig({
 				extends: true,
 				test: {
 					name: "perf",
-					include: ["**/*.perf.test.ts"]
+					include: ["**/*.perf.test.ts"],
+					// Real-ONNX perf files are partitioned into the `onnx`
+					// project (below) so each file runs in exactly ONE project.
+					exclude: ["**/lightness.perf.test.ts", "**/daemon-init-latency.perf.test.ts"]
+				}
+			},
+			{
+				extends: true,
+				test: {
+					name: "onnx",
+					// POSITIVE-ONLY includes (FIX-381: no `!` negations).
+					include: [
+						"**/vectors.worker-parity.test.ts",
+						"**/embedding-smoke.test.ts",
+						"**/lightness.perf.test.ts",
+						"**/daemon-init-latency.perf.test.ts"
+					],
+					// One file at a time (Vitest 5: replaces the removed
+					// `poolOptions.forks.singleFork`).
+					fileParallelism: false,
+					// Run AFTER every default-group (0) project so no ONNX fork
+					// overlaps any other test process. See the header comment.
+					sequence: { groupOrder: 1 }
 				}
 			}
 		]

@@ -106,7 +106,12 @@ describe("readResource memory://memories", () => {
 			),
 			{ numRuns: 50 }
 		);
-	}, 15000);
+		// REL-051: raised from 15000ms. This property creates a fresh in-memory
+		// SQLite store per run (50 runs) and flaked with a timeout under
+		// parallel load (observed during the 0.49.0 gate as well as the 0.51.0
+		// Release gate). The assertion is unchanged; only the wall-clock budget
+		// is widened to absorb scheduling contention.
+	}, 60_000);
 
 	it("Property 19 (no filter): returns entries from all repos", async () => {
 		await fc.assert(
@@ -131,7 +136,12 @@ describe("readResource memory://memories", () => {
 			),
 			{ numRuns: 100 }
 		);
-	});
+		// REL-051: explicit 60s budget. This property creates a fresh
+		// in-memory SQLite store per run (100 runs) and flaked with a timeout
+		// under full parallel load (observed in a clean `--project unit` run).
+		// The assertion is unchanged; only the wall-clock budget is widened to
+		// absorb scheduling contention.
+	}, 60_000);
 });
 
 describe("MCP resource templates and session resources", () => {

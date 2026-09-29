@@ -161,7 +161,12 @@ describe("Property 7: Pagination non-overlapping", () => {
 			),
 			{ numRuns: 50 }
 		);
-	}, 15000);
+		// REL-051: raised from 15000ms. Each run constructs a fresh in-memory
+		// SQLite store (re-running all migrations) and inserts up to 40 rows;
+		// the property took ~9s in isolation and flaked past 15s under full
+		// parallel load (observed in a clean `--project unit` run). The
+		// assertion is unchanged; only the wall-clock budget is widened.
+	}, 60_000);
 });
 
 describe("Property 8: TTL stores correct expires_at", () => {

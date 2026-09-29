@@ -211,7 +211,13 @@ describe("CodebaseIndexService — Performance", () => {
 		// Backdate every file's mtime to well before last_indexed_at so the
 		// planner's mtime pre-filter proves content unchanged WITHOUT a read
 		// (issue #60 — incremental indexing via mtime delta, fast-path).
-		const backdate = new Date(Date.now() - 10_000); // 10s before now
+		//
+		// REL-051: a 60s margin (was 10s). The first index above is bounded by
+		// MAX_DURATION_MS (10s), so the whole first pass finishes <10s after
+		// "now"; backdating by 60s guarantees every file's mtime is strictly
+		// BEFORE last_indexed_at even under heavy parallel load, which is what
+		// the mtime fast-path (and the parsedFiles===0 assertion) depends on.
+		const backdate = new Date(Date.now() - 60_000); // 60s before now (REL-051)
 		for (let i = 0; i < TARGET_FILE_COUNT; i++) {
 			const dir = path.join(repoPath, `dir-${Math.floor(i / 100)}`);
 			fs.utimesSync(path.join(dir, `file-${i}.ts`), backdate, backdate);
