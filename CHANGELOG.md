@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.0] — 2026-10-03
+
+Owner-scope integrity release (`FIX-OWNER-CODEBASE`): codebase-index→KG rows no longer lose their owner, and `memories` gains the `(owner, repo, code)` uniqueness constraint that `tasks` has had since v2 — closing the hole that let an out-of-band owner merge produce `MEM-001`×9 in `(vheins, favori-app)` and strand every later memory behind `getByCode`.
+
+### Fixed
+
+- **Codebase→KG rows no longer lose their owner scope (`FIX-OWNER-CODEBASE`):** the codebase-index → knowledge-graph enqueue used to hardcode `owner: ""` on every symbol/relation job (a leftover from when `codebase_symbols` had no owner column), so entities, relations, observations, and action_log rows derived from an index sweep were written with an empty owner — untraceable to the indexing scope and, for `favori-app`, repeatedly re-created after the 2026-10-03 owner-merge repair. `owner` is now threaded end-to-end: the `codebase-index` tool passes the caller's `owner` into `indexRepository`, it flows through `IndexOptions` → `ParsePipelineOptions`/`PipelineContext` → `WriteBaseContext` → `enqueueCodebaseSymbols` → `codebaseSymbolJobPayload`, and the file watcher captures the owner at `registerRepo` time so watcher-triggered re-indexes stay scoped. `logToolAction` at both the `tools/index.ts` and `router.ts` call sites now passes the resolved `owner` too. Callers that genuinely have no owner (e.g. a rootless CLI index) still fall back to `""`, preserving the historical behavior.
+
+### Added
+
+- **Migration v40 `memories-code-owner-repo-unique` (`FIX-OWNER-CODEBASE`):** `memories` now carries `UNIQUE (owner, repo, code)`, matching the `tasks` constraint that has existed since v2. `memories.code` is allocated per scope by `generateNextCode` and probed by `resolveEntityCode`, but nothing at the storage layer prevented a duplicate — which is how an out-of-band owner-merge produced `MEM-001`×9 in `(vheins, favori-app)` and left every later memory unreachable via `getByCode` (it returns the oldest row). The migration is **conditional**: it probes for duplicate groups first and, when any remain, logs a warning and skips rather than aborting the migration transaction (a `CREATE UNIQUE INDEX` failure would roll back and brick daemon startup). NULL/blank codes are exempt. Idempotent via `CREATE UNIQUE INDEX IF NOT EXISTS`.
+
 ## [0.51.1] — 2026-09-29
 
 Patch release fixing `daemon install` on macOS and Linux (issue #129).
