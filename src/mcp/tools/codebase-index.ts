@@ -48,6 +48,7 @@ export async function handleCodebaseIndexRepository(
 
 	try {
 		const result = await service.indexRepository(repo, resolvedPath, {
+			owner: validated.owner,
 			force: validated.force,
 			includeGlobs: validated.includeGlobs,
 			excludeGlobs: validated.excludeGlobs
@@ -57,7 +58,9 @@ export async function handleCodebaseIndexRepository(
 		// repo stays fresh after this build. Idempotent; in the dashboard
 		// process (which imports this handler too) the entry is a harmless
 		// no-op — the watcher loop only runs in the MCP server process.
-		registerRepo(repo, resolvedPath);
+		// The owner is captured so watcher-triggered re-indexes keep the
+		// codebase→KG enqueue scoped (FIX-OWNER-CODEBASE).
+		registerRepo(repo, resolvedPath, validated.owner);
 		const capabilities = getRuntimeCapabilities();
 		capabilities.markReady("indexing");
 		void capabilities.ensure("watcher");

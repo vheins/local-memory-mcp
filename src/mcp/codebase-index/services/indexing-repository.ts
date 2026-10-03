@@ -59,6 +59,13 @@ export interface CodebaseIndexService {
 export interface IndexOptions {
 	/** If true, re-parse all files regardless of checksum match (default: false). */
 	force?: boolean;
+	/**
+	 * Scope owner for the codebase→KG enqueue (FIX-OWNER-CODEBASE). Threaded
+	 * from the tool/watcher caller so the KG rows derived from this index carry
+	 * the caller's owner instead of "". Empty/undefined falls back to the
+	 * historical owner-less behavior.
+	 */
+	owner?: string;
 	/** Include-only glob patterns passed to FileDiscovery. */
 	includeGlobs?: string[];
 	/** Extra exclude glob patterns passed to FileDiscovery. */
@@ -223,9 +230,10 @@ export async function performIndexRepository(
 		// Rename transfers and stale cleanup run once, after all parse batches.
 		// Renamed paths never enter fileInserts (skipped at decision time), so
 		// their transferred symbols are never deleted by a later parse flush.
-		await applyRenames({ db, repo, batchSize, options }, renameMap);
+		await applyRenames({ db, repo, owner: options.owner, batchSize, options }, renameMap);
 		const dbWriteErrors =
-			pipeline.dbWriteErrors + (await cleanStaleFiles({ db, repo, batchSize, options }, stalePaths));
+			pipeline.dbWriteErrors +
+			(await cleanStaleFiles({ db, repo, owner: options.owner, batchSize, options }, stalePaths));
 
 		// ── Build final report ───────────────────────────────
 		const durationMs = Math.round(performance.now() - startTime);

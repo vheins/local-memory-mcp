@@ -142,7 +142,10 @@ export async function applyJob(
 		// writer mirrors saveStandardRelations — it re-reads the file's
 		// symbols + reference edges from codebase_symbols/codebase_references
 		// (the latest committed state; the payload snapshot gates dedup).
-		// owner is "" (codebase_symbols has no owner column).
+		// `owner` is threaded from the index caller through the queue payload
+		// (FIX-OWNER-CODEBASE): codebase_symbols has no owner column, but the
+		// KG rows written here DO carry one, so it must come from the payload
+		// rather than being hardcoded to "".
 		await saveExtractions(kgContent, title, owner, repo, store, "codebase");
 		await saveCodebaseRelations({ filePath: title, owner, repo }, store);
 	} else {

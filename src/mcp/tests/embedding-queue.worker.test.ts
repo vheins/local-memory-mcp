@@ -636,3 +636,67 @@ describe("EmbeddingWorker — SQLITE_BUSY is never a job failure (TASK-457 anti-
 		expect(worker.getStats().failed).toBe(0);
 	});
 });
+
+describe("EmbeddingWorker — codebase owner threading (FIX-OWNER-CODEBASE)", () => {
+	let db: SQLiteStore;
+	let worker: EmbeddingWorker;
+
+	beforeEach(async () => {
+		db = await createTestStore();
+		worker = makeWorker(db);
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	it("threads the caller's owner into the codebase KG rows instead of hardcoding \"\"", async () => {
+		const FILE = "src/order.ts";
+		const entityId = codebaseEntityId(REPO, FILE);
+		db.codebaseFiles.upsertFile({ repo: REPO, file_path: FILE, language: "typescript" });
+		db.codebaseSymbols.bulkUpsertSymbols(makeCodebaseSymbols(FILE));
+		db.codebaseReferences.bulkUpsertReferences(REPO, makeCodebaseRefs(FILE));
+
+		expect(
+			enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE), makeCodebaseRefs(FILE), "vheins")
+		).toBe(true);
+		await worker.runOnce();
+
+		// Every KG row the codebase job writes carries the threaded owner —
+		// this is the regression net for the "" that used to be hardcoded
+		// (and kept re-creating owner='' rows after the favori-app repair).
+		const ownerless = countRows(
+			db,
+			"SELECT COUNT(*) as cnt FROM entities WHERE repo = ? AND name IN ('OrderService', 'computeTotal') AND owner != 'vheins'",
+			[REPO]
+		);
+		expect(ownerless).toBe(0);
+		expect(
+			countRows(db, "SELECT COUNT(*) as cnt FROM relations WHERE repo = ? AND owner != 'vheins'", [REPO])
+		).toBe(0);
+		expect(
+			countRows(db, "SELECT COUNT(*) as cnt FROM observations WHERE repo = ? AND owner != 'vheins'", [REPO])
+		).toBe(0);
+		// And at least one row of each kind WAS written with the owner (guards
+		// against a vacuous pass where nothing was written at all).
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM entities WHERE repo = ? AND owner = 'vheins'", [REPO])).toBeGreaterThan(0);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM relations WHERE repo = ? AND owner = 'vheins'", [REPO])).toBeGreaterThan(0);
+		expect(getJob(db, "codebase_symbol", entityId)!.status).toBe("done");
+	});
+
+	it("still falls back to \"\" when the caller has no owner (rootless CLI index)", async () => {
+		const FILE = "src/order.ts";
+		const entityId = codebaseEntityId(REPO, FILE);
+		db.codebaseFiles.upsertFile({ repo: REPO, file_path: FILE, language: "typescript" });
+		db.codebaseSymbols.bulkUpsertSymbols(makeCodebaseSymbols(FILE));
+		db.codebaseReferences.bulkUpsertReferences(REPO, makeCodebaseRefs(FILE));
+
+		expect(enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE), makeCodebaseRefs(FILE))).toBe(true);
+		await worker.runOnce();
+
+		expect(
+			countRows(db, "SELECT COUNT(*) as cnt FROM entities WHERE repo = ? AND owner = '' AND name = 'OrderService'", [REPO])
+		).toBe(1);
+		expect(getJob(db, "codebase_symbol", entityId)!.status).toBe("done");
+	});
+});

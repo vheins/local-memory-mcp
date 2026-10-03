@@ -303,7 +303,7 @@ export function registerAllTools(
 						sessionId: session.sessionId
 					});
 					const errorResponse = toErrorResponse(err);
-					logToolAction(store, toolName, normalizedArgs, errorResponse);
+					logToolAction(store, toolName, normalizedArgs, errorResponse, String(normalizedArgs.owner ?? ""));
 					return toCallToolResult(errorResponse);
 				}
 
@@ -326,7 +326,7 @@ export function registerAllTools(
 				// (OPT-PERF-05). Read tools skip the DB write entirely; the gate
 				// lives in logToolAction (utils/action-log.ts) over
 				// ACTION_LOG_TOOLS (utils/tool-plumbing.ts), shared with router.ts.
-				logToolAction(store, toolName, normalizedArgs, result);
+				logToolAction(store, toolName, normalizedArgs, result, String(normalizedArgs.owner ?? ""));
 				reuseTelemetry.recordTool({
 					owner: String(normalizedArgs.owner ?? ""),
 					repo: String(normalizedArgs.repo ?? "unknown"),

@@ -67,6 +67,13 @@ import { autoIndexIfStale } from "./indexing-service";
 export interface WatchedRepoEntry {
 	/** Absolute, resolved path to the repo on disk. */
 	repoPath: string;
+	/**
+	 * Scope owner captured at registration time (FIX-OWNER-CODEBASE) so
+	 * watcher-triggered re-indexes forward it to the codebase→KG enqueue
+	 * instead of writing owner-less rows. Empty when the registering caller
+	 * could not resolve one.
+	 */
+	owner: string;
 	/** Epoch ms when the repo was registered with the watcher. */
 	registeredAt: number;
 	/** Epoch ms of the last trigger dispatch — the in-memory re-entry cap. */
@@ -87,17 +94,17 @@ const watchedRepos = new Map<string, WatchedRepoEntry>();
  * the path (and only when the path actually changed). Safe to call from any
  * process; processes that never start the loop just hold a harmless entry.
  */
-export function registerRepo(repo: string, repoPath: string): void {
+export function registerRepo(repo: string, repoPath: string, owner = ""): void {
 	const resolved = path.resolve(repoPath);
 	const existing = watchedRepos.get(repo);
-	if (existing && existing.repoPath === resolved) {
+	if (existing && existing.repoPath === resolved && existing.owner === owner) {
 		return;
 	}
 	// lastTriggeredAt starts at registration time so a freshly registered repo
 	// is not immediately re-triggered by the next sweep (the tool call that
 	// registered it just indexed it).
 	const now = Date.now();
-	watchedRepos.set(repo, { repoPath: resolved, registeredAt: now, lastTriggeredAt: now });
+	watchedRepos.set(repo, { repoPath: resolved, owner, registeredAt: now, lastTriggeredAt: now });
 }
 
 /** Remove a repo from the watcher registry (e.g. repo deleted entirely). */
@@ -214,7 +221,7 @@ export async function sweepWatchedRepos(
 		//    silently skip every watcher-triggered run. Advancing
 		//    lastTriggeredAt on dispatch means the cap throttles even when the
 		//    run parses zero files (nothing advances last_indexed_at).
-		const result = await autoIndexIfStale(repo, entry.repoPath, db, parserPool, { ttlMs });
+		const result = await autoIndexIfStale(repo, entry.repoPath, db, parserPool, { ttlMs, owner: entry.owner });
 		if (result.status === "started") {
 			entry.lastTriggeredAt = now;
 			outcome.triggered.push(repo);

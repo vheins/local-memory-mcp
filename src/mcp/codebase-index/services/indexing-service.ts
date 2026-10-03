@@ -41,6 +41,12 @@ export { clearIndexingRepos } from "./indexing-cache";
 export interface AutoIndexOptions {
 	/** Custom TTL in ms. Overrides CODEBASE_AUTO_INDEX_TTL env var. */
 	ttlMs?: number;
+	/**
+	 * Scope owner forwarded to the codebase→KG enqueue (FIX-OWNER-CODEBASE).
+	 * The watcher passes the owner captured at registration; empty/undefined
+	 * preserves the historical owner-less behavior.
+	 */
+	owner?: string;
 }
 
 export interface AutoIndexResult {
@@ -120,7 +126,7 @@ export async function autoIndexIfStale(
 	// auto-index-guard.ts.
 	try {
 		const service = createCodebaseIndexService(db, parserPool);
-		void containIndexRepositoryFailure(repo, service.indexRepository(repo, repoPath));
+		void containIndexRepositoryFailure(repo, service.indexRepository(repo, repoPath, { owner: options?.owner }));
 	} catch (err) {
 		containIndexRepositoryFailure(repo, Promise.reject(err));
 	}

@@ -62,14 +62,15 @@ export function enqueueCodebaseSymbols(
 	repo: string,
 	filePath: string,
 	symbols: CodebaseSymbolInsert[],
-	refs?: CodebaseReferenceInsert[]
+	refs?: CodebaseReferenceInsert[],
+	owner = ""
 ): boolean {
 	return enqueueEmbeddingJob(store, {
 		kind: "codebase_symbol",
 		id: codebaseEntityId(repo, filePath),
 		repo,
-		owner: "",
-		payload: codebaseSymbolJobPayload({ repo, filePath, symbols, refs })
+		owner,
+		payload: codebaseSymbolJobPayload({ repo, filePath, symbols, refs, owner })
 	});
 }
 

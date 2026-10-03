@@ -64,6 +64,12 @@ export interface ExistingFileEntry {
 export interface ParsePipelineOptions {
 	/** If true, re-parse all files regardless of checksum match (default: false). */
 	force?: boolean;
+	/**
+	 * Scope owner forwarded to the codebase→KG enqueue (FIX-OWNER-CODEBASE).
+	 * Threaded from IndexOptions.owner; empty/undefined preserves the
+	 * historical owner-less behavior.
+	 */
+	owner?: string;
 	/** Number of files to process per transaction batch (default: 50). */
 	batchSize?: number;
 	/** Progress callback emitted at each stage. */
@@ -129,6 +135,12 @@ export interface PipelineContext {
 	db: SQLiteStore;
 	parserPool: ParserPool;
 	repo: string;
+	/**
+	 * Scope owner forwarded to the codebase→KG enqueue (FIX-OWNER-CODEBASE).
+	 * Sourced from `options.owner`; empty/undefined preserves the historical
+	 * owner-less behavior.
+	 */
+	owner?: string;
 	existingMap: Map<string, ExistingFileEntry>;
 	checksumToOldPaths: Map<string, string[]>;
 	renameMap: Map<string, string>;

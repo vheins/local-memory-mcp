@@ -39,6 +39,8 @@ export interface WriteResult {
 export interface WriteContext {
 	db: SQLiteStore;
 	repo: string;
+	/** Scope owner forwarded to codebase→KG enqueue (FIX-OWNER-CODEBASE). */
+	owner?: string;
 	fileInserts: CodebaseFileInsert[];
 	symbolInserts: CodebaseSymbolInsert[];
 	referenceInserts?: CodebaseReferenceInsert[];
@@ -62,6 +64,12 @@ export interface WriteContext {
 export interface WriteBaseContext {
 	db: SQLiteStore;
 	repo: string;
+	/**
+	 * Scope owner threaded from the index caller and forwarded to the
+	 * codebase→KG enqueue (FIX-OWNER-CODEBASE). Empty/undefined falls back to
+	 * the historical owner-less behavior.
+	 */
+	owner?: string;
 	batchSize: number;
 	options: { onProgress?: (progress: IndexProgress) => void };
 }
@@ -102,7 +110,7 @@ function emitProgress(options: { onProgress?: (progress: IndexProgress) => void 
  * @returns Number of DB write errors (always 0 — failures throw).
  */
 export async function applyRenames(base: WriteBaseContext, renameMap: Map<string, string>): Promise<number> {
-	const { db, repo } = base;
+	const { db, repo, owner } = base;
 
 	if (renameMap.size === 0) return 0;
 
@@ -159,7 +167,7 @@ export async function applyRenames(base: WriteBaseContext, renameMap: Map<string
 					import_kind: r.import_kind
 				}));
 				if (symbols.length > 0 || refs.length > 0) {
-					enqueueCodebaseSymbols(db, repo, newPath, symbols, refs);
+					enqueueCodebaseSymbols(db, repo, newPath, symbols, refs, owner);
 				}
 				db.explorationObservations.refreshForFiles(repo, [newPath]);
 			}
@@ -209,7 +217,7 @@ export async function writeParseBatch(
 	renameMap: Map<string, string>,
 	referenceInserts: CodebaseReferenceInsert[] = []
 ): Promise<number> {
-	const { db, repo, batchSize, options } = base;
+	const { db, repo, owner, batchSize, options } = base;
 	let dbWriteErrors = 0;
 
 	// ── 2. Upsert files in batches within transaction ─
@@ -328,7 +336,7 @@ export async function writeParseBatch(
 								const symbols = symbolsByFile.get(fp);
 								const refs = refsByFile.get(fp);
 								if ((symbols && symbols.length > 0) || (refs && refs.length > 0)) {
-									enqueueCodebaseSymbols(db, repo, fp, symbols ?? [], refs ?? []);
+									enqueueCodebaseSymbols(db, repo, fp, symbols ?? [], refs ?? [], owner);
 								}
 							}
 							db.explorationObservations.refreshForFiles(repo, [...reindexedPaths]);

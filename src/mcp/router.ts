@@ -217,7 +217,7 @@ export function createRouter(
 				error: String(err)
 			});
 			const errorResponse = toErrorResponse(err);
-			logToolAction(db, toolName, args, errorResponse);
+			logToolAction(db, toolName, args, errorResponse, String(args.owner ?? ""));
 			return errorResponse;
 		}
 
@@ -230,7 +230,7 @@ export function createRouter(
 			// (OPT-PERF-05) — read tools emit no action_log write — then derives
 			// metadata from result.structuredContent and logs under the
 			// no-file-lock policy.
-			logToolAction(db, toolName, args, result);
+			logToolAction(db, toolName, args, result, String(args.owner ?? ""));
 			const session = getSessionContext?.();
 			reuseTelemetry.recordTool({
 				owner: String(args.owner ?? ""),

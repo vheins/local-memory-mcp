@@ -66,6 +66,7 @@ export async function runParsePipeline(
 		db,
 		parserPool,
 		repo,
+		owner: options.owner,
 		existingMap,
 		checksumToOldPaths,
 		renameMap,

@@ -150,7 +150,13 @@ export async function persistParseBatch(
 	// ── Flush this batch's inserts (bounded memory — Fix #3a) ──
 	if (batch.fileInserts.length > 0) {
 		run.dbWriteErrors += await writeParseBatch(
-			{ db: ctx.db, repo: ctx.repo, batchSize: ctx.options.batchSize ?? DEFAULT_BATCH_SIZE, options: ctx.options },
+			{
+				db: ctx.db,
+				repo: ctx.repo,
+				owner: ctx.owner,
+				batchSize: ctx.options.batchSize ?? DEFAULT_BATCH_SIZE,
+				options: ctx.options
+			},
 			batch.fileInserts,
 			batch.symbolInserts,
 			ctx.renameMap,

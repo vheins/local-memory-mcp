@@ -157,15 +157,19 @@ export function codebaseEntityParts(entityId: string): { repo: string; filePath:
  *   ("Mentioned in codebase: <path>"), one shared text for all of the file's
  *   entities.
  * - `codebaseRefDigest`: reference-edge digest — see above.
- * - `owner`: "" — `codebase_symbols` has no owner column (cross-tenant guard
- *   in codebase.read.ts); KG entities for the codebase domain are owner-less
- *   and repo-scoped, matching the rest of the codebase index.
+ * - `owner`: the scope owner threaded from the index caller (FIX-OWNER-CODEBASE).
+ *   `codebase_symbols` itself has no owner column (cross-tenant guard in
+ *   codebase.read.ts), but the KG rows this job writes DO carry an owner, so
+ *   the payload must forward the caller's owner instead of a hardcoded "".
+ *   Falls back to "" only when the caller could not resolve one (e.g. a
+ *   rootless CLI index), preserving the previous owner-less behavior.
  */
 export function codebaseSymbolJobPayload(input: {
 	repo: string;
 	filePath: string;
 	symbols: CodebaseSymbolInsert[];
 	refs?: CodebaseReferenceInsert[];
+	owner?: string;
 }): EmbeddingJobPayload {
 	const lines = input.symbols.slice(0, KG_MAX_CONTEXT_ENTITIES).map((s) => {
 		const doc = s.doc_comment ? `: ${s.doc_comment.slice(0, CODEBASE_SYMBOL_LINE_CHARS)}` : "";
@@ -178,7 +182,7 @@ export function codebaseSymbolJobPayload(input: {
 		text: content,
 		content,
 		title: input.filePath,
-		owner: "",
+		owner: input.owner ?? "",
 		repo: input.repo,
 		updatedAt: now,
 		codebaseRefDigest: input.refs ? codebaseRefDigest(input.refs) : ""
