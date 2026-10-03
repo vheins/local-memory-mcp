@@ -40,8 +40,9 @@ import { migration as v36 } from "./v36-relations-index-consolidation";
 import { migration as v37 } from "./v37-vector-blob-format";
 import { migration as v38 } from "./v38-bug-reports";
 import { migration as v39 } from "./v39-observations-index-consolidation";
+import { migration as v40 } from "./v40-memories-code-owner-repo-unique";
 
-export const SCHEMA_VERSION = 39;
+export const SCHEMA_VERSION = 40;
 
 /**
  * A single versioned schema migration. `up` runs inside the migration runner's
@@ -96,7 +97,8 @@ const MIGRATIONS: Migration[] = [
 	v36,
 	v37,
 	v38,
-	v39
+	v39,
+	v40
 ];
 
 // ──────────────────────────────────────────────
