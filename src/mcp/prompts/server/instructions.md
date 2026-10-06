@@ -7,17 +7,7 @@ Local Memory MCP — persistent memory, task coordination, and coding standards 
 
 ## Contract Ownership
 
-This file is the CANONICAL tool contract for `local-memory-mcp`. It is the SINGLE SOURCE OF TRUTH for:
-
-- data scoping rules
-- registered (canonical) tool names — no legacy/unregistered names
-- required/optional fields and auto-infer semantics
-- who may call each operation and when (who/when) — see Who / When matrix
-- micro-flows for every multi-step operation
-
-Process/orchestration (macro workflow S0→Synthesize→S1→S2→Execute→Close, gates, pipeline, fallback, git safety) lives in `AGENTS.md`. Do NOT redefine the tool contract in `AGENTS.md`, and do NOT duplicate this contract anywhere else.
-
-> **Workflow note**: These MCP tools are the mechanism. The macro workflow (S0→Synthesize→S1→S2→Execute→Close) is the orchestration, defined in `AGENTS.md`.
+This file is the CANONICAL tool contract for `local-memory-mcp` — the SINGLE SOURCE OF TRUTH for data scoping, registered tool names, required/optional fields and auto-infer semantics, the who/when matrix, and micro-flows.
 
 ## Data Scoping
 
@@ -35,7 +25,7 @@ The `owner` field MUST be the GitHub username or organization that OWNS the repo
 - Repo `vheins/local-memory-mcp` → owner=`vheins`
 - Repo `my-org/my-project` → owner=`my-org`
 
-NEVER use the agent's name (e.g., `sentinel`, `test-executor`, `claude`) as the owner.
+NEVER use the agent's name (e.g., the calling agent's own identifier) as the owner.
 NEVER guess the owner from the working directory path.
 
 If unsure, run `git remote -v` in the project directory — the remote URL (e.g., `git@github.com:vheins/local-memory-mcp.git`) gives you both `owner` and `repo`.
@@ -56,38 +46,18 @@ If unsure, run `git remote -v` in the project directory — the remote URL (e.g.
 
 **Session-wide defaults (can be omitted):** `owner`, `repo`, `agent`, and `model` are auto-populated from the session context and environment when not explicitly provided:
 
-| Field   | Fallback chain                                                                                                                   |
-| :------ | :------------------------------------------------------------------------------------------------------------------------------- |
-| `owner` | tool arg → `owner` segment of `owner/repo` → `inferOwnerFromSession` (git remote / MCP roots) → `session.owner` (CWD git remote) |
-| `repo`  | tool arg → `inferRepoFromSession` (single MCP root basename) → `session.repo` (CWD basename)                                     |
-| `agent` | tool arg → `session.lastSeenAgent` → `session.clientName` (handshake) → `MCP_CLIENT_NAME` env                                    |
-| `model` | tool arg → `session.lastSeenModel` → `MCP_MODEL` env                                                                             |
+| Field   | Fallback chain                                                                                     |
+| :------ | :------------------------------------------------------------------------------------------------- |
+| `owner` | tool arg → `owner` segment of `owner/repo` → session context (git remote / MCP roots) → CWD remote |
+| `repo`  | tool arg → session context (MCP root basename) → CWD basename                                      |
+| `agent` | tool arg → session context (last-seen agent, client name, `MCP_CLIENT_NAME` env)                   |
+| `model` | tool arg → session context (last-seen model, `MCP_MODEL` env)                                       |
 
 Setting these explicitly in the tool call always takes priority over session defaults.
 
-Path-basename values are NEVER used as `owner` (FIX-029): a structural path segment such as `home` (from `/home/<user>`) or a dotfile directory (`.config`) is rejected rather than fabricated as an owner, so a scope-less call can never silently mis-file data under a wrong-scope owner. When the scope is genuinely undeterminable for an HTTP/daemon write, the call fails loud instead.
+Path-basename values are NEVER used as `owner`: a structural path segment such as `home` (from `/home/<user>`) or a dotfile directory (`.config`) is rejected rather than fabricated as an owner, so a scope-less call can never silently mis-file data under a wrong-scope owner. When the scope is genuinely undeterminable for an HTTP/daemon write, the call fails loud instead.
 
 Violation: tasks created with a wrong owner will be invisible to other agents querying with the correct owner.
-
-### Dashboard repo-only view is intentional (ADR-008)
-
-The dashboard aggregates by **short `repo` only** (`owner = ""` reads like `MemoryService.list({ repo })` / `TaskService.getTasksByRepo("", repo)` in `src/dashboard/services/`). A `GET /api/memories?repo=my-app` or tasks/stats equivalent therefore **intentionally merges** `alice/my-app` and `bob/my-app` into one operational view of the single-host SQLite DB. This is not a bug — document a per-owner filter instead if you need isolation. Dashboard rows SHOULD render an **owner badge** (the stored `owner` string) so mixed-owner views are self-explanatory.
-
-### Global vs scoped tables (ADR-008)
-
-| Tables                                                                                                                                | `is_global` | Representation                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------- | :---------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `memories`, `coding_standards`                                                                                                        |   **Yes**   | `repo NOT NULL` + `is_global` recommended; `coding_standards.repo` is still nullable for backward compat — new writes SHOULD set `repo` and use `is_global = 1` for globals |
-| `tasks`, `task_comments`, KG (`entities`/`relations`/`observations`), `exploration_observations`, telemetry/audit/queue/vector tables |   **No**    | `repo NOT NULL`, no `is_global`; strict `(owner, repo)` scope                                                                                                               |
-| `codebase_*`                                                                                                                          |     N/A     | Repo-keyed only (no `owner` column) — see below                                                                                                                             |
-
-Reads that support globals use `((owner = ? AND repo = ?) OR is_global = 1)` when `owner` is present; dashboard repo-only reads use strict `repo = ?` (and therefore see all owners). See ADR-008 for the full table policy.
-
-### Codebase owner isolation — out of scope
-
-The codebase index (`codebase_files` / `codebase_symbols` / `codebase_references` plus `codebase_symbols_fts`) is partitioned by `repo` string only; no `owner` column and no per-owner isolation is planned. See ADR-008.
-
-> Full rationale and consequences: `.agents/documents/design/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`.
 
 ## Core Workflows
 
@@ -149,17 +119,17 @@ A `memory-write` update accepts the same fields as create but all are optional (
 
 **Codebase Index**: `codebase-index` → `codebase-read` — **MANDATORY FIRST for ALL codebase exploration (STRICT)**
 
-- `codebase-index(repo)` = status (freshness + count + runtime capability state); `codebase-index(repoPath + repo)` = index (tree-sitter scan); `warmup:true` explicitly initializes the index engine.
+- `codebase-index(repo)` = status (freshness + count); `codebase-index(repoPath + repo)` = index (tree-sitter scan).
 - Always check status first. If stale, trigger index before querying.
 - `codebase-read`: `query` → search, `name` → symbol trace, `filePath` → file symbols, `content` → grep indexed file contents, none → architecture. `depth` only applies inside architecture mode.
 - **STRICT PRIORITY**: ALL agents (orchestrator + sub-agents) MUST start every codebase context search with `codebase-index`/`codebase-read` — symbols, files, architecture, trace, and content grep.
 - **FORBIDDEN as first resort**: `rg` / `grep` / `glob` / `seed` / `cat` / `bash cat` / `find` / `ls` / brute-force filesystem search — NEVER use before `codebase-read`. Allowed ONLY as fallback after index returns empty/stale or cannot answer, and ONLY via `explore` sub-agent (which itself tries index first before `glob`/`grep`/`cat`). Direct `rg`/`grep`/`cat` without prior `codebase-read` is a violation. `cat` is for reading a **known** file only — never for blind exploration.
 
-**Prompts (skill-like reads)**: `prompt-read`
+**Prompts (skill-like reads)**: `prompt-read` — read-only alias for the protocol-level `prompts/*` surface (`prompts/list` + `prompts/get`); it mirrors the same catalog and content, so tool-only clients (e.g. OpenCode) can discover and invoke prompts as tools.
 
-- `prompt-read` is a read-only alias/proxy for the protocol-level `prompts/*` surface (`prompts/list` + `prompts/get`) — it mirrors the same catalog and content, so tool-only clients (e.g. OpenCode) can discover and invoke prompts as tools. It does NOT replace the `prompts/*` distinction; both surface the same `src/mcp/prompts/definitions/` files.
 - Auto-infer: `name` present → DETAIL (loads the prompt with `{{var}}` substitution; `{{current_repo}}`/`{{current_owner}}` are reserved keys always auto-injected from session, never read from args); none → LIST (catalog of `{name, description, agent, arguments}`).
 - Detail on unknown/traversal names → NOT_FOUND-classified error envelope (`schema: "tool-error"`, `code: "NOT_FOUND"`).
+- WHEN to call it: before starting a workflow/task, when a task references a skill/prompt by name (e.g. `create-task`, `task-management`, `code-review`, `session-planner`), or whenever you need a checklist/template before acting.
 
 **Exploration Observations**: `observation-write` → `observation-read`
 
@@ -173,38 +143,15 @@ A `memory-write` update accepts the same fields as create but all are optional (
 - Budget: `budget.tokens` (256–20_000, default 2_000) + `budget.max_items` (1–100, default 20) + `budget.code_depth` (0–5, default 1, graph expansion from `current_file_path`). Candidates are ranked by priority + lexical overlap with `objective`, packed until either budget is hit; overflow is reported in `exclusions` with reason `token_budget` or `item_budget`.
 - `include_stale:false` by default (fresh observations only); `limit` (1–100, default 5) caps legacy memory/task projections. `context_pack_id` / `session_id` enable cache-hit correlation (opaque, never prompt text).
 
-**Synthesis**: `synthesize` (requires client sampling support) + `repo-summarize`
-
-- `synthesize`: composite contextual synthesis via MCP sampling over local memories + tasks; filtered from tool definitions when the client lacks sampling capability.
-- `repo-summarize`: archive session signals as `task_archive` summary (importance=3).
-
-### Discovering workflow guidance with prompt-read
-
-`prompt-read` is read-only with no side effects. Check for available guidance before acting.
-
-- WHEN to call `prompt-read`:
-  - Before starting any workflow or task — check whether a prompt/skill exists that can guide execution.
-  - When a task description or orchestrator prompt references a skill/prompt by name (e.g. `create-task`, `task-management`, `code-review`, `session-planner`) — load its definition before executing the workflow.
-  - When you need a workflow checklist, template, or definition before acting (read-before-act).
-- HOW it works (auto-infer):
-  - No `name` → LIST the catalog of available prompts (`{name, description, agent, arguments}`).
-  - With `name` → DETAIL loads the prompt with `{{var}}` substitution; `{{current_repo}}` / `{{current_owner}}` are always auto-injected from session.
-  - Callable as `prompt-read` tool OR native `prompts/get` / `prompts/list` — same content from `src/mcp/prompts/definitions/`.
-  - Detail on unknown/traversal names → `NOT_FOUND` error envelope (`schema: "tool-error"`, `code: "NOT_FOUND"`).
-
 ### Persisting reusable rules with standard-write
 
 `standard-write` is durable with 1 rule per entry. It writes to `coding_standards` for normative, enforceable conventions.
 
-- WHEN to call `standard-write`:
-  - After completing work you discovered a reusable normative rule or convention (naming, layering, a11y, testing) that should outlive the session.
-  - When the `standard-read` pre-implementation gate surfaced a missing standard that now needs to be codified.
-  - When you were explicitly asked to codify a convention. Set `is_global` and `repo` for global vs repo-scoped entries (see Data Scoping).
+- WHEN to call it: after discovering a reusable normative rule/convention (naming, layering, a11y, testing) that should outlive the session; when the `standard-read` pre-implementation gate surfaced a missing standard; or when explicitly asked to codify a convention. Set `is_global` and `repo` for global vs repo-scoped entries (see Data Scoping).
 - Priority framework — `standard-write` vs `memory-write` (classify every finding before persisting):
-  - **P1 — Normative & enforceable for future work → `standard-write`**: the finding should be enforced on future tasks. Write 1 rule/entry; check `standard-read` first to avoid duplicates; set `is_global`/`repo` per Data Scoping.
-  - **P2 — Episodic / contextual → `memory-write`**: why/history, code facts, decision rationale, or task-specific patterns. Mandatory after every task — choose correct `type` + `importance`; see Core Workflows → Memory for timing.
-  - **P3 — Both aspects → write BOTH**: `standard-write` for the enforceable rule + `memory-write` for the context/rationale/history that explains why. Do not collapse into one entry.
-  - Examples: naming convention (`use camelCase for service methods`) → P1 `standard-write`; `we chose JWT because legacy sessions lack revocation` → P2 `memory-write` (`type: decision`); style rule + rationale (`max 500 lines/file because review cost spikes beyond that`) → P3 both.
+  - **P1 — Normative & enforceable for future work → `standard-write`**: check `standard-read` first to avoid duplicates; set `is_global`/`repo` per Data Scoping.
+  - **P2 — Episodic / contextual → `memory-write`**: why/history, code facts, decision rationale, or task-specific patterns. Mandatory after every task — choose correct `type` + `importance`.
+  - **P3 — Both aspects → write BOTH**: the enforceable rule (`standard-write`) plus the context/rationale/history (`memory-write`). Do not collapse into one entry.
 
 ## Who / When
 
@@ -214,14 +161,14 @@ A `memory-write` update accepts the same fields as create but all are optional (
 | `memory-write`                    | After completing work — persist decisions, patterns, code facts                                                                | All agents (orchestrator + sub-agents)                       |
 | `memory-read(id/code)`            | When task prompt includes a memory code — retrieve full context                                                                | Sub-agents only                                              |
 | `memory-write` (acknowledge)      | After consuming a memory — mark it as used/reviewed                                                                            | Sub-agents only                                              |
-| `memory-read` (recap)             | At macro-workflow start (S0) — summary of recent memory activity                                                               | Orchestrator                                                 |
+| `memory-read` (recap)             | At macro-workflow start — summary of recent memory activity                                                                    | Orchestrator                                                 |
 | `memory-write` (`type=decision`)  | Log a structured architectural decision (importance=4)                                                                         | All agents                                                   |
 | `task-read`                       | Sync — list/search/detail of pending, backlog, in_progress                                                                     | Orchestrator + sub-agents                                    |
 | `claim-manage`                    | Claim task start (`task_code` + `agent`) → `in_progress`                                                                       | Agent executing the task                                     |
 | `task-write(status=completed)`    | Mark task done — auto-releases claim, expires linked handoffs                                                                  | Agent executing the task                                     |
-| `handoff-read`                    | Check incoming handoffs (S0); search/list pending                                                                              | Orchestrator                                                 |
+| `handoff-read`                    | Check incoming handoffs at workflow start; search/list pending                                                                 | Orchestrator                                                 |
 | `handoff-write`                   | Create handoff ONLY for unfinished work (concrete next owner + steps)                                                          | Agent leaving work behind                                    |
-| `standard-read(query)`            | Hydrate (S1) — load applicable coding standards                                                                                | All agents                                                   |
+| `standard-read(query)`            | Hydrate — load applicable coding standards before implementation                                                               | All agents                                                   |
 | `standard-write`                  | After discovering a durable reusable pattern/convention worth persisting (check `standard-read` first)                         | Any agent that produced code/docs and found a normative rule |
 | `standard-delete`                 | Delete coding standards (single/bulk, UUID or code)                                                                            | All agents                                                   |
 | `memory-delete`                   | Soft-delete memories (single/bulk, UUID or code)                                                                               | All agents                                                   |
@@ -231,84 +178,14 @@ A `memory-write` update accepts the same fields as create but all are optional (
 | `agent-context`                   | Compile token-budgeted cross-source context for an objective                                                                   | All agents                                                   |
 | `observation-write`               | Create/update/bulk/refresh exploration observations with fingerprints                                                          | All agents                                                   |
 | `observation-read`                | Read observations by scope, subject, task, file, symbol, confidence                                                            | All agents                                                   |
-| `codebase-index(repo)`            | Check index freshness/status before querying                                                                                   | Orchestrator                                                 |
-| `codebase-index(repoPath + repo)` | Refresh a stale index                                                                                                          | Orchestrator                                                 |
-| `codebase-index(warmup:true)`     | Explicitly warm the index engine                                                                                               | Orchestrator                                                 |
-| `codebase-read(query)`            | Primary codebase exploration (symbol/NL search)                                                                                | Orchestrator                                                 |
-| `codebase-read(name)`             | Trace definition & usage cross-file                                                                                            | Orchestrator                                                 |
+| `codebase-index`                  | Check index freshness/status before querying; refresh a stale index; `warmup:true` initializes the engine                      | All agents                                                   |
+| `codebase-read`                   | Primary codebase exploration (symbol/NL search, trace, file symbols, architecture, content grep)                               | All agents                                                   |
 | `prompt-read(name?)`              | Before executing a skill/workflow — load its definition/template (LIST catalog when no name, DETAIL with {{var}} substitution) | Orchestrator + sub-agents needing guided execution           |
-
-## Registered Tools (20 canonical)
-
-All 20 tools are registered via `src/mcp/tools/index.ts` (`buildExecutors` + `TOOL_DEFINITIONS`) and `src/mcp/mcp-server.ts:registerAllTools`. No legacy dotted aliases are registered — the router normalizes `'.'` → `'-'` only for backward-compatible dispatch.
-
-| #   | Tool                | Kind   | Description                                                            |
-| --- | ------------------- | ------ | ---------------------------------------------------------------------- |
-| 1   | `memory-write`      | write  | Create / update / acknowledge / bulk memories (auto-infer)             |
-| 2   | `memory-read`       | read   | Search / detail / recap memories (auto-infer)                          |
-| 3   | `memory-delete`     | write  | Soft-delete memories (single/bulk)                                     |
-| 4   | `task-write`        | write  | Create / update / bulk / interactive tasks                             |
-| 5   | `task-read`         | read   | Search / detail / list tasks                                           |
-| 6   | `task-delete`       | write  | Soft-delete tasks → canceled                                           |
-| 7   | `handoff-write`     | write  | Create / update handoff                                                |
-| 8   | `handoff-read`      | read   | Detail / list / search handoffs (incl. claims list)                    |
-| 9   | `claim-manage`      | write† | Claim / release / list task claims (auto-infer; list is read-only)     |
-| 10  | `standard-write`    | write  | Create / update / bulk coding standards                                |
-| 11  | `standard-read`     | read   | Search / detail / list standards                                       |
-| 12  | `standard-delete`   | write  | Delete standards (single/bulk)                                         |
-| 13  | `agent-context`     | read   | Budgeted cross-source context compiler                                 |
-| 14  | `synthesize`        | read   | Context synthesis via MCP sampling (gated on client capability)        |
-| 15  | `repo-summarize`    | write  | Repository summary from signals                                        |
-| 16  | `observation-write` | write  | Create / update / bulk / refresh exploration observations              |
-| 17  | `observation-read`  | read   | Read exploration observations                                          |
-| 18  | `codebase-index`    | write  | Index or status (incl. warmup)                                         |
-| 19  | `codebase-read`     | read   | Trace / file / search / architecture / content grep                    |
-| 20  | `prompt-read`       | read   | Prompt catalog / prompt content with {{var}} substitution (skill-like) |
-
-† `claim-manage` list modes are read-only and do not emit an `action_log` row; claim/release modes do.
-
-`prompt-read` is a read-only alias/proxy for the protocol-level `prompts/*` surface — see **Prompts (skill-like reads)** above for auto-infer semantics and error behavior.
-
-## Tool Error Envelope
-
-Every tool failure is returned as a canonical `ToolError` envelope via `src/mcp/utils/mcp-error.ts:toErrorResponse` (shared by both SDK and router transports):
-
-```json
-{
-	"schema": "tool-error",
-	"code": "VALIDATION_ERROR",
-	"message": "Error: ...",
-	"retryable": false,
-	"error": "Error: ...",
-	"details": {}
-}
-```
-
-- `schema` is always `"tool-error"`.
-- `code` is one of `VALIDATION_ERROR` | `NOT_FOUND` | `CONFLICT` | `UNSUPPORTED_OPERATION` | `CAPABILITY_UNAVAILABLE` | `INTERNAL_ERROR` (open string for forward-compat).
-- `message` and `error` carry the same human-readable text; `error` is a backward-compatible alias.
-- `retryable` is `false` for all currently classified errors; `true` only for explicitly retryable tool errors.
-- `details` is present only when the handler supplies structured details.
-- Successful structured results use `withEnvelope(schema, mode, data)` and `createMcpResponse(..., { includeJson })` — `structuredContent` is populated only when `json:true` or the handler opts in; `content[0].text` always carries a human summary.
-
-## Runtime Profiles & Capabilities
-
-Runtime profile is selected via `MCP_RUNTIME_PROFILE` (`minimal` | `balanced` | `full`, default `full`) in `src/mcp/runtime-capabilities.ts`:
-
-| Profile    | Capabilities                                                  |
-| ---------- | ------------------------------------------------------------- |
-| `minimal`  | `dashboard`                                                   |
-| `balanced` | `semantic`, `indexing`, `dashboard`                           |
-| `full`     | `semantic`, `indexing`, `watcher`, `maintenance`, `dashboard` |
-
-- Each capability has state `unavailable` | `idle` | `loading` | `ready` | `degraded` | `failed`; `snapshot()` exposes `loaded_at`, `duration_ms`, `error`, and footprint.
-- Semantic capability is lazily warmed only for semantic-demanding calls: `isSemanticToolDemand` returns true for **writes** `memory-write` / `standard-write` / `task-write`, and for **reads** `memory-read` / `standard-read` / `task-read` / `agent-context` only when `query` or `objective` is present.
-- `codebase-index` status includes runtime capability state; `warmup:true` explicitly initializes the index engine. Without semantic/indexing, tools degrade to lexical results rather than failing.
 
 ## Rules
 
-- Do NOT invent method names — use ONLY the registered tools listed above.
+- Do NOT invent method names — call ONLY the tools this server exposes in the MCP tool catalog. No legacy dotted aliases exist; the server only normalizes `'.'` → `'-'` in a name.
 - `memory-write` is **mandatory** after every task (min 1 entry).
 - Sub-agents **MUST** call `memory-read(query)` during work and `memory-write` (acknowledge) after consuming a memory.
-- Orchestrator calls `memory-read` (recap) at S0.
-- **Codebase exploration (STRICT — overrides legacy wording below)**: `codebase-index` + `codebase-read` are the MANDATORY first tools for any codebase context discovery. Direct `rg` / `grep` / `glob` / `seed` / `cat` / `find` / `ls` / filesystem brute-force is FORBIDDEN as first resort. Use ONLY via `explore` sub-agent AFTER the index has been tried and cannot answer — `explore` itself will try index first before falling back to `glob`/`grep`/`cat`. `cat` = reading a known path only; using `cat` to brute-force explore unknown files is a violation.
+- Orchestrator calls `memory-read` (recap) at macro-workflow start.
+- **Codebase exploration (STRICT)**: `codebase-index` + `codebase-read` are the MANDATORY first tools for any codebase context discovery — see §Core Workflows → Codebase Index for the full rule and fallback chain.

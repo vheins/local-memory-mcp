@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.1] — 2026-10-06
+
+Prompt-hygiene patch: the MCP server instructions (injected into every consuming agent's system prompt on every turn) drop ~40% of their size by removing content that carried no signal for a consumer of the published package.
+
+### Changed
+
+- **Server instructions trimmed 30.1 KB → 18.2 KB (`FIX-INSTRUCTIONS`):** removed the `Registered Tools` table (duplicates the MCP protocol tool definitions the client already receives), the `Tool Error Envelope` and `Runtime Profiles` sections (internal implementation detail), and the ADR-008 dashboard/ownership notes (repo-internal design docs). Folded the standalone `prompt-read`/`synthesis`/`standard-write` subsections into their Core Workflows entries and de-numbered the who/when rows.
+- **Removed repo-internal leakage from the injected contract:** dropped ticket IDs (`FIX-029`, `PERF-009`, `ADR-008`), internal source paths (`src/…`, `dist/…`), internal function/symbol names (`inferOwnerFromSession`, `session.lastSeenAgent`, …), maintainer-only instructions, and hardcoded agent-name examples. Consumers of the npm package have no access to this repo's tickets or `src/` tree, so these were pure token noise.
+- **Fixed a who/when contradiction:** `codebase-index` and `codebase-read` were listed as orchestrator-only while the rules require every agent to start with them; both now read "All agents".
+- Stale `S0→S1→S2` phase tokens replaced with "macro workflow" to match the global workflow vocabulary.
+
 ## [0.52.0] — 2026-10-03
 
 Owner-scope integrity release (`FIX-OWNER-CODEBASE`): codebase-index→KG rows no longer lose their owner, and `memories` gains the `(owner, repo, code)` uniqueness constraint that `tasks` has had since v2 — closing the hole that let an out-of-band owner merge produce `MEM-001`×9 in `(vheins, favori-app)` and strand every later memory behind `getByCode`.
