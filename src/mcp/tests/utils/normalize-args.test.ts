@@ -267,6 +267,46 @@ describe("normalizeToolArguments", () => {
 		expect(result.model).toBe("env-model");
 	});
 
+	// FIX-CLAIM-AGENT-INJECT: `agent` is a filter/discriminator for these tools,
+	// not attribution metadata. Auto-filling it from the session silently
+	// narrowed claim-manage RELEASE to the caller's own claims and flipped
+	// handoff-read into LIST-CLAIMS.
+	describe("agent-semantic tools skip the session agent fallback", () => {
+		const session = makeSession({ lastSeenAgent: "opencode", clientName: "opencode" });
+
+		it("claim-manage RELEASE without agent stays agent-free", () => {
+			const result = normalizeToolArguments({ task_code: "X", release: true }, session, {
+				toolName: "claim-manage"
+			});
+			expect(result.agent).toBeUndefined();
+			expect(result.release).toBe(true);
+		});
+
+		it("handoff-read list without agent stays agent-free (no LIST-CLAIMS hijack)", () => {
+			const result = normalizeToolArguments({ repo: "r", owner: "o" }, session, { toolName: "handoff-read" });
+			expect(result.agent).toBeUndefined();
+		});
+
+		it("still keeps an EXPLICIT agent on an agent-semantic tool", () => {
+			const result = normalizeToolArguments({ task_code: "X", release: true, agent: "backend" }, session, {
+				toolName: "claim-manage"
+			});
+			expect(result.agent).toBe("backend");
+		});
+
+		it("attribution tools (memory-write) still receive the session agent", () => {
+			const result = normalizeToolArguments({ repo: "r", owner: "o", content: "x" }, session, {
+				toolName: "memory-write"
+			});
+			expect(result.agent).toBe("opencode");
+		});
+
+		it("a call with no toolName keeps the historical fallback", () => {
+			const result = normalizeToolArguments({ query: "q" }, session);
+			expect(result.agent).toBe("opencode");
+		});
+	});
+
 	// ── TASK-420: roots-first scope priority + write fail-loud ─────────────
 	describe("scope priority and write fail-loud (TASK-420)", () => {
 		it("WRITE with no explicit scope and a rootless HTTP session THROWS", () => {

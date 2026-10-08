@@ -139,6 +139,15 @@ function classifyExpectedError(error: Error): {
 	if (/\bnot found\b/i.test(error.message)) {
 		return { code: "NOT_FOUND", message: error.message, retryable: false };
 	}
+	// FIX-CLAIM-AGENT-INJECT: a "No <entity> found" failure ("No active claim
+	// found for task X" from claim-manage RELEASE) is the same caller-actionable
+	// not-found class as "… not found", but the reversed word order missed the
+	// `\bnot found\b` test above and fell through to the opaque
+	// "Internal tool error". Surface the real message under NOT_FOUND so the
+	// caller can tell "no such row" from a genuine server fault.
+	if (/^no .* found\b/i.test(error.message)) {
+		return { code: "NOT_FOUND", message: error.message, retryable: false };
+	}
 	// Client-capability gaps (issue #108): the caller asked for a feature the
 	// connected client does not advertise (MCP sampling / elicitation). The
 	// request cannot succeed on this transport, but it is not a server crash —

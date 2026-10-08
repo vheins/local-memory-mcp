@@ -26,6 +26,27 @@ export type NormalizeToolArgumentsOptions = {
 	isWrite?: boolean;
 };
 
+/**
+ * Tools where `agent`/`model` are CALLER-SUPPLIED SEMANTICS — a filter or a
+ * mode discriminator — NOT write-attribution metadata. The session-wide
+ * lazy-capture at the end of {@link normalizeToolArguments} must NOT auto-fill
+ * them, because an omitted `agent` would silently become "the connected
+ * client's name" and change the operation:
+ *
+ * - `claim-manage` RELEASE narrows its UPDATE to `AND agent = ?`, so a claim
+ *   held by a different agent reports "No active claim found" even though the
+ *   claim is active (observed: client `opencode` releasing a claim held by
+ *   `backend`).
+ * - `handoff-read` treats a present `agent` as the LIST-CLAIMS discriminator
+ *   (`claim:true` OR `agent`), so every handoff list/search silently became
+ *   "claims for <clientName>" and returned 0 rows.
+ *
+ * Attribution-writing tools (memory-write, task-write, standard-write,
+ * observation-write, …) keep the injection: there `agent` records who
+ * performed the write, which is exactly what the session fallback is for.
+ */
+export const AGENT_SEMANTIC_TOOLS: ReadonlySet<string> = new Set(["claim-manage", "handoff-read"]);
+
 /** True only for a non-empty (post-trim) string — the "explicitly provided" test. */
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
@@ -484,7 +505,16 @@ export function normalizeToolArguments(
 	// Lazy capture model & agent — fall back to session-wide values when
 	// args are not provided. lastSeenAgent/lastSeenModel are set once at
 	// oninitialized and never mutated afterward.
-	nextArgs.agent ??= session?.lastSeenAgent ?? session?.clientName ?? process.env.MCP_CLIENT_NAME;
+	//
+	// FIX-CLAIM-AGENT-INJECT: for tools where `agent` is caller-supplied
+	// SEMANTICS (a filter or a mode discriminator — see AGENT_SEMANTIC_TOOLS),
+	// an omitted `agent` MUST stay omitted. Filling it with the connected
+	// client's name silently narrowed `claim-manage` RELEASE to the caller's
+	// own claims and flipped `handoff-read` into LIST-CLAIMS. Attribution
+	// tools keep the fallback: there `agent` records who wrote the row.
+	if (!options?.toolName || !AGENT_SEMANTIC_TOOLS.has(options.toolName)) {
+		nextArgs.agent ??= session?.lastSeenAgent ?? session?.clientName ?? process.env.MCP_CLIENT_NAME;
+	}
 	nextArgs.model ??= session?.lastSeenModel ?? process.env.MCP_MODEL;
 
 	return nextArgs;

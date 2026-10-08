@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createRouter } from "../router";
+import { createSessionContext } from "../session";
 import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
@@ -633,5 +634,98 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 
 		expect(updateRes.structuredContent.success).toBe(true);
 		expect(updateRes.structuredContent.status).toBe("expired");
+	});
+
+	// FIX-CLAIM-AGENT-INJECT: a session-bearing client (lastSeenAgent = its
+	// client name) must not have that name injected into `agent` for tools
+	// where `agent` is a filter/discriminator. Reproduces the production
+	// failure: client `opencode` releasing a claim held by `backend` reported
+	// "No active claim found" (masked as "Internal tool error"), and every
+	// handoff list/search silently returned 0 claims for `opencode`.
+	describe("session agent injection does not corrupt agent-semantic tools", () => {
+		let sessionRouter: (method: string, params: Record<string, unknown>) => Promise<any>;
+
+		beforeEach(() => {
+			const session = createSessionContext("http");
+			session.lastSeenAgent = "opencode";
+			session.clientName = "opencode";
+			const raw = createRouter(db, vectors, { getSessionContext: () => session });
+			sessionRouter = async (method, params) => {
+				const args = (params as Record<string, unknown>)?.arguments as Record<string, unknown> | undefined;
+				if (method === "tools/call" && args) {
+					args.json = true;
+				}
+				return raw(method, params);
+			};
+		});
+
+		it("releases a claim held by a DIFFERENT agent when the caller omits agent", async () => {
+			await sessionRouter("tools/call", {
+				name: "task-write",
+				arguments: {
+					repo: REPO,
+					owner: "test",
+					code: "AGENT-INJECT-1",
+					phase: "implementation",
+					title: "Agent injection target",
+					description: "Task used to validate release across agents.",
+					status: "pending",
+					priority: 3
+				}
+			});
+
+			await sessionRouter("tools/call", {
+				name: "claim-manage",
+				arguments: { repo: REPO, owner: "test", task_code: "AGENT-INJECT-1", agent: "backend", role: "worker" }
+			});
+
+			// No `agent` → release ANY active claim for the task (not just the
+			// caller's own). Before the fix this threw "No active claim found".
+			const releaseRes = await sessionRouter("tools/call", {
+				name: "claim-manage",
+				arguments: { repo: REPO, owner: "test", task_code: "AGENT-INJECT-1", release: true }
+			});
+
+			expect(releaseRes.isError).toBeFalsy();
+			expect(releaseRes.structuredContent.success).toBe(true);
+			expect(releaseRes.structuredContent.task_code).toBe("AGENT-INJECT-1");
+		});
+
+		it("keeps handoff-read in handoff-list mode (no LIST-CLAIMS hijack)", async () => {
+			await sessionRouter("tools/call", {
+				name: "task-write",
+				arguments: {
+					repo: REPO,
+					owner: "test",
+					code: "AGENT-INJECT-2",
+					phase: "implementation",
+					title: "Handoff read target",
+					description: "Task used to validate handoff-read mode.",
+					status: "pending",
+					priority: 3
+				}
+			});
+
+			await sessionRouter("tools/call", {
+				name: "handoff-write",
+				arguments: {
+					repo: REPO,
+					owner: "test",
+					from_agent: "agent-a",
+					to_agent: "agent-b",
+					task_code: "AGENT-INJECT-2",
+					summary: "Handoff that must remain listable"
+				}
+			});
+
+			const listRes = await sessionRouter("tools/call", {
+				name: "handoff-read",
+				arguments: { repo: REPO, owner: "test" }
+			});
+
+			expect(listRes.structuredContent.schema).toBe("handoff-read");
+			expect(listRes.structuredContent.mode).toBe("list");
+			expect(listRes.structuredContent.count).toBe(1);
+		});
 	});
 });

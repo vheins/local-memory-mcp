@@ -176,6 +176,28 @@ describe("mcp-error — canonical error envelope (OPT-CODE-01)", () => {
 			expect(res.structuredContent).toMatchObject({ code: "VALIDATION_ERROR", message });
 		});
 
+		// FIX-CLAIM-AGENT-INJECT: claim-manage RELEASE raises
+		// "No active claim found for task X" when the UPDATE matches no row.
+		// The reversed word order missed the `\bnot found\b` test and fell
+		// through to the opaque "Internal tool error".
+		it("positive: 'No active claim found' maps to NOT_FOUND with the real message", () => {
+			const message = "No active claim found for task FEAT-PO-QTY-BE";
+			const res = toErrorResponse(new Error(message));
+			expect(res.isError).toBe(true);
+			expect(res.content?.[0]).toEqual({ type: "text", text: message });
+			expect(res.structuredContent).toMatchObject({
+				schema: "tool-error",
+				code: "NOT_FOUND",
+				message,
+				retryable: false
+			});
+		});
+
+		it("negative: a genuine server fault still maps to the generic INTERNAL_ERROR", () => {
+			const res = toErrorResponse(new Error("segmentation fault in widget parser"));
+			expect(res.structuredContent).toMatchObject({ code: "INTERNAL_ERROR", message: "Internal tool error" });
+		});
+
 		it("positive: 'status is not valid for CREATE' maps to VALIDATION_ERROR", () => {
 			const res = toErrorResponse(new Error("status is not valid for CREATE — use id + status for UPDATE"));
 			expect(res.structuredContent).toMatchObject({
