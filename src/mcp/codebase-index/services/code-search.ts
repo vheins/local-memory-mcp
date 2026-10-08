@@ -106,6 +106,60 @@ function safeJoin(repoPath: string, filePath: string): string | null {
 	return absolutePath;
 }
 
+// ── Skip-warning dedup (FIX-CODESEARCH-STORM) ────────────────────────────
+// A wrong / subdirectory `repoPath` makes EVERY indexed file resolve to a
+// non-existent path, so the two skip warnings below used to fire once per
+// file. One observed storm wrote 157k lines / ~50 MB through the SYNCHRONOUS
+// file sink in a single minute, stalling the event loop and starving JSON-RPC
+// (the -32001 client timeouts). A skip is a diagnostic about the CALL, not
+// per-file data: emit at most one per (message, repo, repoPath) per interval.
+const WARN_DEDUP_INTERVAL_MS = 60_000;
+/** Hard cap on retained dedup keys — bounds memory under many repos. */
+const WARN_DEDUP_MAX_KEYS = 256;
+
+interface WarnDedupState {
+	/** Epoch ms of the last emitted warning for this key. */
+	lastEmittedAt: number;
+	/** Occurrences suppressed since that emission (surfaced on the next one). */
+	suppressed: number;
+}
+
+/** key → dedup state (Map preserves insertion order ⇒ oldest evicted first). */
+const warnDedup = new Map<string, WarnDedupState>();
+
+/** Clears the skip-warning dedup state (tests / long-lived ops). */
+export function clearCodeSearchWarnDedup(): void {
+	warnDedup.clear();
+}
+
+/**
+ * Emits a skip warning at most once per `WARN_DEDUP_INTERVAL_MS` for a given
+ * (message, repo, repoPath) triple, annotating the next emission with how many
+ * occurrences were suppressed in between. Rate-limited so a repo-wide
+ * resolution failure never floods the log sink.
+ */
+function warnSkipOnce(repo: string, repoPath: string, message: string, context: Record<string, unknown>): void {
+	const key = `${message}\u0000${repo}\u0000${repoPath}`;
+	const now = Date.now();
+	const state = warnDedup.get(key);
+
+	if (state && now - state.lastEmittedAt < WARN_DEDUP_INTERVAL_MS) {
+		state.suppressed += 1;
+		return;
+	}
+
+	const suppressed = state?.suppressed ?? 0;
+	// Re-insert to move the key to the MRU tail (keeps eviction meaningful).
+	warnDedup.delete(key);
+	warnDedup.set(key, { lastEmittedAt: now, suppressed: 0 });
+	if (warnDedup.size > WARN_DEDUP_MAX_KEYS) {
+		const oldest = warnDedup.keys().next().value;
+		if (oldest !== undefined) warnDedup.delete(oldest);
+	}
+
+	logger.warn(message, suppressed > 0 ? { ...context, suppressedSincePrevious: suppressed } : context);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ORCHESTRATOR
 // ═══════════════════════════════════════════════════════════════════════════
@@ -198,7 +252,10 @@ async function grepIndexedFile(
 ): Promise<CodeSearchMatch[] | null> {
 	const absolutePath = safeJoin(repoPath, file.file_path);
 	if (absolutePath === null) {
-		logger.warn("[CodeSearch] Skipping indexed file outside repo root", { repo, filePath: file.file_path });
+		warnSkipOnce(repo, repoPath, "[CodeSearch] Skipping indexed file outside repo root", {
+			repo,
+			filePath: file.file_path
+		});
 		return null;
 	}
 
@@ -206,7 +263,7 @@ async function grepIndexedFile(
 	try {
 		content = await codeSearchCache.getContent(repo, file.file_path, file.checksum ?? null, absolutePath);
 	} catch (err) {
-		logger.warn("[CodeSearch] Skipping unreadable indexed file", {
+		warnSkipOnce(repo, repoPath, "[CodeSearch] Skipping unreadable indexed file", {
 			repo,
 			filePath: file.file_path,
 			error: err instanceof Error ? err.message : String(err)

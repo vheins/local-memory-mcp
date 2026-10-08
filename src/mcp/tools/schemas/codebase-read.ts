@@ -124,6 +124,13 @@ export const CodebaseReadSchema = z.object({
 	 * The index stores no repo→path registry — the caller supplies it, exactly
 	 * as index_repository does. CODE mode absent ⇒ REPO_PATH_REQUIRED error
 	 * envelope; ARCHITECTURE absent ⇒ graceful degradation.
+	 *
+	 * MUST be the repository ROOT (the same absolute path passed to
+	 * index_repository) — NOT a subdirectory. Indexed `file_path`s are relative
+	 * to the root, so a subdirectory path makes every file resolve outside it.
+	 * When the repo is registered with the file watcher, a non-root path is
+	 * rejected up front with a REPO_PATH_NOT_ROOT error envelope instead of
+	 * emitting one skip warning per indexed file.
 	 */
 	repoPath: z.string().min(1).optional(),
 

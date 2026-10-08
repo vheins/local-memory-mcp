@@ -198,10 +198,21 @@ export function createFileSink(logDir: string, maxFiles = 5): LogSink {
 	const date = toLocalISOString().slice(0, 10).replace(/-/g, "");
 	const logFile = `${logDir}/mcp-${date}.log`;
 
+	// Asynchronous append stream (FIX-CODESEARCH-STORM): the previous
+	// `fs.appendFileSync` issued one BLOCKING write syscall per line, so a
+	// warning storm (~20k lines/min) starved the event loop. A WriteStream
+	// buffers writes and flushes off the main path; lines stay ordered because
+	// they funnel through a single stream. Best-effort: sink errors are
+	// swallowed so logging can never break the caller.
+	const stream = fs.createWriteStream(logFile, { flags: "a" });
+	stream.on("error", () => {
+		/* best effort — a failed log sink must not crash the process */
+	});
+
 	return (payload) => {
 		const line = `${toLocalISOString()} [${payload.level.toUpperCase()}] [pid:${process.pid}] ${JSON.stringify(payload.data)}\n`;
 		try {
-			fs.appendFileSync(logFile, line);
+			stream.write(line);
 		} catch {
 			/* best effort */
 		}

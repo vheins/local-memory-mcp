@@ -121,6 +121,7 @@ A `memory-write` update accepts the same fields as create but all are optional (
 
 - `codebase-index(repo)` = status (freshness + count); `codebase-index(repoPath + repo)` = index (tree-sitter scan).
 - Always check status first. If stale, trigger index before querying.
+- **`repoPath` MUST be the repo ROOT** — the exact same absolute path passed to `codebase-index`, never a subdirectory (e.g. `modules/PurchaseDistributor/Lang`). Indexed `file_path`s are relative to the root, so a subdirectory path makes every file miss (`REPO_PATH_NOT_ROOT` / `REPO_FILES_MISSING`).
 - `codebase-read`: `query` → search, `name` → symbol trace, `filePath` → file symbols, `content` → grep indexed file contents, none → architecture. `depth` only applies inside architecture mode.
 - **STRICT PRIORITY**: ALL agents (orchestrator + sub-agents) MUST start every codebase context search with `codebase-index`/`codebase-read` — symbols, files, architecture, trace, and content grep.
 - **FORBIDDEN as first resort**: `rg` / `grep` / `glob` / `seed` / `cat` / `bash cat` / `find` / `ls` / brute-force filesystem search — NEVER use before `codebase-read`. Allowed ONLY as fallback after index returns empty/stale or cannot answer, and ONLY via `explore` sub-agent (which itself tries index first before `glob`/`grep`/`cat`). Direct `rg`/`grep`/`cat` without prior `codebase-read` is a violation. `cat` is for reading a **known** file only — never for blind exploration.

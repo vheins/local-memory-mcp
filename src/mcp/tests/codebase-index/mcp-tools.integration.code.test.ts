@@ -3,6 +3,7 @@ import { handleCodebaseRead } from "../../tools/codebase.read";
 import fs from "node:fs";
 import path from "node:path";
 import { data, setupIntegrationFixture } from "./mcp-tools.integration.shared.js";
+import { registerRepo, clearWatchedRepos } from "../../codebase-index/services/file-watcher.js";
 import type { SQLiteStore } from "../../storage/sqlite.js";
 import type { VectorStore } from "../../types.js";
 
@@ -206,6 +207,52 @@ describe("handleCodebaseRead (code mode)", () => {
 
 		expect(resp.isError).toBe(true);
 		expect(d).toMatchObject({ schema: "tool-error", code: "REPO_NOT_INDEXED", retryable: false });
+	});
+
+	it("subdirectory repoPath → REPO_PATH_NOT_ROOT (FIX-CODESEARCH-STORM)", async () => {
+		const GUARD_REPO = "code-mode-root-guard";
+		const subdir = path.join(tempDir, "search-test-fixture");
+		registerRepo(GUARD_REPO, tempDir);
+		try {
+			const resp = await handleCodebaseRead(
+				{ owner: "vheins", json: true, repo: GUARD_REPO, content: "greet", repoPath: subdir },
+				store,
+				vectors
+			);
+			const d = data(resp);
+
+			expect(resp.isError).toBe(true);
+			expect(d).toMatchObject({ schema: "tool-error", code: "REPO_PATH_NOT_ROOT", retryable: false });
+			expect((d.details as Record<string, unknown>).expected).toBe(tempDir);
+		} finally {
+			clearWatchedRepos();
+		}
+	});
+
+	it("registered root repoPath passes the guard (no false positive)", async () => {
+		const GUARD_REPO = "code-mode-root-ok";
+		store.codebaseFiles.upsertFile({
+			repo: GUARD_REPO,
+			file_path: CODE_FILE,
+			language: "typescript",
+			checksum: "code-fixture-sum",
+			lines: 1,
+			size_bytes: 1
+		});
+		registerRepo(GUARD_REPO, tempDir);
+		try {
+			const resp = await handleCodebaseRead(
+				{ owner: "vheins", json: true, repo: GUARD_REPO, content: "greet", repoPath: tempDir },
+				store,
+				vectors
+			);
+			const d = data(resp);
+
+			expect(d.error).toBeUndefined();
+			expect(d.mode).toBe("code");
+		} finally {
+			clearWatchedRepos();
+		}
 	});
 
 	it("invalid regex → INVALID_REGEX", async () => {

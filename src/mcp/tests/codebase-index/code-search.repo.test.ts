@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { searchCodeInRepo } from "../../codebase-index/services/code-search.js";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
+import { searchCodeInRepo, clearCodeSearchWarnDedup } from "../../codebase-index/services/code-search.js";
 import { clearCodeSearchCache } from "../../codebase-index/services/code-search.js";
+import { logger } from "../../utils/logger.js";
 import { createTestStore } from "../../storage/sqlite.js";
 import type { SQLiteStore } from "../../storage/sqlite.js";
 import { computeChecksum } from "../../codebase-index/services/indexing-cache.js";
@@ -228,6 +229,72 @@ describe("searchCodeInRepo", () => {
 			expect(result.filesScanned).toBe(0);
 		} finally {
 			fs.rmSync(sibling, { force: true });
+		}
+	});
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SKIP-WARNING DEDUP (FIX-CODESEARCH-STORM)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("skip-warning dedup (FIX-CODESEARCH-STORM)", () => {
+	beforeEach(() => {
+		clearCodeSearchWarnDedup();
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		clearCodeSearchWarnDedup();
+	});
+
+	it("emits ONE warning for a repo-wide resolution failure, not one per file", async () => {
+		const repo = freshRepo();
+		// Three indexed rows whose files live under repoRoot…
+		for (const name of ["a.ts", "b.ts", "c.ts"]) {
+			writeIndexedFile(repo, `${repo}/${name}`, "needle here\n");
+		}
+		// …but the search runs against a DIFFERENT (empty) root, so every file
+		// resolves to a non-existent path → each would warn without dedup.
+		const wrongRoot = fs.mkdtempSync(path.join(os.tmpdir(), "code-search-wrong-"));
+		const warnSpy = vi.spyOn(logger, "warn");
+		try {
+			const result = await searchCodeInRepo(store, repo, wrongRoot, { needle: "needle", limit: 10, offset: 0 });
+			expect(result.matches).toEqual([]);
+			expect(result.filesScanned).toBe(0);
+
+			const skipWarnings = warnSpy.mock.calls.filter(([msg]) => String(msg).includes("Skipping unreadable indexed file"));
+			expect(skipWarnings).toHaveLength(1);
+		} finally {
+			fs.rmSync(wrongRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("annotates the next emission with the suppressed count after the interval", async () => {
+		const repo = freshRepo();
+		for (const name of ["a.ts", "b.ts", "c.ts"]) {
+			writeIndexedFile(repo, `${repo}/${name}`, "needle here\n");
+		}
+		const wrongRoot = fs.mkdtempSync(path.join(os.tmpdir(), "code-search-wrong2-"));
+		const warnSpy = vi.spyOn(logger, "warn");
+		const realNow = Date.now;
+		try {
+			let clock = realNow();
+			vi.spyOn(Date, "now").mockImplementation(() => clock);
+
+			// First call → one warning, 2 occurrences suppressed (3 files).
+			await searchCodeInRepo(store, repo, wrongRoot, { needle: "needle", limit: 10, offset: 0 });
+			expect(warnSpy).toHaveBeenCalledTimes(1);
+
+			// Advance past the dedup interval → next call emits again, carrying
+			// the count suppressed since the previous emission.
+			clock += 61_000;
+			await searchCodeInRepo(store, repo, wrongRoot, { needle: "needle", limit: 10, offset: 0 });
+			expect(warnSpy).toHaveBeenCalledTimes(2);
+			const secondContext = warnSpy.mock.calls[1][1] as Record<string, unknown>;
+			expect(secondContext.suppressedSincePrevious).toBe(2);
+		} finally {
+			vi.spyOn(Date, "now").mockRestore();
+			fs.rmSync(wrongRoot, { recursive: true, force: true });
 		}
 	});
 });
