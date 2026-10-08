@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.2] — 2026-10-08
+
+Correctness + stability patch. Two production bugs: a session-`agent` injection that silently corrupted agent-semantic tools (`claim-manage` RELEASE and `handoff-read`), and a codebase-read warning storm that grew `daemon.log` to 93 MB / 500k lines and starved the event loop.
+
+### Fixed
+
+- **Session `agent` injection corrupted agent-semantic tools (`FIX-CLAIM-AGENT-INJECT`):** `normalizeToolArguments` filled an omitted `agent` with the connected client's name (`session.lastSeenAgent ?? clientName ?? MCP_CLIENT_NAME`) for every tool. For `claim-manage` RELEASE, which narrows its UPDATE to `AND agent = ?`, a client releasing a claim held by a different agent got 0 rows — observed in production: client `opencode` releasing a claim held by `backend` for `FEAT-PO-QTY-BE` reported "No active claim found" even though the claim was active at that instant. For `handoff-read`, which treats a present `agent` as the LIST-CLAIMS discriminator, every handoff list/search silently became "claims for `<clientName>`" and returned 0 rows. Introduces `AGENT_SEMANTIC_TOOLS = {claim-manage, handoff-read}`; the session fallback now skips them. An explicit `agent` is still honored, and attribution tools (`memory-write`, `task-write`, `standard-write`, `observation-write`, …) keep the fallback.
+- **`No active claim found` surfaced as "Internal tool error" (`FIX-CLAIM-AGENT-INJECT`):** the raw error matched no classifier pattern (`\bnot found\b` missed the reversed word order) and fell through to `INTERNAL_ERROR`. A `^no .* found` arm now maps it to `NOT_FOUND` with the original message, so the caller can tell "no such row" from a genuine server fault.
+- **`codebase-read` warning storm (`FIX-CODESEARCH-STORM`):** `codebase_files.file_path` is relative to the repo ROOT, but clients passed a SUBDIRECTORY as `repoPath` (`modules/PurchaseDistributor/Lang`, `lang/`, `Vue/`, …), so `safeJoin` resolved every file outside the root and each `codebase-read` emitted one ENOENT warning per indexed file (157k warnings total; one cross-repo contamination case produced 33,990). Three changes: a `REPO_PATH_NOT_ROOT` guard in `codebase-read` CODE mode that rejects a non-root `repoPath` up front when the file-watcher registry knows the repo (realpath identity with a `resolve()` fallback; absent registry entry skips the guard); skip-warning dedup (`warnSkipOnce`) capped at one warning per (message, repo, repoPath) per 60s with a bounded 256-key map and a `suppressedSincePrevious` counter; and an async log sink — `createFileSink` switches from `fs.appendFileSync` (one blocking write syscall per line; a ~20k lines/min storm ≈ 7 MB/min blocked the event loop) to `fs.createWriteStream` with errors swallowed.
+
+### Added
+
+- **Regression coverage:** normalize-args unit tests (release without agent stays agent-free, explicit agent preserved, attribution tools unaffected, no-`toolName` fallback), classifier tests (`NOT_FOUND` for "No active claim found"; genuine faults still `INTERNAL_ERROR`), an end-to-end router test reproducing the cross-agent release and the handoff-read list mode, plus dedup and `REPO_PATH_NOT_ROOT` guard tests.
+- **`repoPath` guidance:** the `codebase-read` schema and the injected server instructions now state that `repoPath` MUST be the repo ROOT (the same absolute path passed to `codebase-index`), never a subdirectory.
+
 ## [0.52.1] — 2026-10-06
 
 Prompt-hygiene patch: the MCP server instructions (injected into every consuming agent's system prompt on every turn) drop ~40% of their size by removing content that carried no signal for a consumer of the published package.
