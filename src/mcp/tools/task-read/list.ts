@@ -1,6 +1,7 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { Task, TASK_STATUSES } from "../../types";
 import { buildTableResult, createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { formatDisplayTimestamp } from "../../utils/display-time";
 import { logger } from "../../utils/logger";
 import { fetchAggregatedTaskKgContext } from "../kg-archivist/query";
 import { capitalize, describeStatusFilter } from "./shared";
@@ -40,7 +41,7 @@ export async function handleListMode(
 		t.title,
 		t.status,
 		t.priority,
-		t.updated_at,
+		formatDisplayTimestamp(t.updated_at),
 		t.comments_count || 0
 	]);
 

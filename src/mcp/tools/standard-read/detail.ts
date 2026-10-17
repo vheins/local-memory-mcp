@@ -9,6 +9,7 @@
 import { CodingStandardEntry } from "../../types";
 import { SQLiteStore } from "../../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { formatDisplayTimestamp } from "../../utils/display-time";
 import { UUID_REGEX } from "../../utils/uuid";
 import { fetchKgContext, fetchAggregatedKgContext } from "../kg-archivist/query";
 import { StandardReadInput } from "../schemas/index";
@@ -24,8 +25,8 @@ function formatStandardDetail(s: CodingStandardEntry): string[] {
 		`Version: ${s.version}`,
 		`Language: ${s.language || "-"}`,
 		`Scope: ${s.is_global ? "global" : s.repo || "-"}`,
-		`Created: ${s.created_at}`,
-		`Updated: ${s.updated_at}`
+		`Created: ${formatDisplayTimestamp(s.created_at)}`,
+		`Updated: ${formatDisplayTimestamp(s.updated_at)}`
 	];
 
 	if (s.stack.length > 0) lines.push(`Stack: ${s.stack.join(", ")}`);

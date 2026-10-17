@@ -13,6 +13,7 @@
 import { MemoryEntry } from "../../types";
 import { SQLiteStore } from "../../storage/sqlite";
 import { createMcpResponse, McpResponse, withEnvelope } from "../../utils/mcp-response";
+import { formatDisplayTimestamp } from "../../utils/display-time";
 import { UUID_REGEX } from "../../utils/uuid";
 import { isMemoryAcknowledged } from "../../utils/memory-utils";
 import { fetchKgContext, fetchAggregatedKgContext } from "../kg-archivist/query";
@@ -30,8 +31,8 @@ export function formatMemoryDetail(memory: MemoryEntry, showId?: boolean): strin
 		`Status: ${memory.status}`,
 		`Acknowledged: ${isMemoryAcknowledged(memory) ? "yes" : "no"}`,
 		`Tags: ${memory.tags.length > 0 ? memory.tags.join(", ") : "-"}`,
-		`Created: ${memory.created_at}`,
-		`Updated: ${memory.updated_at}`
+		`Created: ${formatDisplayTimestamp(memory.created_at)}`,
+		`Updated: ${formatDisplayTimestamp(memory.updated_at)}`
 	);
 	if (memory.scope?.repo) lines.push(`Repo: ${memory.scope.repo}`);
 	if (memory.scope?.folder) lines.push(`Folder: ${memory.scope.folder}`);

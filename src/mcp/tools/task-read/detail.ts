@@ -4,6 +4,7 @@ import { createMcpResponse, McpResponse, withEnvelope } from "../../utils/mcp-re
 import { UUID_REGEX } from "../../utils/uuid";
 import { logger } from "../../utils/logger";
 import { assertNotOrchestratorPlaceholder } from "../../utils/placeholder-code";
+import { formatDisplayTimestamp } from "../../utils/display-time";
 import { fetchTaskKgContext } from "../kg-archivist/query";
 
 function buildTaskDetailLines(
@@ -47,11 +48,11 @@ function buildTaskDetailLines(
 			);
 		}
 	}
-	lines.push(`Created: ${task.created_at}`);
-	if (task.updated_at) lines.push(`Updated: ${task.updated_at}`);
-	if (task.in_progress_at) lines.push(`Started: ${task.in_progress_at}`);
-	if (task.finished_at) lines.push(`Finished: ${task.finished_at}`);
-	if (task.canceled_at) lines.push(`Canceled: ${task.canceled_at}`);
+	lines.push(`Created: ${formatDisplayTimestamp(task.created_at)}`);
+	if (task.updated_at) lines.push(`Updated: ${formatDisplayTimestamp(task.updated_at)}`);
+	if (task.in_progress_at) lines.push(`Started: ${formatDisplayTimestamp(task.in_progress_at)}`);
+	if (task.finished_at) lines.push(`Finished: ${formatDisplayTimestamp(task.finished_at)}`);
+	if (task.canceled_at) lines.push(`Canceled: ${formatDisplayTimestamp(task.canceled_at)}`);
 
 	if (children.length > 0) {
 		lines.push("", "--- Children ---");
@@ -73,7 +74,7 @@ function buildTaskDetailLines(
 			const statusChange =
 				c.previous_status || c.next_status ? ` [${c.previous_status || "?"} → ${c.next_status || "?"}]` : "";
 			const agentInfo = c.agent ? ` (${c.agent})` : "";
-			lines.push(`- ${c.created_at}${statusChange}${agentInfo}: ${c.comment}`);
+			lines.push(`- ${formatDisplayTimestamp(c.created_at)}${statusChange}${agentInfo}: ${c.comment}`);
 		}
 	}
 
