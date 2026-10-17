@@ -319,6 +319,7 @@ worker starts inline at startup).
 | `ENABLE_REUSE_TELEMETRY`         | `"true"`                         | Set to `"false"` to disable aggregate-only context-reuse telemetry.                                                                                                                                             |
 | `REUSE_TELEMETRY_RETENTION_DAYS` | `30`                             | Hourly aggregate retention in days (bounded to 1–365).                                                                                                                                                          |
 | `REUSE_TELEMETRY_MAX_ROWS`       | `20000`                          | Global cap for aggregate telemetry rows.                                                                                                                                                                        |
+| `LOCAL_MEMORY_DISPLAY_TZ`        | — (raw ISO-8601 UTC)             | IANA zone (e.g. `Asia/Jakarta`) used to render timestamps in human-readable tool output (`task-read`, `memory-read`, `standard-read`) as `YYYY-MM-DD HH:mm:ss ±HH:MM`. Unset, empty, or invalid ⇒ output stays byte-identical to the stored ISO-8601 UTC string. Storage, ordering, filtering, and comparisons remain UTC. |
 
 ### Dashboard
 

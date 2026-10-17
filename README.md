@@ -178,6 +178,7 @@ wins). `configDir` defaults to `~/.config/local-memory-mcp`.
 | :-------------------------- | :------ | :--------------------------------------------- |
 | `PORT`                      | `3456`  | Port for the combined daemon (MCP + dashboard) |
 | `MEMORY_DB_BUSY_TIMEOUT_MS` | `30000` | SQLite busy timeout in ms                      |
+| `LOCAL_MEMORY_DISPLAY_TZ`   | —       | IANA zone (e.g. `Asia/Jakarta`) for timestamps in tool text output, rendered as `YYYY-MM-DD HH:mm:ss ±HH:MM`. Unset/invalid keeps raw ISO-8601 UTC. Storage stays UTC. |
 
 #### Notes
 

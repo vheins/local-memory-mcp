@@ -155,6 +155,7 @@ Dashboard tersedia di `http://127.0.0.1:3456` — port yang sama, tidak perlu pr
 | :-------------------------- | :------ | :------------------------------------------- |
 | `PORT`                      | `3456`  | Port untuk daemon gabungan (MCP + dashboard) |
 | `MEMORY_DB_BUSY_TIMEOUT_MS` | `30000` | Timeout busy SQLite dalam ms                 |
+| `LOCAL_MEMORY_DISPLAY_TZ`   | —       | Zona IANA (mis. `Asia/Jakarta`) untuk timestamp di output teks tool, ditampilkan sebagai `YYYY-MM-DD HH:mm:ss ±HH:MM`. Jika kosong/tidak valid, tetap ISO-8601 UTC mentah. Penyimpanan tetap UTC. |
 
 #### Catatan
 
