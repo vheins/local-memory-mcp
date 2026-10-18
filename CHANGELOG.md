@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.3] — 2026-10-18
+
+Patch release carrying a backward-compatible feature. This deviates from the repository's minor-bump convention by operator decision: the version delta stays small for consumers who pin versions.
+
+### Added
+
+- **`LOCAL_MEMORY_DISPLAY_TZ` display timezone (`LMM-TZ-01`):** an IANA zone name (e.g. `Asia/Jakarta`) that renders timestamps returned by `task-read` (list and detail), `memory-read` (detail), and `standard-read` (detail) as `YYYY-MM-DD HH:mm:ss ±HH:MM` instead of the raw ISO-8601 UTC string. When the variable is unset, empty, or an invalid zone, rendering falls back to the raw ISO-8601 UTC string. Storage, ordering, and filtering are unaffected and remain UTC — the variable changes presentation only.
+
 ## [0.52.2] — 2026-10-08
 
 Correctness + stability patch. Two production bugs: a session-`agent` injection that silently corrupted agent-semantic tools (`claim-manage` RELEASE and `handoff-read`), and a codebase-read warning storm that grew `daemon.log` to 93 MB / 500k lines and starved the event loop.
