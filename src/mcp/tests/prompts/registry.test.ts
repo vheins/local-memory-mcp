@@ -86,7 +86,7 @@ vi.mock("fs", async (importOriginal) => {
 	const existsSync = (p: string): boolean => realFs.existsSync(translate(p));
 	const readdirSync = (p: string): string[] => realFs.readdirSync(translate(p));
 	const readFileSync = (p: string, encoding?: BufferEncoding | null): string | Buffer =>
-		realFs.readFileSync(translate(p), encoding ?? undefined);
+		encoding ? realFs.readFileSync(translate(p), encoding) : realFs.readFileSync(translate(p));
 
 	const mockFs = { ...realFs, existsSync, readdirSync, readFileSync };
 	return { ...realFs, ...mockFs, default: mockFs };
