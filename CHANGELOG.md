@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.4] — 2026-11-05
+
+### Changed
+
+- Bump `@modelcontextprotocol/server` from 2.0.0-beta.2 to 2.4.0 (PR #140, PR #150).
+- Bump `@types/node` from 22.19.17 to 26.6.6 (PR #141, PR #151).
+- Bump `typescript` from 5.9.3 to 6.0.3 (PR #143).
+- Bump `eslint` from 10.11.0 to 10.14.0 (PR #139).
+- Bump `actions/setup-node` from 7.0.0 to 7.1.0 (PR #146).
+- Bump `actions/upload-artifact` from 7.0.1 to 7.0.2 (PR #145).
+- Bump `fast-check` from 4.7.0 to 4.10.2 (PR #149).
+- Bump `globals` from 17.5.0 to 17.13.0 (PR #142).
+- Bump npm dependencies (`vite`, `zod`, `rolldown`, `undici`, `postcss`, `body-parser`, `dompurify`, `nanoid`, `iconv-lite`, `qs`, `proxy-addr`, `source-map-js`) (PR #144, PR #148).
+
+### Fixed
+
+- **prompts**: Support MCP SDK 2.3.0+ prompt registration by generating dynamic `argsSchema` from loaded arguments to preserve `{{arg}}` substitution (PR #140 / TASK-435).
+- **tests**: Handle narrowed `@types/node` v26 `readFileSync` overload by conditionally passing encoding (PR #141 / TASK-436).
+- **dashboard**: Add `vite-env.d.ts` client type declarations for CSS side-effect imports under TypeScript 6 and svelte-check (PR #143 / TASK-437).
+
 ## [0.52.3] — 2026-10-18
 
 Patch release carrying a backward-compatible feature. This deviates from the repository's minor-bump convention by operator decision: the version delta stays small for consumers who pin versions.
