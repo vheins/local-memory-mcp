@@ -95,8 +95,12 @@ export async function coreUpdate(
 		updated_at: new Date().toISOString()
 	};
 
-	// Re-enqueue embedding/KG on content or semantic field change — atomic
-	// with the row update, enrichment deferred to the outbox worker (TASK-013).
+	// Re-enqueue embedding/KG on content or semantic field change. One
+	// BEGIN IMMEDIATE transaction spans standards.db (the row) AND memory.db
+	// (queue_jobs) — NOT atomic under WAL: a crash can commit one file without
+	// the other. Startup backfill re-enqueues a missing vector (the same job
+	// re-runs KG extraction); a job without its row turns poison after retries.
+	// Enrichment is deferred to the outbox worker (TASK-013).
 	const contentRelatedFields = [
 		params.name,
 		params.content,

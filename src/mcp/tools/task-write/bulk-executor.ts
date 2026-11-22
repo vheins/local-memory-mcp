@@ -361,7 +361,11 @@ export async function executeBulkOperation(
 					depends_on: resolveDependsOn(raw.depends_on as string | null | undefined, owner, repo, storage, localCodeMap)
 				};
 
-				// Insert + enqueue embedding/KG atomically; enrichment (ONNX +
+				// One BEGIN IMMEDIATE transaction spans tasks.db (the row) AND
+				// memory.db (queue_jobs) — NOT atomic under WAL: a crash can
+				// commit one file without the other. Startup backfill re-enqueues
+				// a missing vector (the same job re-runs KG extraction); a job
+				// without its row turns poison after retries. Enrichment (ONNX +
 				// compromise KG) runs via the outbox worker (TASK-013).
 				storage.db
 					.transaction(() => {

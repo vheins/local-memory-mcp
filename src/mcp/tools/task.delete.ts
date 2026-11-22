@@ -56,7 +56,10 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 	// Shared purge + cleanup contract (OPT-DRY-03): soft cancel + child detach +
 	// vector removal + claim release + handoff expiry + queue_jobs purge +
 	// repo-scoped KG cleanup — identical to the memory/standard delete tools.
-	// All DB mutations run in ONE transaction; KG cleanup stays best-effort.
+	// NO cross-file atomicity: queue purge, entity mutation and vector removal
+	// run as ordered, idempotent phases, each in its own transaction; KG cleanup
+	// is a best-effort final phase. Recovery is caller retry — no startup
+	// reconciliation repairs a half-finished purge.
 	// Only resolved-and-existing targets are purged; phantom ids never reach it.
 	if (validIdsToDelete.length > 0) {
 		purgeEntityAndCleanup(

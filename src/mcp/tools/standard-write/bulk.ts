@@ -84,8 +84,12 @@ export async function handleBulk(
 				model: (std.model as string) || "unknown"
 			};
 
-			// Insert + enqueue embedding/KG atomically; enrichment deferred to
-			// the outbox worker (TASK-013).
+			// One BEGIN IMMEDIATE transaction spans standards.db (the row) AND
+			// memory.db (queue_jobs) — NOT atomic under WAL: a crash can commit
+			// one file without the other. Startup backfill re-enqueues a missing
+			// vector (the same job re-runs KG extraction); a job without its row
+			// turns poison after retries. Enrichment deferred to the outbox
+			// worker (TASK-013).
 			db.db
 				.transaction(() => {
 					db.standards.insert(entry);

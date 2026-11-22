@@ -90,8 +90,12 @@ export async function handleCreateSingle(
 	storage: SQLiteStore,
 	_vectors: VectorStore
 ): Promise<McpResponse> {
-	// Insert task + enqueue embedding/KG job atomically; enrichment (ONNX
-	// vector + compromise KG) runs via the outbox worker (TASK-013).
+	// One BEGIN IMMEDIATE transaction spans tasks.db (the row) AND memory.db
+	// (queue_jobs) — NOT atomic under WAL: a crash can commit one file without
+	// the other. Startup backfill re-enqueues a missing vector (the same job
+	// re-runs KG extraction); a job without its row turns poison after retries.
+	// Enrichment (ONNX vector + compromise KG) runs via the outbox worker
+	// (TASK-013).
 	const { task } = storage.db
 		.transaction(() => {
 			const created = coreCreate(params, storage);
