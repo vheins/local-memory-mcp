@@ -42,7 +42,7 @@ Canonical (adopted, previously `_archive/decisions/`):
 - `ADR-009-optional-multi-database-support.md` — SQLite default with optional future multi-database adapters
 - `ADR-010-streamable-http-transport.md` — Opt-in Streamable HTTP transport for one daemon and many clients
 - `ADR-011-split-memory-db-per-domain.md` — Split `memory.db` per domain (evaluated; rejected — superseded by `ADR-012`)
-- `ADR-012-split-memory-db-per-domain-files.md` — Split `memory.db` into five domain files (`core`, `tasks`, `standards`, `kg`, `observability`)
+- `ADR-012-split-memory-db-per-domain-files.md` — Split the hot store per domain: existing `memory.db` (core) plus four new files (`tasks`, `standards`, `kg`, `observability`)
 - `SPEC-001-unified-nl-query.md` — Unified NL query (`key:value` inline tags)
 
 ## Links
