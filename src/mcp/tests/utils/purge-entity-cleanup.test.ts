@@ -10,6 +10,7 @@ function makeDb() {
 	const transaction = vi.fn((fn: () => void) => ({ immediate: () => fn() }));
 	const bulkUpdateMemories = vi.fn();
 	const standardDelete = vi.fn();
+	const removeStandardVector = vi.fn();
 	const updateTask = vi.fn();
 	const clearChildrenParent = vi.fn();
 	const removeTaskVector = vi.fn();
@@ -19,7 +20,7 @@ function makeDb() {
 	const db = {
 		db: { prepare, transaction },
 		memories: { bulkUpdateMemories },
-		standards: { delete: standardDelete },
+		standards: { delete: standardDelete, removeStandardVector },
 		tasks: { updateTask, clearChildrenParent, removeTaskVector },
 		handoffs: { releaseClaimsForTask, updatePendingHandoffsForTask },
 		knowledgeGraph: { deleteObservationsAndOrphans }
@@ -31,6 +32,7 @@ function makeDb() {
 		transaction,
 		bulkUpdateMemories,
 		standardDelete,
+		removeStandardVector,
 		updateTask,
 		clearChildrenParent,
 		removeTaskVector,
@@ -73,6 +75,9 @@ describe("purgeEntityAndCleanup", () => {
 		]);
 		expect(m.standardDelete).toHaveBeenNthCalledWith(1, "s1");
 		expect(m.standardDelete).toHaveBeenNthCalledWith(2, "s2");
+		// Vector removal is a separate phase (FIX-011) — same ids, own call.
+		expect(m.removeStandardVector).toHaveBeenNthCalledWith(1, "s1");
+		expect(m.removeStandardVector).toHaveBeenNthCalledWith(2, "s2");
 	});
 
 	it("runs the full task cancel contract", () => {

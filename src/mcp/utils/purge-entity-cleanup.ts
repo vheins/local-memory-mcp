@@ -111,8 +111,7 @@ function purgeQueueJobs(db: SQLiteStore, kind: PurgeEntityKind, items: PurgeEnti
 
 /**
  * Runs the full delete contract for a batch of entities of one kind as four
- * ordered phases. No phase relies on a commit that spans two database files
- * (see the standard-vector residual below).
+ * ordered phases. No phase relies on a commit that spans two database files.
  *
  * 1. `queue_jobs` purge — FIRST, own transaction ({@link purgeQueueJobs}). The
  *    safe-first order is documented there.
@@ -123,20 +122,17 @@ function purgeQueueJobs(db: SQLiteStore, kind: PurgeEntityKind, items: PurgeEnti
  *    residue is the harmless one (job gone, entity still present) and phase 1 is
  *    idempotent, so a retry completes the purge. A partially-scanned batch can
  *    roll back its own entity writes, since those share one file group.
- * 3. Derived vector cleanup for tasks — own transaction. Leftover
- *    `derived.task_vectors` rows are inert (every vector read JOINs its parent
- *    table), so this is cleanup, not a consistency dependency.
+ * 3. Derived vector cleanup for tasks and standards — own transaction, in
+ *    `codebase.db`. The row is committed before its vector on purpose: a crash
+ *    between the phases leaves an orphan vector, which is inert (every vector
+ *    read JOINs its parent table), never a row whose vector is missing. That
+ *    missing-vector direction is the one semantic search would silently lose
+ *    until the capped startup backfill repaired it.
  * 4. KG cleanup — best-effort (never throws), atomic, once per batch, each
  *    (text, repo) pair scoped to the entity's OWN repo so identical titles
  *    across repos never cross-delete (TASK-045/043); orphans are checked via
  *    observations UNION relations so relation-referenced entities are KEPT
  *    (REFACTOR-KG-006 / TASK-004).
- *
- * Known residual: `StandardEntity.delete` drops the `coding_standards` row and
- * its `derived.standard_vectors` row in one call, so phase 2 reaches into
- * `codebase.db` for standards. Nothing depends on that co-commit — a leftover
- * standard vector is unreachable (`getVectorCandidates` JOINs
- * `coding_standards`) — and it is not part of the crash-safety argument above.
  *
  * Archived memories legitimately keep their vector rows — they stay searchable
  * with `includeArchived`.
@@ -198,6 +194,16 @@ export function purgeEntityAndCleanup(
 		db.db
 			.transaction(() => {
 				for (const item of items) db.tasks.removeTaskVector(item.id);
+			})
+			.immediate();
+	} else if (kind === "standard") {
+		// Phase 3 for standards (FIX-011): the row is already committed in
+		// phase 2, so this transaction touches only `codebase.db` and a crash
+		// before it leaves an unreachable vector rather than a row with no
+		// vector (which semantic search would miss until the startup backfill).
+		db.db
+			.transaction(() => {
+				for (const item of items) db.standards.removeStandardVector(item.id);
 			})
 			.immediate();
 	}

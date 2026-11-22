@@ -410,11 +410,30 @@ export class StandardEntity extends BaseEntity {
 		);
 	}
 
+	/**
+	 * Hard-delete the `coding_standards` row only.
+	 *
+	 * The semantic vector is a derived artifact (`derived.standard_vectors` in
+	 * `codebase.db`) with no cross-database FK, so it does NOT ride along in one
+	 * call: a transaction spanning attached database files is not atomic under
+	 * WAL (ADR-012, FIX-011). Callers delete the row first and then remove the
+	 * vector with {@link removeStandardVector} in a later transaction — the purge
+	 * contract does exactly that, row in phase 2 and vector in phase 3. A crash
+	 * between the two leaves an orphan vector, which is inert because every
+	 * vector read JOINs this table; the reverse order would leave a searchable
+	 * row whose vector silently vanished until the startup backfill.
+	 */
 	delete(id: string): void {
-		// coding_standards lives in memory.db; its vector lives in the derived
-		// database with NO cross-database FK, so the previously implicit
-		// ON DELETE CASCADE is now an explicit delete (TASK-037).
 		this.run(`DELETE FROM ${Q_TABLE_CODING_STANDARDS} WHERE id = ?`, [id]);
+	}
+
+	/**
+	 * Remove the derived semantic vector of a standard, and nothing else.
+	 *
+	 * Split from {@link delete} so the purge path can run it in its own
+	 * transaction (phase 3) without touching `standards.db`.
+	 */
+	removeStandardVector(id: string): void {
 		this.run("DELETE FROM derived.standard_vectors WHERE standard_id = ?", [id]);
 	}
 

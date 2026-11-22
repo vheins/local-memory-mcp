@@ -11,6 +11,11 @@
  * So every test here opens a store on a real temp directory and asserts WAL for
  * each database BEFORE exercising the purge. `assertAllWal` is itself covered by
  * a `:memory:` case that must fail, so the guard cannot go vacuous unnoticed.
+ *
+ * FIX-011 adds the standard vector split to the same file-mode proof: the
+ * `coding_standards` row (standards.db) and its `standard_vectors` row
+ * (codebase.db) are deleted in separate phases, and a phase-3 crash must leave
+ * only the unreachable vector.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -88,6 +93,17 @@ function countQueueJobs(store: SQLiteStore, kind: string, entityId: string): num
 	const row = store.db
 		.prepare("SELECT COUNT(*) AS c FROM queue_jobs WHERE entity_kind = ? AND entity_id = ?")
 		.get(kind, entityId) as { c: number };
+	return row.c;
+}
+
+/**
+ * Count `derived.standard_vectors` rows PHYSICALLY — no JOIN, so an orphan
+ * vector (row deleted, vector left behind) is still visible here.
+ */
+function countStandardVectors(store: SQLiteStore, standardId: string): number {
+	const row = store.db
+		.prepare("SELECT COUNT(*) AS c FROM derived.standard_vectors WHERE standard_id = ?")
+		.get(standardId) as { c: number };
 	return row.c;
 }
 
@@ -261,6 +277,66 @@ describe("purgeEntityAndCleanup on real WAL files (FIX-006)", () => {
 			).toBe(2);
 			expect(store.standards.getById(a.id)).toBeNull();
 			expect(store.standards.getById(b.id)).toBeNull();
+		} finally {
+			store.close();
+		}
+	});
+
+	it("deletes the standard row in phase 2 and its vector in phase 3, so a phase-3 crash leaves only an orphan vector", () => {
+		const dir = makeTempDir();
+		const store = new SQLiteStore(path.join(dir, "memory.db"));
+		try {
+			assertAllWal(store);
+
+			const standard = makeStandard("cccccccc-0000-4000-a000-000000000001");
+			store.standards.insert(standard);
+			store.standards.upsertVectorEmbedding(standard.id, [0.1, 0.2]);
+			insertQueueJob(store, "standard", standard.id);
+
+			// Premise: the row and its vector really live in different files.
+			const standardsTables = tablesOfFile(path.join(dir, "standards.db"));
+			const derivedTables = tablesOfFile(path.join(dir, "codebase.db"));
+			expect(standardsTables.has("coding_standards")).toBe(true);
+			expect(standardsTables.has("standard_vectors")).toBe(false);
+			expect(derivedTables.has("standard_vectors")).toBe(true);
+			expect(countStandardVectors(store, standard.id)).toBe(1);
+
+			// Crash between phase 2 (row delete, standards.db) and phase 3
+			// (vector delete, codebase.db). Not a :memory: store: WAL is real,
+			// so the split is the only reason the row survives on its own.
+			const crash = vi.spyOn(store.standards, "removeStandardVector").mockImplementation(() => {
+				throw new Error("injected crash between purge phases");
+			});
+			expect(() =>
+				purgeEntityAndCleanup(store, "standard", [{ id: standard.id, title: standard.title, repo: REPO }])
+			).toThrow("injected crash between purge phases");
+
+			// Phase 1 committed: no job points at the purged standard.
+			expect(countQueueJobs(store, "standard", standard.id)).toBe(0);
+			// Phase 2 committed on its own: the row is gone.
+			expect(store.standards.getById(standard.id)).toBeNull();
+			// Phase 3 rolled back: the vector is still there, physically.
+			expect(countStandardVectors(store, standard.id)).toBe(1);
+			// ... and unreachable, which is what makes the residue safe: every
+			// vector read JOINs coding_standards, so semantic search cannot
+			// surface it.
+			expect(store.standards.getVectorCandidates(REPO)).toHaveLength(0);
+
+			// Retry: phases 1 and 2 are no-ops, phase 3 finishes the cleanup.
+			crash.mockRestore();
+			expect(purgeEntityAndCleanup(store, "standard", [{ id: standard.id, title: standard.title, repo: REPO }])).toBe(
+				1
+			);
+			expect(store.standards.getById(standard.id)).toBeNull();
+			expect(countStandardVectors(store, standard.id)).toBe(0);
+
+			// Re-running a completed purge stays idempotent.
+			expect(purgeEntityAndCleanup(store, "standard", [{ id: standard.id, title: standard.title, repo: REPO }])).toBe(
+				1
+			);
+			expect(store.standards.getById(standard.id)).toBeNull();
+			expect(countStandardVectors(store, standard.id)).toBe(0);
+			expect(countQueueJobs(store, "standard", standard.id)).toBe(0);
 		} finally {
 			store.close();
 		}
