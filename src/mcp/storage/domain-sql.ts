@@ -2,8 +2,8 @@ import type Database from "better-sqlite3";
 
 /**
  * Small SQLite inspection helpers shared by the domain split (ADR-012 /
- * TASK-003): `domain-migration.ts` (copy/verify/drop) and `domain-fts.ts`
- * (FTS rebuild/audit).
+ * TASK-003): `domain-copy.ts` (copy/verify), `domain-migration.ts` (scan/drop),
+ * `domain-disk-guard.ts` (size estimate) and `domain-fts.ts` (rebuild/audit).
  *
  * Every helper takes an explicit schema name. That is unavoidable here: the whole
  * point of the split is that an UNQUALIFIED name resolves to `main` first, so a

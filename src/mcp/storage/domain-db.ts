@@ -51,8 +51,9 @@ export type { DomainMigrationResult, DomainTableSpec } from "./domain-migration"
  * `entity_names_fts`) are grouped with their `content=` table for the same
  * reason.
  *
- * The one-time data move lives in `domain-migration.ts` (copy → verify → FTS
- * audit → drop), which this module attaches, schemas and orchestrates.
+ * The one-time data move is orchestrated by `domain-migration.ts` (copy →
+ * verify → FTS audit → drop), with the per-table copy in `domain-copy.ts`;
+ * this module attaches, schemas and drives it.
  *
  * ## `:memory:` mode keeps the SAME layout
  *

@@ -134,24 +134,24 @@ Each file gets its own WAL and checkpoint policy, and a reader can observe diffe
 
 ## Data-Preserving Migration Strategy
 
-Same shape as `runDerivedMigration` (`src/mcp/storage/derived-db.ts:400-436`) — attach, create, copy, verify, drop — with a stricter copy contract and a disk guard. The shipped sequence is `runDomainMigration` in `src/mcp/storage/domain-migration.ts:393-478`, orchestrated by `ensureDomainReady` in `src/mcp/storage/domain-db.ts:226-234`:
+Same shape as `runDerivedMigration` (`src/mcp/storage/derived-db.ts:400-436`) — attach, create, copy, verify, drop — with a stricter copy contract and a disk guard. The shipped sequence is `runDomainMigration` in `src/mcp/storage/domain-migration.ts:211-300`, with the per-table copy in `src/mcp/storage/domain-copy.ts:237-306`, orchestrated by `ensureDomainReady` in `src/mcp/storage/domain-db.ts:226-234`:
 
 1. **Attach** each of the four target files as its schema, creating the directory on first run; idempotent when already attached, checked via `PRAGMA database_list` (`src/mcp/storage/domain-db.ts:120-155`).
 2. **Create schema** in every attached file with `CREATE TABLE/INDEX IF NOT EXISTS`, so a retry is safe (`src/mcp/storage/domain-db.ts:164-166`, DDL in `domain-schema.ts`).
-3. **Copy** each table with an explicit column list — the intersection of source and target columns. A source column missing in the target is a schema-drift error that aborts before any drop (`src/mcp/storage/domain-migration.ts:242-251`). `INSERT OR IGNORE`, never `INSERT OR REPLACE`, in two passes:
-   - `INSERT OR IGNORE INTO <schema>.<table> (rowid, …) SELECT rowid, … FROM main.<table>` preserves each source row's `rowid` so an external-content FTS index stays docid-aligned (`:256-261`; skipped for `WITHOUT ROWID` targets);
-   - `INSERT OR IGNORE INTO <schema>.<table> (…) SELECT … FROM main.<table> m WHERE NOT EXISTS (SELECT 1 FROM <schema>.<table> t WHERE <pk match>)` fills rows the first pass skipped because the target `rowid` was already taken by a different row (`:263-268`).
+3. **Copy** each table with an explicit column list — the intersection of source and target columns. A source column missing in the target is a schema-drift error that aborts before any drop (`src/mcp/storage/domain-copy.ts:246-250`). `INSERT OR IGNORE`, never `INSERT OR REPLACE`, in two passes:
+   - `INSERT OR IGNORE INTO <schema>.<table> (rowid, …) SELECT rowid, … FROM main.<table>` preserves each source row's `rowid` so an external-content FTS index stays docid-aligned (`domain-copy.ts:255-263`; skipped for `WITHOUT ROWID` targets);
+   - `INSERT OR IGNORE INTO <schema>.<table> (…) SELECT … FROM main.<table> m WHERE NOT EXISTS (SELECT 1 FROM <schema>.<table> t WHERE <pk match>)` fills rows the first pass skipped because the target `rowid` was already taken by a different row (`domain-copy.ts:265-273`).
 
-   `OR IGNORE` is deliberate: an existing target row is the post-split version and must win over the `main` snapshot, so a partially migrated store is never overwritten (`:229-230`).
+   `OR IGNORE` is deliberate: an existing target row is the post-split version and must win over the `main` snapshot, so a partially migrated store is never overwritten (`domain-copy.ts:226-227`).
 
-4. **Verify** the target holds at least as many rows as the source, then every source row is present in the target by primary key; throw on any missing row, before any drop (`src/mcp/storage/domain-migration.ts:270-288`).
-5. **Drop** the `main`-side objects only after **all** tables are copied and verified: triggers first, then `main`-side FTS indexes, then tables children-before-parents, every statement `DROP … IF EXISTS` and guarded so a concurrent peer's drop cannot fail the run (`src/mcp/storage/domain-migration.ts:340-368`, called at `:455-458`). No partial cutover.
+4. **Verify** the target holds at least as many rows as the source, then every source row is present in the target by primary key; throw on any missing row, before any drop (`src/mcp/storage/domain-copy.ts:275-293`).
+5. **Drop** the `main`-side objects only after **all** tables are copied and verified: triggers first, then `main`-side FTS indexes, then tables children-before-parents, every statement `DROP … IF EXISTS` and guarded so a concurrent peer's drop cannot fail the run (`src/mcp/storage/domain-migration.ts:155-183`, called at `:279`). No partial cutover.
 6. **Rebuild and audit FTS** before the drop: `verifyDomainFtsAfterCopy` rebuilds every domain-owned index and requires one document per content row, with one rebuild+audit retry (`src/mcp/storage/domain-fts.ts:194-210`). `memories_fts` is excluded — its content table never leaves `main`.
-7. **Never wrap the cross-file work in a transaction** (`src/mcp/storage/domain-migration.ts:376-379`). FK enforcement is suspended for the copy window and restored afterwards (`:430-448`), because rows may be inserted child-before-parent.
+7. **Never wrap the cross-file work in a transaction** (`src/mcp/storage/domain-migration.ts:189-194`). FK enforcement is suspended for the copy window and restored afterwards (`:248-270`), because rows may be inserted child-before-parent.
 8. **Rollback = delete the four new files** and keep serving `main` (`src/mcp/storage/domain-db.ts:219-221`). The copy is additive (`INSERT OR IGNORE`), `main` keeps every source table until the drop phase, and the migration retries on the next startup. This rollback is safe only while `main` still holds the source tables: once the drop phase has run, deleting the files discards the moved data.
-9. **Idempotent entry:** skip any table already absent from `main` (`src/mcp/storage/domain-migration.ts:396-401`). When nothing is left to move, the already-split path audits every FTS index and repairs drift instead of trusting it (`:403-422`), so a database already split, or one left behind by a crashed run, converges rather than failing.
+9. **Idempotent entry:** skip any table already absent from `main` (`src/mcp/storage/domain-migration.ts:214-219`). When nothing is left to move, the already-split path audits every FTS index and repairs drift instead of trusting it (`:221-240`), so a database already split, or one left behind by a crashed run, converges rather than failing.
 
-**Disk guard.** Before the first write, `assertEnoughDiskSpace` estimates the copy as `(page_count - freelist_count) * page_size` of `main` plus a fixed 16 MiB margin and throws when the volume cannot hold it (`src/mcp/storage/domain-migration.ts:162-201`). Nothing is copied or dropped in that case; the move retries on the next startup. `:memory:` stores skip the guard (`:178`).
+**Disk guard.** Before the first write, `assertEnoughDiskSpace` estimates the copy as `(page_count - freelist_count) * page_size` of `main` plus a fixed 16 MiB margin and throws when the volume cannot hold it (`src/mcp/storage/domain-disk-guard.ts:63-87`). Nothing is copied or dropped in that case; the move retries on the next startup. `:memory:` stores skip the guard (`domain-disk-guard.ts:64`).
 
 **Space reclamation.** Dropping the `main` tables frees pages into the SQLite freelist, not back to the filesystem; `auto_vacuum` is deliberately never set in the constructor, so it keeps SQLite's default of `NONE` unless an operator converts it (`src/mcp/storage/sqlite.ts:137-143`). Reclaiming that space is a separate, guarded maintenance operation (`AGENTS.md` § Database space reclamation: `VACUUM_ON_STARTUP` or a manual `VACUUM` with every process stopped). This ADR does not authorize an automatic `VACUUM`.
 
@@ -159,7 +159,7 @@ Same shape as `runDerivedMigration` (`src/mcp/storage/derived-db.ts:400-436`) �
 
 As originally written, this section prescribed `INSERT OR REPLACE` for the copy (mirroring `copyTable` in `derived-db.ts:360-369`) and described rollback as deleting five new files. The shipped migration does neither, deliberately:
 
-- **Copy** uses two-pass `INSERT OR IGNORE` (`domain-migration.ts:238-297`) instead of `INSERT OR REPLACE`. `OR REPLACE` would overwrite a post-split target row with the stale `main` snapshot when the copy is re-run after a partial failure, and would drop the rowid-preserving first pass that keeps external-content FTS docids aligned.
+- **Copy** uses two-pass `INSERT OR IGNORE` (`domain-copy.ts:237-306`) instead of `INSERT OR REPLACE`. `OR REPLACE` would overwrite a post-split target row with the stale `main` snapshot when the copy is re-run after a partial failure, and would drop the rowid-preserving first pass that keeps external-content FTS docids aligned.
 - **File count** is four new files, not five: the core group stayed in the existing `memory.db` rather than moving to a new `core.db`, so `_schema_version` and the core tables never leave `main`.
 - **Disk guard** (step above) is present in the implementation and was absent from the original text.
 
@@ -227,7 +227,7 @@ The layout is therefore identical in tests and production — same five schemas,
 Not part of the decision. Shipped as:
 
 1. Storage layer: `src/mcp/storage/domain-db.ts` (attach, idempotent schema init, triggers, checkpoints, `ensureDomainReady`) with the static per-group DDL in `src/mcp/storage/domain-schema.ts`, and `Q_TABLE_*` schema-qualified constants in `src/mcp/utils/constants.ts` used by production SQL. Migrations (`MIGRATIONS`) still run against `main` with unqualified `TABLE_*` names; a future migration that alters a moved table must edit the static domain DDL instead.
-2. Data migration: the copy/verify/FTS/drop sequence in §Data-Preserving Migration Strategy, in `src/mcp/storage/domain-migration.ts` with FTS handling in `src/mcp/storage/domain-fts.ts`, tested against a copy of a real database.
+2. Data migration: the copy/verify/FTS/drop sequence in §Data-Preserving Migration Strategy, orchestrated in `src/mcp/storage/domain-migration.ts` with the per-table copy in `src/mcp/storage/domain-copy.ts`, the disk guard in `src/mcp/storage/domain-disk-guard.ts` and FTS handling in `src/mcp/storage/domain-fts.ts`, tested against a copy of a real database.
 3. Verification: scoped type-check and lint, the cross-domain atomicity test, maintenance and archival tests, and a row-count plus per-row digest comparison before and after against a real data copy. `src/mcp/tests/domain-placement.test.ts` asserts each domain table lives in its ADR-012 file.
 
 ## References
@@ -235,7 +235,7 @@ Not part of the decision. Shipped as:
 - `src/mcp/storage/derived-db.ts` — `ATTACH` as `derived`, FTS5 same-file constraint, cross-database FK omission, `copyTable`, `runDerivedMigration`, non-atomic cross-file note
 - `src/mcp/storage/sqlite.ts` — single connection, WAL/busy_timeout setup, migration run, `ensureDerivedReady`, `createTestStore`
 - `src/mcp/storage/domain-db.ts`, `src/mcp/storage/domain-schema.ts` — the shipped attach/schema/trigger/checkpoint layer and the static per-group DDL
-- `src/mcp/storage/domain-migration.ts`, `src/mcp/storage/domain-fts.ts` — the copy/verify/drop move and the FTS rebuild/audit paths
+- `src/mcp/storage/domain-migration.ts`, `src/mcp/storage/domain-copy.ts`, `src/mcp/storage/domain-disk-guard.ts`, `src/mcp/storage/domain-fts.ts` — the copy/verify/drop move, its disk guard and the FTS rebuild/audit paths
 - `src/mcp/tests/domain-placement.test.ts` — asserts every domain table lives in its ADR-012 file
 - `src/mcp/storage/migrations/index.ts` — `SCHEMA_VERSION = 40`, migration runner
 - `src/mcp/utils/purge-entity-cleanup.ts` — one transaction across entity cleanup and `queue_jobs`
