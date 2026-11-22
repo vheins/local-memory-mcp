@@ -26,13 +26,13 @@ describe("exploration observation tools", () => {
 
 	it("installs the observation schema, indexes, foreign key, and idempotent migrations", () => {
 		expect(SCHEMA_VERSION).toBe(40);
-		const tables = db.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{
+		const tables = db.db.prepare("SELECT name FROM observability.sqlite_master WHERE type = 'table'").all() as Array<{
 			name: string;
 		}>;
 		expect(tables.map(({ name }) => name)).toEqual(
 			expect.arrayContaining(["exploration_observations", "exploration_evidence"])
 		);
-		const indexes = db.db.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all() as Array<{
+		const indexes = db.db.prepare("SELECT name FROM observability.sqlite_master WHERE type = 'index'").all() as Array<{
 			name: string;
 		}>;
 		expect(indexes.map(({ name }) => name)).toEqual(
