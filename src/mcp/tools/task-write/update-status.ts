@@ -1,8 +1,10 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { Task, TaskStatus, VectorStore } from "../../types";
+import { McpResponse } from "../../utils/mcp-response";
 import { logger } from "../../utils/logger";
 import { archiveTasksToMemory } from "../task.helpers";
+import { clearTaskArchivePending, markTaskArchivePending } from "../../utils/task-archive-marker";
 import { resolveTransitionComment } from "./state-machine";
 
 // ---------------------------------------------------------------------------
@@ -105,18 +107,34 @@ export function handleCoordinationCleanup(
  * metadata.task_ids — instead of N per-task rows. A single id keeps the
  * per-task archive shape.
  *
- * The archival is intentionally cheap: task_archive skips the conflict check
- * (memory-write/helpers.ts) and ONNX embedding + KG extraction run later via
- * the outbox worker (TASK-013), so awaiting it adds negligible latency to the
- * write path.
+ * FIX-002 (ADR-012): the task row (`tasks.db`) and the archive memory
+ * (`memory.db` core) are DIFFERENT FILES, so this pair is NOT atomic. A failed
+ * archive used to be swallowed here (`logger.error` only), leaving a completed
+ * task with no archive and no trace. Now it:
+ *   1. persists a durable `metadata.archive_pending` marker on each affected
+ *      task row (same file as the completed status), and
+ *   2. RETURNS a detectable outcome instead of swallowing — the status change
+ *      committed, so failing the whole call would misreport it; the caller
+ *      surfaces `archiveStatus` in the tool response and the marker carries the
+ *      state for startup reconciliation
+ *      (`services/task-archive-reconcile.ts`), which drains it idempotently.
  */
+export interface TaskArchiveOutcome {
+	/** `true` when every requested archive memory was written. */
+	ok: boolean;
+	/** Task ids whose archive is still missing (empty when `ok`). */
+	pendingTaskIds: string[];
+	/** Failure message when `ok` is false. */
+	error?: string;
+}
+
 export async function archiveCompletedTasks(
 	completedTaskIds: string[],
 	repo: string,
 	storage: SQLiteStore,
 	vectors: VectorStore
-): Promise<void> {
-	if (completedTaskIds.length === 0) return;
+): Promise<TaskArchiveOutcome> {
+	if (completedTaskIds.length === 0) return { ok: true, pendingTaskIds: [] };
 	try {
 		// TASK-039: archiveTasksToMemory coalesces a multi-task batch into ONE
 		// task_archive memory (capped content, metadata.task_ids) and delegates
@@ -124,7 +142,51 @@ export async function archiveCompletedTasks(
 		// runs under one exclusive write so the task_archive row(s) exist the
 		// moment the caller observes the completion.
 		await storage.withExclusiveWrite(() => archiveTasksToMemory(completedTaskIds, repo, storage, vectors));
+		// No-op when the archive path already cleared the marker; also heals a
+		// stale marker left by an earlier failed attempt on the same task.
+		clearTaskArchivePending(storage, completedTaskIds);
+		return { ok: true, pendingTaskIds: [] };
 	} catch (err) {
-		logger.error("Failed to archive tasks to memory", { taskIds: completedTaskIds, error: String(err) });
+		// The marker is written inside the archive helpers; persist it here too
+		// so a failure BEFORE the memory INSERT (e.g. lock acquisition) is still
+		// detectable. Both calls are idempotent.
+		markTaskArchivePending(storage, completedTaskIds, err);
+		logger.error("Failed to archive tasks to memory", { taskIds: completedTaskIds, repo, error: String(err) });
+		return { ok: false, pendingTaskIds: [...completedTaskIds], error: String(err) };
+	}
+}
+
+/**
+ * Surfaces a failed archive on an already-built tool response.
+ *
+ * The status write is committed at this point, so the response stays a
+ * success; it gains an explicit `archiveStatus` payload plus a warning
+ * sentence naming the affected tasks and the recovery path. Callers must not
+ * throw for this state — retrying the completion would be a status no-op and
+ * would NOT re-archive.
+ */
+export function applyArchiveOutcome(
+	response: McpResponse,
+	outcome: TaskArchiveOutcome,
+	labels: readonly string[]
+): void {
+	if (outcome.ok) return;
+
+	const affected = labels.length > 0 ? labels.join(", ") : outcome.pendingTaskIds.join(", ");
+	const warning =
+		` WARNING: task_archive memory write failed (${outcome.error ?? "unknown error"}). ` +
+		`Task status is committed; archive pending for ${affected}. ` +
+		`Startup reconciliation will re-archive automatically — do not retry the status change.`;
+
+	const text = response.content?.[0];
+	if (text && text.type === "text") text.text += warning;
+
+	if (response.structuredContent && typeof response.structuredContent === "object") {
+		(response.structuredContent as Record<string, unknown>).archiveStatus = {
+			status: "pending",
+			task_ids: outcome.pendingTaskIds,
+			error: outcome.error,
+			recovery: "startup_reconciliation"
+		};
 	}
 }

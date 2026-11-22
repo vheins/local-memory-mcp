@@ -17,6 +17,7 @@ import { addLogSink, createFileSink, logger } from "./utils/logger";
 import { bugCapture } from "./utils/bug-capture";
 import { reuseTelemetry } from "./utils/reuse-telemetry";
 import { runStartupMaintenance } from "./services/maintenance-job";
+import { reconcileTaskArchives } from "./services/task-archive-reconcile";
 import { runStartupVacuum } from "./services/vacuum";
 import { scheduleDeferredSemanticWarmup } from "./services/startup-warmup";
 import { scheduleDeferredStartupPasses } from "./services/startup-deferral";
@@ -356,6 +357,15 @@ if (runtimeCapabilities.profile === "full") {
 	if (EMBEDDING_LAZY_WARMUP) {
 		startupPasses.push({ name: "embedding-worker", run: () => embeddingWorker.start() });
 	}
+	startupPasses.push({
+		name: "task-archive-reconciliation",
+		run: async () => {
+			const result = await reconcileTaskArchives(db, vectors);
+			if (result.scanned > 0 || result.skipped) {
+				logger.info("[Server] Task archive reconciliation complete", { ...result });
+			}
+		}
+	});
 	startupPasses.push({ name: "maintenance", run: () => runtimeCapabilities.ensure("maintenance") });
 	// FIX-034: eager semantic (ONNX) warm-up, DEFERRED and NON-FATAL — a timeout
 	// or load failure logs one WARN and bumps a counter, but never blocks or

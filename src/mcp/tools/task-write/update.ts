@@ -20,7 +20,8 @@ import {
 	applyStatusTimestamps,
 	insertStatusComment,
 	handleCoordinationCleanup,
-	archiveCompletedTasks
+	archiveCompletedTasks,
+	applyArchiveOutcome
 } from "./update-status";
 
 // ---------------------------------------------------------------------------
@@ -346,7 +347,13 @@ export async function handleUpdate(
 	// Archive completed tasks BEFORE the response resolves so task_archive
 	// memory rows exist once the caller observes the write (deterministic —
 	// no setImmediate race). Awaited under the (reentrant) write lock.
-	await archiveCompletedTasks(completedTaskIds, params.repo, storage, vectors);
+	// FIX-002: a failed archive is surfaced on the response, never swallowed.
+	const archiveOutcome = await archiveCompletedTasks(completedTaskIds, params.repo, storage, vectors);
+	applyArchiveOutcome(
+		response,
+		archiveOutcome,
+		updatedTasks.map((task) => task.code)
+	);
 
 	return response;
 }
@@ -528,7 +535,13 @@ export async function handleBulkUpdateByIds(
 	// Archive completed tasks BEFORE the response resolves so task_archive
 	// memory rows exist once the caller observes the write (deterministic —
 	// no setImmediate race). Awaited under the (reentrant) write lock.
-	await archiveCompletedTasks(completedTaskIds, params.repo, storage, vectors);
+	// FIX-002: a failed archive is surfaced on the response, never swallowed.
+	const archiveOutcome = await archiveCompletedTasks(completedTaskIds, params.repo, storage, vectors);
+	applyArchiveOutcome(
+		response,
+		archiveOutcome,
+		updatedTasks.map((task) => task.code)
+	);
 
 	return response;
 }

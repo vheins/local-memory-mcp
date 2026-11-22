@@ -35,8 +35,11 @@ export async function executeBulkOperation(
 ): Promise<{
 	results: Record<string, unknown>[];
 	allOk: boolean;
+	/** FIX-002: per-repo archive failures surfaced to the caller, never swallowed. */
+	archiveFailures: { repo: string; taskIds: string[]; labels: string[]; error?: string }[];
 }> {
 	const results: Record<string, unknown>[] = [];
+	const archiveFailures: { repo: string; taskIds: string[]; labels: string[]; error?: string }[] = [];
 
 	const initialStats = storage.taskStats.getTaskStats(owner, repo);
 	let pendingInRequestCount = 0;
@@ -399,15 +402,25 @@ export async function executeBulkOperation(
 
 	// Flush collected completions ONCE per repo (TASK-044). A repo with N
 	// completed tasks produces ONE aggregated task_archive memory; a repo with
-	// a single completion keeps the exact per-task archive shape. Best-effort:
-	// archiveCompletedTasks logs and swallows failures so the batch result is
-	// unaffected.
+	// a single completion keeps the exact per-task archive shape.
+	// FIX-002 (ADR-012): a failed archive is NO LONGER swallowed — the outcome
+	// is returned to the orchestrator, which surfaces it on the batch response
+	// (`archiveStatus` + warning text). The task rows carry a durable
+	// `archive_pending` marker that startup reconciliation drains.
 	for (const [taskRepo, ids] of completedByRepo) {
-		await archiveCompletedTasks(ids, taskRepo, storage, vectors);
+		const archiveOutcome = await archiveCompletedTasks(ids, taskRepo, storage, vectors);
+		if (!archiveOutcome.ok) {
+			archiveFailures.push({
+				repo: taskRepo,
+				taskIds: archiveOutcome.pendingTaskIds,
+				labels: ids.map((id) => storage.tasks.getTaskById(id)?.task_code ?? id),
+				error: archiveOutcome.error
+			});
+		}
 	}
 
 	const failed = results.filter((r) => !r.success);
 	const allOk = failed.length === 0;
 
-	return { results, allOk };
+	return { results, allOk, archiveFailures };
 }

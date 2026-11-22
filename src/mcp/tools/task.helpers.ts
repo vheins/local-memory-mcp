@@ -3,6 +3,7 @@ import { type Task, type TaskComment, type TaskStatus, type VectorStore } from "
 import { logger } from "../utils/logger";
 import { resolveEntityRef } from "../utils/entity-ref";
 import { TASK_ARCHIVE_AGGREGATE_MAX_CHARS, TASK_ARCHIVE_TTL_DAYS } from "../utils/constants";
+import { clearTaskArchivePending, markTaskArchivePending, stripTaskArchivePending } from "../utils/task-archive-marker";
 import { handleMemoryWrite } from "./memory-write";
 
 /**
@@ -123,7 +124,9 @@ export async function archiveTaskToMemory(taskId: string, repo: string, storage:
 	const metadata = {
 		task_id: taskId,
 		task_code: task.task_code,
-		original_metadata: task.metadata
+		// FIX-002: never persist the internal archive-pending bookkeeping key
+		// into the durable archive body.
+		original_metadata: stripTaskArchivePending(task.metadata)
 	};
 
 	const title = `Completed Task: ${task.title}`;
@@ -153,8 +156,16 @@ export async function archiveTaskToMemory(taskId: string, repo: string, storage:
 			vectors
 		);
 	} catch (error) {
-		logger.error("Failed to archive task to memory", { error: String(error) });
+		// FIX-002: do NOT swallow. Persist a durable marker on the task row
+		// (same file as the completed status) and re-throw so the caller can
+		// surface the failure; startup reconciliation re-archives from the
+		// marker, idempotently.
+		markTaskArchivePending(storage, [taskId], error);
+		logger.error("Failed to archive task to memory", { taskId, repo, error: String(error) });
+		throw error;
 	}
+
+	clearTaskArchivePending(storage, [taskId]);
 }
 
 /** Renders the full per-task archive body (title, phase, comments history, …). */
@@ -251,6 +262,7 @@ export async function archiveTasksToMemory(
 
 	const title = `Completed Tasks: ${tasks.length} tasks`;
 	const truncatedTitle = title.length > 100 ? title.substring(0, 97) + "..." : title;
+	const attemptedTaskIds = tasks.map((t) => t.task.id);
 
 	try {
 		await handleMemoryWrite(
@@ -268,7 +280,7 @@ export async function archiveTasksToMemory(
 				metadata: {
 					aggregated: true,
 					count: tasks.length,
-					task_ids: tasks.map((t) => t.task.id),
+					task_ids: attemptedTaskIds,
 					task_codes: taskCodes
 				}
 			},
@@ -276,6 +288,12 @@ export async function archiveTasksToMemory(
 			vectors
 		);
 	} catch (error) {
-		logger.error("Failed to archive tasks to memory", { error: String(error) });
+		// FIX-002: mark EVERY task in the batch (the aggregate archive is a
+		// single row covering all of them) and re-throw for the caller.
+		markTaskArchivePending(storage, attemptedTaskIds, error);
+		logger.error("Failed to archive tasks to memory", { taskIds: attemptedTaskIds, repo, error: String(error) });
+		throw error;
 	}
+
+	clearTaskArchivePending(storage, attemptedTaskIds);
 }

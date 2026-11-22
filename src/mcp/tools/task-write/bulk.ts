@@ -140,6 +140,36 @@ export async function handleInteractive(
 	return handleCreateSingle(createParams, storage, vectors);
 }
 
+/**
+ * FIX-002: one-sentence warning appended to a bulk response when a completed
+ * task's `task_archive` memory failed to write. The status change is already
+ * committed, so the batch is not failed — the marker + startup reconciliation
+ * repair it.
+ */
+function buildArchiveWarning(failures: readonly { labels: string[]; error?: string }[]): string {
+	if (failures.length === 0) return "";
+	const affected = failures.flatMap((f) => f.labels).join(", ");
+	const reason = failures.find((f) => f.error)?.error ?? "unknown error";
+	return (
+		` WARNING: task_archive memory write failed (${reason}). ` +
+		`Task status is committed; archive pending for ${affected}. ` +
+		`Startup reconciliation will re-archive automatically — do not retry the status change.`
+	);
+}
+
+/** Machine-readable archive status for the bulk response envelope. */
+function toArchiveStatus(
+	failures: readonly { repo: string; taskIds: string[]; error?: string }[]
+): Record<string, unknown> {
+	return {
+		status: "pending",
+		task_ids: failures.flatMap((f) => f.taskIds),
+		repos: [...new Set(failures.map((f) => f.repo))],
+		error: failures.find((f) => f.error)?.error,
+		recovery: "startup_reconciliation"
+	};
+}
+
 // ---------------------------------------------------------------------------
 // BULK — thin orchestrator
 // ---------------------------------------------------------------------------
@@ -163,10 +193,11 @@ export async function handleBulk(
 		);
 	}
 
-	const { results, allOk } = await executeBulkOperation(items, owner, repo, storage, vectors);
+	const { results, allOk, archiveFailures } = await executeBulkOperation(items, owner, repo, storage, vectors);
 
 	const succeeded = results.filter((r) => r.success);
 	const failed = results.filter((r) => !r.success);
+	const archiveWarning = buildArchiveWarning(archiveFailures);
 
 	if (!allOk) {
 		if (items.length === failed.length) {
@@ -174,7 +205,7 @@ export async function handleBulk(
 			throw new Error(failed[0].error as string);
 		}
 		// Partial failure — return error response with results
-		const message = `Processed ${succeeded.length}/${items.length} in "${repo}" (${failed.length} failed). Errors: ${failed.map((r) => `[${r.index}] ${r.error}`).join("; ")}`;
+		const message = `Processed ${succeeded.length}/${items.length} in "${repo}" (${failed.length} failed). Errors: ${failed.map((r) => `[${r.index}] ${r.error}`).join("; ")}${archiveWarning}`;
 		return createMcpErrorResponse({
 			code: "PARTIAL_FAILURE",
 			message,
@@ -185,6 +216,7 @@ export async function handleBulk(
 				total: items.length,
 				createdCount: succeeded.length,
 				errors: failed.map((r) => ({ index: r.index, error: r.error })),
+				...(archiveFailures.length > 0 ? { archiveStatus: toArchiveStatus(archiveFailures) } : {}),
 				results: results.map((r) => {
 					const res: Record<string, unknown> = { index: r.index, operation: r.operation, success: r.success };
 					if (r.id) res.id = r.id;
@@ -226,12 +258,15 @@ export async function handleBulk(
 		summaryText = `Processed ${items.length} in "${repo}" — create: ${createCodes}; update: ${updateCodes}.`;
 	}
 
+	summaryText += archiveWarning;
+
 	return createMcpResponse(
 		{
 			success: true,
 			repo,
 			total: items.length,
 			createdCount: succeeded.length,
+			...(archiveFailures.length > 0 ? { archiveStatus: toArchiveStatus(archiveFailures) } : {}),
 			results: results.map((r) => {
 				const res: Record<string, unknown> = { index: r.index, operation: r.operation, success: r.success };
 				if (r.id) res.id = r.id;

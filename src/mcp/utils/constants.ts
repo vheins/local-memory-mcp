@@ -218,6 +218,16 @@ export const TASK_ARCHIVE_TTL_DAYS = envInt("TASK_ARCHIVE_TTL_DAYS", 180);
 // are NOT capped here — they retain the full task body as before.
 export const TASK_ARCHIVE_AGGREGATE_MAX_CHARS = envInt("TASK_ARCHIVE_AGGREGATE_MAX_CHARS", 5_000);
 
+// ── Half-archived task reconciliation (FIX-002 / ADR-012) ────────────────
+// The task row and its task_archive memory live in different SQLite files, so
+// the pair is not atomic. `archive_pending` is a durable marker written to the
+// task row on a failed archive; the startup pass
+// (src/mcp/services/task-archive-reconcile.ts) re-archives marked tasks
+// idempotently. These bounds keep that pass off the full table on every start:
+// at most N candidates per run, and only tasks finished within the window.
+export const TASK_ARCHIVE_RECONCILE_MAX_TASKS = envInt("TASK_ARCHIVE_RECONCILE_MAX_TASKS", 50);
+export const TASK_ARCHIVE_RECONCILE_WINDOW_DAYS = envInt("TASK_ARCHIVE_RECONCILE_WINDOW_DAYS", 30);
+
 // ── Conflict thresholds ──────────────────────────────────────────────────
 // memory-write rejects creates whose content overlaps an existing memory
 // above this cosine threshold.
