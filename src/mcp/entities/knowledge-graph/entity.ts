@@ -5,7 +5,10 @@ import {
 	KG_MAX_CONTEXT_ENTITIES,
 	KG_MAX_CONTEXT_RELATIONS,
 	KG_MAX_GRAPH_EDGES,
-	KG_PRUNE_WINDOW_CHUNK
+	KG_PRUNE_WINDOW_CHUNK,
+	Q_TABLE_ENTITIES,
+	Q_TABLE_OBSERVATIONS,
+	Q_TABLE_RELATIONS
 } from "../../utils/constants";
 import * as queries from "./queries";
 import type { KgQueryRunner, KgEntityRow, KgRelationRow, KgObservationRow } from "./queries";
@@ -389,9 +392,9 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	/** Delete all observations, relations and entities for a repo — atomic. Returns entities deleted. */
 	deleteRepoEntities(repo: string): number {
 		return this.transaction(() => {
-			this.run("DELETE FROM observations WHERE repo = ?", [repo]);
-			this.run("DELETE FROM relations WHERE repo = ?", [repo]);
-			const result = this.run("DELETE FROM entities WHERE repo = ?", [repo]);
+			this.run(`DELETE FROM ${Q_TABLE_OBSERVATIONS} WHERE repo = ?`, [repo]);
+			this.run(`DELETE FROM ${Q_TABLE_RELATIONS} WHERE repo = ?`, [repo]);
+			const result = this.run(`DELETE FROM ${Q_TABLE_ENTITIES} WHERE repo = ?`, [repo]);
 			return result.changes;
 		});
 	}
@@ -399,13 +402,13 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	/** Delete all observations + relations referencing an entity, then the entity — atomic. */
 	deleteEntityWithObservations(entityName: string, repo: string): boolean {
 		return this.transaction(() => {
-			this.run("DELETE FROM observations WHERE entity_name = ? AND repo = ?", [entityName, repo]);
-			this.run("DELETE FROM relations WHERE (from_entity = ? OR to_entity = ?) AND repo = ?", [
+			this.run(`DELETE FROM ${Q_TABLE_OBSERVATIONS} WHERE entity_name = ? AND repo = ?`, [entityName, repo]);
+			this.run(`DELETE FROM ${Q_TABLE_RELATIONS} WHERE (from_entity = ? OR to_entity = ?) AND repo = ?`, [
 				entityName,
 				entityName,
 				repo
 			]);
-			this.run("DELETE FROM entities WHERE name = ? AND repo = ?", [entityName, repo]);
+			this.run(`DELETE FROM ${Q_TABLE_ENTITIES} WHERE name = ? AND repo = ?`, [entityName, repo]);
 			return true;
 		});
 	}
@@ -423,10 +426,10 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	 */
 	async deleteOrphanEntities(chunkSize = KG_PRUNE_WINDOW_CHUNK): Promise<number> {
 		return await this.deleteWindowed(
-			"entities",
-			`NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = _row.name AND o.repo = _row.repo)
-			 AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.from_entity = _row.name AND r.repo = _row.repo)
-			 AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.to_entity = _row.name AND r.repo = _row.repo)`,
+			Q_TABLE_ENTITIES,
+			`NOT EXISTS (SELECT 1 FROM ${Q_TABLE_OBSERVATIONS} o WHERE o.entity_name = _row.name AND o.repo = _row.repo)
+			 AND NOT EXISTS (SELECT 1 FROM ${Q_TABLE_RELATIONS} r WHERE r.from_entity = _row.name AND r.repo = _row.repo)
+			 AND NOT EXISTS (SELECT 1 FROM ${Q_TABLE_RELATIONS} r WHERE r.to_entity = _row.name AND r.repo = _row.repo)`,
 			[],
 			chunkSize
 		);
@@ -439,7 +442,7 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	 */
 	deleteObservationsAndOrphans(items: Array<{ text: string; repo: string }>): number {
 		return this.transaction(() => {
-			const deleteObservation = this.db.prepare("DELETE FROM observations WHERE observation = ? AND repo = ?");
+			const deleteObservation = this.db.prepare(`DELETE FROM ${Q_TABLE_OBSERVATIONS} WHERE observation = ? AND repo = ?`);
 			for (const item of items) {
 				deleteObservation.run(item.text, item.repo);
 			}
@@ -447,10 +450,10 @@ export class KnowledgeGraphEntity extends BaseEntity {
 			const repos = [...new Set(items.map((i) => i.repo))];
 			let orphanCount = 0;
 			if (repos.length > 0) {
-				const sweep = this.db.prepare(`DELETE FROM entities AS e WHERE e.repo = ?
-					AND NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = e.name AND o.repo = e.repo)
-					AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.from_entity = e.name AND r.repo = e.repo)
-					AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.to_entity = e.name AND r.repo = e.repo)`);
+				const sweep = this.db.prepare(`DELETE FROM ${Q_TABLE_ENTITIES} AS e WHERE e.repo = ?
+					AND NOT EXISTS (SELECT 1 FROM ${Q_TABLE_OBSERVATIONS} o WHERE o.entity_name = e.name AND o.repo = e.repo)
+					AND NOT EXISTS (SELECT 1 FROM ${Q_TABLE_RELATIONS} r WHERE r.from_entity = e.name AND r.repo = e.repo)
+					AND NOT EXISTS (SELECT 1 FROM ${Q_TABLE_RELATIONS} r WHERE r.to_entity = e.name AND r.repo = e.repo)`);
 				for (const repo of repos) {
 					orphanCount += sweep.run(repo).changes;
 				}
@@ -461,7 +464,7 @@ export class KnowledgeGraphEntity extends BaseEntity {
 
 	/** Delete an observation by id (dashboard). Returns rows changed. */
 	deleteObservation(id: string): { changes: number } {
-		return this.run("DELETE FROM observations WHERE id = ?", [id]);
+		return this.run(`DELETE FROM ${Q_TABLE_OBSERVATIONS} WHERE id = ?`, [id]);
 	}
 
 	deleteStaleObservations(cutoff: string, chunkSize?: number): Promise<number> {
@@ -478,20 +481,20 @@ export class KnowledgeGraphEntity extends BaseEntity {
 
 	/** Delete observations created before the cutoff (legacy age-only prune; no orphan sweep). */
 	deleteObservationsOlderThan(cutoff: string): number {
-		const result = this.run("DELETE FROM observations WHERE created_at < ?", [cutoff]);
+		const result = this.run(`DELETE FROM ${Q_TABLE_OBSERVATIONS} WHERE created_at < ?`, [cutoff]);
 		return result.changes;
 	}
 
 	/** Delete a relation by its composite key (dashboard). Returns rows changed. */
 	deleteRelation(from_entity: string, to_entity: string, relation_type: string, repo: string): { changes: number } {
 		return this.run(
-			"DELETE FROM relations WHERE from_entity = ? AND to_entity = ? AND relation_type = ? AND repo = ?",
+			`DELETE FROM ${Q_TABLE_RELATIONS} WHERE from_entity = ? AND to_entity = ? AND relation_type = ? AND repo = ?`,
 			[from_entity, to_entity, relation_type, repo]
 		);
 	}
 
 	/** Delete one repository-scoped entity; observations/relations cascade through composite FKs. */
 	deleteEntity(name: string, repo: string): { changes: number } {
-		return this.run("DELETE FROM entities WHERE name = ? AND repo = ?", [name, repo]);
+		return this.run(`DELETE FROM ${Q_TABLE_ENTITIES} WHERE name = ? AND repo = ?`, [name, repo]);
 	}
 }

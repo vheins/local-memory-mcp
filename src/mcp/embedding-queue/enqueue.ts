@@ -24,7 +24,7 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
 import { logger } from "../utils/logger";
-import { EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE, TABLE_MEMORIES, TABLE_TASKS } from "../utils/constants";
+import { EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE, TABLE_MEMORIES, Q_TABLE_CODING_STANDARDS, Q_TABLE_TASKS } from "../utils/constants";
 import {
 	MemoryEntry,
 	Task,
@@ -427,7 +427,7 @@ export function backfillMissingVectors(
 				`SELECT s.id, s.repo, s.owner, s.title, s.content, s.context, s.version, s.language,
 					s.stack, s.tags, s.metadata, s.parent_id, s.updated_at,
 					sv.standard_id AS vector_id, sv.content_hash AS stored_hash, sv.model_version AS stored_version
-             FROM coding_standards s LEFT JOIN derived.standard_vectors sv ON sv.standard_id = s.id
+             FROM ${Q_TABLE_CODING_STANDARDS} s LEFT JOIN derived.standard_vectors sv ON sv.standard_id = s.id
              ORDER BY (sv.standard_id IS NULL) DESC,
 				(sv.content_hash IS NULL OR sv.model_version IS NULL OR sv.model_version <> ?) DESC,
 				s.updated_at DESC
@@ -491,7 +491,7 @@ export function backfillMissingVectors(
 			.prepare(
 				`SELECT t.id, t.repo, t.owner, t.phase, t.title, t.description, t.parent_id, t.metadata, t.updated_at,
 					tv.task_id AS vector_id, tv.content_hash AS stored_hash, tv.model_version AS stored_version
-             FROM ${TABLE_TASKS} t LEFT JOIN derived.task_vectors tv ON tv.task_id = t.id
+             FROM ${Q_TABLE_TASKS} t LEFT JOIN derived.task_vectors tv ON tv.task_id = t.id
               WHERE t.status != '${TASK_STATUS_CANCELED}'
               ORDER BY (tv.task_id IS NULL) DESC,
 				(tv.content_hash IS NULL OR tv.model_version IS NULL OR tv.model_version <> ?) DESC,

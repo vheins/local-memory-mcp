@@ -1,4 +1,5 @@
 import { CodingStandardEntry } from "../../types";
+import { Q_TABLE_CODING_STANDARDS } from "../../utils/constants";
 
 /**
  * Single source of truth for the coding_standards INSERT statement
@@ -7,7 +8,7 @@ import { CodingStandardEntry } from "../../types";
  */
 export function buildStandardInsert(entry: CodingStandardEntry): { sql: string; params: unknown[] } {
 	return {
-		sql: `INSERT INTO coding_standards (
+		sql: `INSERT INTO ${Q_TABLE_CODING_STANDARDS} (
 			id, code, title, content, parent_id, context, version, language, stack,
 			is_global, owner, repo, tags, metadata, created_at, updated_at, hit_count, last_used_at, agent, model
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

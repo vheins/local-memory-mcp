@@ -1,4 +1,10 @@
-import { KG_MAX_GRAPH_EDGES } from "../../utils/constants";
+import {
+	KG_MAX_GRAPH_EDGES,
+	Q_TABLE_ENTITIES,
+	Q_TABLE_KG_DEGREES,
+	Q_TABLE_OBSERVATIONS,
+	Q_TABLE_RELATIONS
+} from "../../utils/constants";
 import type { KgEntityRow, KgObservationRow, KgQueryRunner, KgRelationRow } from "./query-types";
 
 /**
@@ -6,7 +12,7 @@ import type { KgEntityRow, KgObservationRow, KgQueryRunner, KgRelationRow } from
  */
 export function entityExists(runner: KgQueryRunner, name: string, repo: string): boolean {
 	return (
-		runner.get<{ present: number }>("SELECT 1 AS present FROM entities WHERE name = ? AND repo = ?", [name, repo]) !==
+		runner.get<{ present: number }>(`SELECT 1 AS present FROM ${Q_TABLE_ENTITIES} WHERE name = ? AND repo = ?`, [name, repo]) !==
 		undefined
 	);
 }
@@ -15,7 +21,7 @@ export function entityExists(runner: KgQueryRunner, name: string, repo: string):
  * Full entity row by name (dashboard detail).
  */
 export function getEntityByName(runner: KgQueryRunner, name: string, repo: string): KgEntityRow | undefined {
-	return runner.get<KgEntityRow>("SELECT * FROM entities WHERE name = ? AND repo = ?", [name, repo]);
+	return runner.get<KgEntityRow>(`SELECT * FROM ${Q_TABLE_ENTITIES} WHERE name = ? AND repo = ?`, [name, repo]);
 }
 
 /**
@@ -23,7 +29,7 @@ export function getEntityByName(runner: KgQueryRunner, name: string, repo: strin
  */
 export function getRelationsByName(runner: KgQueryRunner, name: string, repo: string): KgRelationRow[] {
 	return runner.all<KgRelationRow>(
-		"SELECT * FROM relations WHERE repo = ? AND (from_entity = ? OR to_entity = ?) ORDER BY relation_type",
+		`SELECT * FROM ${Q_TABLE_RELATIONS} WHERE repo = ? AND (from_entity = ? OR to_entity = ?) ORDER BY relation_type`,
 		[repo, name, name]
 	);
 }
@@ -33,7 +39,7 @@ export function getRelationsByName(runner: KgQueryRunner, name: string, repo: st
  */
 export function getObservationsByName(runner: KgQueryRunner, name: string, repo: string): KgObservationRow[] {
 	return runner.all<KgObservationRow>(
-		"SELECT * FROM observations WHERE entity_name = ? AND repo = ? ORDER BY created_at DESC",
+		`SELECT * FROM ${Q_TABLE_OBSERVATIONS} WHERE entity_name = ? AND repo = ? ORDER BY created_at DESC`,
 		[name, repo]
 	);
 }
@@ -47,7 +53,7 @@ export function listEntities(
 	repo: string,
 	options?: { type?: string; search?: string; limit?: number; offset?: number }
 ): KgEntityRow[] {
-	let sql = "SELECT * FROM entities WHERE repo = ?";
+	let sql = `SELECT * FROM ${Q_TABLE_ENTITIES} WHERE repo = ?`;
 	const params: unknown[] = [repo];
 	if (options?.type) {
 		sql += " AND type = ?";
@@ -77,7 +83,7 @@ export function countEntities(
 	repo: string,
 	options?: { type?: string; search?: string }
 ): number {
-	let sql = "SELECT COUNT(*) AS cnt FROM entities WHERE repo = ?";
+	let sql = `SELECT COUNT(*) AS cnt FROM ${Q_TABLE_ENTITIES} WHERE repo = ?`;
 	const params: unknown[] = [repo];
 	if (options?.type) {
 		sql += " AND type = ?";
@@ -99,7 +105,7 @@ export function listRelations(
 	repo: string,
 	options?: { limit?: number; offset?: number }
 ): KgRelationRow[] {
-	let sql = "SELECT * FROM relations WHERE repo = ? ORDER BY from_entity, to_entity";
+	let sql = `SELECT * FROM ${Q_TABLE_RELATIONS} WHERE repo = ? ORDER BY from_entity, to_entity`;
 	const params: unknown[] = [repo];
 	if (options?.limit !== undefined) {
 		sql += " LIMIT ?";
@@ -116,7 +122,7 @@ export function listRelations(
  * Count relations scoped to a repo (for pagination total).
  */
 export function countRelations(runner: KgQueryRunner, repo: string): number {
-	return runner.get<{ cnt: number }>("SELECT COUNT(*) AS cnt FROM relations WHERE repo = ?", [repo])?.cnt ?? 0;
+	return runner.get<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM ${Q_TABLE_RELATIONS} WHERE repo = ?`, [repo])?.cnt ?? 0;
 }
 
 /**
@@ -142,8 +148,8 @@ export function listGraphNodes(
 	options?: { limit?: number; offset?: number }
 ): Array<{ name: string; type: string }> {
 	let sql = `SELECT e.name, e.type
-		 FROM entities e
-		 LEFT JOIN kg_degrees d ON d.repo = e.repo AND d.node = e.name
+		 FROM ${Q_TABLE_ENTITIES} e
+		 LEFT JOIN ${Q_TABLE_KG_DEGREES} d ON d.repo = e.repo AND d.node = e.name
 		 WHERE e.repo = ?
 		 ORDER BY COALESCE(d.degree, 0) DESC, e.name`;
 	const params: unknown[] = [repo];
@@ -162,7 +168,7 @@ export function listGraphNodes(
  * Count graph nodes for a repo (for pagination total).
  */
 export function countGraphNodes(runner: KgQueryRunner, repo: string): number {
-	return runner.get<{ cnt: number }>("SELECT COUNT(*) AS cnt FROM entities e WHERE e.repo = ?", [repo])?.cnt ?? 0;
+	return runner.get<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM ${Q_TABLE_ENTITIES} e WHERE e.repo = ?`, [repo])?.cnt ?? 0;
 }
 
 /**
@@ -196,16 +202,16 @@ export function listGraphEdges(
 		`WITH degrees AS (
 		   SELECT node, COUNT(*) AS degree
 		   FROM (
-		     SELECT from_entity AS node FROM relations WHERE repo = ?
+		     SELECT from_entity AS node FROM ${Q_TABLE_RELATIONS} WHERE repo = ?
 		     UNION ALL
-		     SELECT to_entity AS node FROM relations WHERE repo = ?
+		     SELECT to_entity AS node FROM ${Q_TABLE_RELATIONS} WHERE repo = ?
 		   )
 		   GROUP BY node
 		 )
 		 SELECT r.from_entity as source, r.to_entity as target, r.relation_type, r.confidence
-		 FROM relations r
-		 INNER JOIN entities e1 ON r.from_entity = e1.name AND r.repo = e1.repo
-		 INNER JOIN entities e2 ON r.to_entity = e2.name AND r.repo = e2.repo
+		 FROM ${Q_TABLE_RELATIONS} r
+		 INNER JOIN ${Q_TABLE_ENTITIES} e1 ON r.from_entity = e1.name AND r.repo = e1.repo
+		 INNER JOIN ${Q_TABLE_ENTITIES} e2 ON r.to_entity = e2.name AND r.repo = e2.repo
 		 LEFT JOIN degrees d1 ON d1.node = r.from_entity
 		 LEFT JOIN degrees d2 ON d2.node = r.to_entity
 		 WHERE r.repo = ?
@@ -249,9 +255,9 @@ export function listGraphEdgesForSubset(
 	const effectiveLimit = probe ? limit + 1 : limit;
 	return runner.all<{ source: string; target: string; relation_type: string; confidence: number }>(
 		`SELECT r.from_entity as source, r.to_entity as target, r.relation_type, r.confidence
-		 FROM relations r
-		 JOIN kg_degrees d1 ON d1.repo = r.repo AND d1.node = r.from_entity
-		 JOIN kg_degrees d2 ON d2.repo = r.repo AND d2.node = r.to_entity
+		 FROM ${Q_TABLE_RELATIONS} r
+		 JOIN ${Q_TABLE_KG_DEGREES} d1 ON d1.repo = r.repo AND d1.node = r.from_entity
+		 JOIN ${Q_TABLE_KG_DEGREES} d2 ON d2.repo = r.repo AND d2.node = r.to_entity
 		 WHERE r.repo = ? AND r.from_entity IN (${placeholders}) AND r.to_entity IN (${placeholders})
 		 ORDER BY (d1.degree + d2.degree) DESC, r.from_entity, r.to_entity
 		 LIMIT ?`,
@@ -264,9 +270,9 @@ export function listGraphEdgesForSubset(
  */
 export function listEntitiesForGraph(runner: KgQueryRunner, repo: string | undefined, limit: number): KgEntityRow[] {
 	if (repo) {
-		return runner.all<KgEntityRow>("SELECT * FROM entities WHERE repo = ? ORDER BY name LIMIT ?", [repo, limit]);
+		return runner.all<KgEntityRow>(`SELECT * FROM ${Q_TABLE_ENTITIES} WHERE repo = ? ORDER BY name LIMIT ?`, [repo, limit]);
 	}
-	return runner.all<KgEntityRow>("SELECT * FROM entities ORDER BY name LIMIT ?", [limit]);
+	return runner.all<KgEntityRow>(`SELECT * FROM ${Q_TABLE_ENTITIES} ORDER BY name LIMIT ?`, [limit]);
 }
 
 /**
@@ -292,7 +298,7 @@ export function listRelationsForGraph(
 		const placeholders = entityNames.map(() => "?").join(",");
 		if (repo) {
 			return runner.all<KgRelationRow>(
-				`SELECT * FROM relations
+				`SELECT * FROM ${Q_TABLE_RELATIONS}
 				 WHERE repo = ? AND from_entity IN (${placeholders}) AND to_entity IN (${placeholders})
 				 ORDER BY from_entity, to_entity
 				 LIMIT ?`,
@@ -300,7 +306,7 @@ export function listRelationsForGraph(
 			);
 		}
 		return runner.all<KgRelationRow>(
-			`SELECT * FROM relations
+			`SELECT * FROM ${Q_TABLE_RELATIONS}
 			 WHERE from_entity IN (${placeholders}) AND to_entity IN (${placeholders})
 			 ORDER BY from_entity, to_entity
 			 LIMIT ?`,
@@ -309,10 +315,10 @@ export function listRelationsForGraph(
 	}
 	// Legacy behavior (no subset): bounded by the same cap.
 	if (repo) {
-		return runner.all<KgRelationRow>("SELECT * FROM relations WHERE repo = ? ORDER BY from_entity, to_entity LIMIT ?", [
+		return runner.all<KgRelationRow>(`SELECT * FROM ${Q_TABLE_RELATIONS} WHERE repo = ? ORDER BY from_entity, to_entity LIMIT ?`, [
 			repo,
 			limit
 		]);
 	}
-	return runner.all<KgRelationRow>("SELECT * FROM relations ORDER BY from_entity, to_entity LIMIT ?", [limit]);
+	return runner.all<KgRelationRow>(`SELECT * FROM ${Q_TABLE_RELATIONS} ORDER BY from_entity, to_entity LIMIT ?`, [limit]);
 }

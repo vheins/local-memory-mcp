@@ -1,4 +1,5 @@
 import { sanitizeFtsTerm } from "../../utils/fts";
+import { Q_TABLE_STANDARD_STACK, Q_TABLE_STANDARD_TAGS } from "../../utils/constants";
 
 /**
  * Shared filter-option shape for the non-FTS and FTS search/count paths.
@@ -50,11 +51,15 @@ export function buildNonFtsFilters(options: StandardFilterOptions): {
 	if (stack) {
 		// Indexed child-table equality (OPT-PERF-07) — replaces the
 		// `stack LIKE '%stack%'` scan on the stack JSON text column.
-		clauses.push("EXISTS (SELECT 1 FROM standard_stack s WHERE s.standard_id = coding_standards.id AND s.stack = ?)");
+		clauses.push(
+			`EXISTS (SELECT 1 FROM ${Q_TABLE_STANDARD_STACK} s WHERE s.standard_id = coding_standards.id AND s.stack = ?)`
+		);
 		params.push(stack);
 	}
 	if (tag) {
-		clauses.push("EXISTS (SELECT 1 FROM standard_tags t WHERE t.standard_id = coding_standards.id AND t.tag = ?)");
+		clauses.push(
+			`EXISTS (SELECT 1 FROM ${Q_TABLE_STANDARD_TAGS} t WHERE t.standard_id = coding_standards.id AND t.tag = ?)`
+		);
 		params.push(tag);
 	}
 	if (repo !== undefined) {
@@ -107,11 +112,11 @@ export function buildFtsFilters(options: StandardFilterOptions): {
 	if (stack) {
 		// Indexed child-table equality (OPT-PERF-07), alias-aware for the
 		// FTS join (cs.id) — replaces `cs.stack LIKE`.
-		conditions.push("EXISTS (SELECT 1 FROM standard_stack s WHERE s.standard_id = cs.id AND s.stack = ?)");
+		conditions.push(`EXISTS (SELECT 1 FROM ${Q_TABLE_STANDARD_STACK} s WHERE s.standard_id = cs.id AND s.stack = ?)`);
 		params.push(stack);
 	}
 	if (tag) {
-		conditions.push("EXISTS (SELECT 1 FROM standard_tags t WHERE t.standard_id = cs.id AND t.tag = ?)");
+		conditions.push(`EXISTS (SELECT 1 FROM ${Q_TABLE_STANDARD_TAGS} t WHERE t.standard_id = cs.id AND t.tag = ?)`);
 		params.push(tag);
 	}
 	if (repo !== undefined) {

@@ -1,4 +1,4 @@
-import { TABLE_TASKS, TABLE_CLAIMS, TABLE_HANDOFFS } from "../../utils/constants";
+import { Q_TABLE_TASK_COMMENTS, Q_TABLE_TASKS, Q_TABLE_CLAIMS, Q_TABLE_HANDOFFS } from "../../utils/constants";
 import {
 	TASK_STATUS_BACKLOG,
 	TASK_STATUS_PENDING,
@@ -14,15 +14,15 @@ import {
  */
 export function buildCoordinationSelect(alias = "t"): string {
 	return `
-			(SELECT COUNT(*) FROM ${TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL) as active_claim_count,
-			(SELECT c.agent FROM ${TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_agent,
-			(SELECT c.role FROM ${TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_role,
-			(SELECT c.claimed_at FROM ${TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_claimed_at,
-			(SELECT COUNT(*) FROM ${TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}') as pending_handoff_count,
-			(SELECT h.id FROM ${TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_id,
-			(SELECT h.summary FROM ${TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_summary,
-			(SELECT h.to_agent FROM ${TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_to_agent,
-			(SELECT h.created_at FROM ${TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_created_at
+			(SELECT COUNT(*) FROM ${Q_TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL) as active_claim_count,
+			(SELECT c.agent FROM ${Q_TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_agent,
+			(SELECT c.role FROM ${Q_TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_role,
+			(SELECT c.claimed_at FROM ${Q_TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_claimed_at,
+			(SELECT COUNT(*) FROM ${Q_TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}') as pending_handoff_count,
+			(SELECT h.id FROM ${Q_TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_id,
+			(SELECT h.summary FROM ${Q_TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_summary,
+			(SELECT h.to_agent FROM ${Q_TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_to_agent,
+			(SELECT h.created_at FROM ${Q_TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_created_at
 		`;
 }
 
@@ -59,13 +59,13 @@ export function taskStatusOrderBy(): string {
  */
 export function taskSelectSkeleton(alias = "t", includeComments = true): string {
 	const commentsCount = includeComments
-		? `,\n\t\t\t(SELECT COUNT(*) FROM task_comments WHERE task_id = ${alias}.id) as comments_count`
+		? `,\n\t\t\t(SELECT COUNT(*) FROM ${Q_TABLE_TASK_COMMENTS} WHERE task_id = ${alias}.id) as comments_count`
 		: "";
 	return `SELECT ${alias}.*, d.task_code as depends_on_code, p.task_code as parent_code,
 		${buildCoordinationSelect(alias)}${commentsCount}
-		FROM ${TABLE_TASKS} ${alias}
-		LEFT JOIN ${TABLE_TASKS} d ON ${alias}.depends_on = d.id
-		LEFT JOIN ${TABLE_TASKS} p ON ${alias}.parent_id = p.id
+		FROM ${Q_TABLE_TASKS} ${alias}
+		LEFT JOIN ${Q_TABLE_TASKS} d ON ${alias}.depends_on = d.id
+		LEFT JOIN ${Q_TABLE_TASKS} p ON ${alias}.parent_id = p.id
 	`;
 }
 

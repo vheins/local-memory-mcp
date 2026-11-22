@@ -6,6 +6,8 @@
  * entity's transaction boundary. `KgWriteRunner` exposes BaseEntity's `run`
  * helper, mirroring the `KgQueryRunner` read accessor from `./queries`.
  */
+import { Q_TABLE_ENTITIES, Q_TABLE_OBSERVATIONS, Q_TABLE_RELATIONS } from "../../utils/constants";
+
 export interface KgWriteRunner {
 	run(sql: string, params?: unknown[]): { changes: number };
 	transaction<T>(fn: () => T): T;
@@ -63,7 +65,7 @@ export interface CreateRelationParams {
 /** Insert an entity, ignoring duplicates within its `(name, repo)` identity. */
 export function upsertEntity(runner: KgWriteRunner, params: UpsertEntityParams): void {
 	runner.run(
-		`INSERT OR IGNORE INTO entities (name, type, description, repo, owner, created_at, updated_at)
+		`INSERT OR IGNORE INTO ${Q_TABLE_ENTITIES} (name, type, description, repo, owner, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		[params.name, params.type, params.description, params.repo, params.owner, params.created_at, params.updated_at]
 	);
@@ -88,7 +90,7 @@ export function upsertEntity(runner: KgWriteRunner, params: UpsertEntityParams):
  */
 export function upsertRelation(runner: KgWriteRunner, params: UpsertRelationParams): void {
 	runner.run(
-		`INSERT OR IGNORE INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at, confidence)
+		`INSERT OR IGNORE INTO ${Q_TABLE_RELATIONS} (from_entity, to_entity, relation_type, repo, owner, created_at, confidence)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		[
 			params.from_entity,
@@ -108,7 +110,7 @@ export function upsertRelation(runner: KgWriteRunner, params: UpsertRelationPara
  */
 export function insertObservation(runner: KgWriteRunner, params: InsertObservationParams): void {
 	runner.run(
-		`INSERT OR IGNORE INTO observations (id, entity_name, observation, repo, owner, created_at)
+		`INSERT OR IGNORE INTO ${Q_TABLE_OBSERVATIONS} (id, entity_name, observation, repo, owner, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		[params.id, params.entity_name, params.observation, params.repo, params.owner, params.created_at]
 	);
@@ -117,7 +119,7 @@ export function insertObservation(runner: KgWriteRunner, params: InsertObservati
 /** Dashboard/admin create: plain INSERT (throws on duplicate name → PK conflict). */
 export function createEntity(runner: KgWriteRunner, params: CreateEntityParams): void {
 	runner.run(
-		`INSERT INTO entities (name, type, description, repo, owner, created_at, updated_at)
+		`INSERT INTO ${Q_TABLE_ENTITIES} (name, type, description, repo, owner, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		[params.name, params.type, params.description, params.repo, params.owner, params.created_at, params.updated_at]
 	);
@@ -126,7 +128,7 @@ export function createEntity(runner: KgWriteRunner, params: CreateEntityParams):
 /** Dashboard/admin create: plain INSERT (throws on duplicate relation → 409). */
 export function createRelation(runner: KgWriteRunner, params: CreateRelationParams): void {
 	runner.run(
-		`INSERT INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at, confidence)
+		`INSERT INTO ${Q_TABLE_RELATIONS} (from_entity, to_entity, relation_type, repo, owner, created_at, confidence)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		[
 			params.from_entity,

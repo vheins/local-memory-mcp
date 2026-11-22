@@ -25,6 +25,8 @@ import { WriteLock } from "./write-lock";
 import { ColdArchiveStore, resolveColdArchivePath } from "./cold-archive";
 import type { ColdArchiveEntry, ColdArchiveSearchOptions } from "./cold-archive";
 import { ensureDerivedReady, resolveDerivedDbPath } from "./derived-db";
+import { checkpointDomainDbs, ensureDomainReady, resolveDomainDbPaths } from "./domain-db";
+import type { DomainSchema } from "./domain-schema";
 import { logger } from "../utils/logger";
 import { MEMORY_DB_BUSY_TIMEOUT_MS, WAL_CHECKPOINT_INTERVAL_MS } from "../utils/constants";
 
@@ -80,6 +82,11 @@ export class SQLiteStore {
 	 * the store is running in a degraded state.
 	 */
 	private derivedPathInstance: string | null = null;
+	/**
+	 * Absolute path (or `:memory:`) of each attached domain database
+	 * (ADR-012 / TASK-002). Empty until the attach step has run.
+	 */
+	private domainPathsInstance: Record<DomainSchema, string> | null = null;
 	/**
 	 * Lazily-opened cold-tier archive (TASK-036). Opened on first access only,
 	 * so profiles that never offload or read the cold tier pay no second-DB
@@ -152,6 +159,14 @@ export class SQLiteStore {
 		// entity prepares its `derived.`-qualified SQL against the final schema.
 		ensureDerivedReady(this.db, finalPath);
 		this.derivedPathInstance = resolveDerivedDbPath(finalPath);
+
+		// Split the hot store into five physical files (ADR-012 / TASK-002). Runs
+		// BEFORE entity construction so every entity prepares its schema-qualified
+		// SQL against the final layout, and AFTER the migrations above, which still
+		// run against `main` (the only connection-level schema that holds a version
+		// ledger). `core` stays in `memory.db` (`main`) so all core SQL is unchanged.
+		ensureDomainReady(this.db, finalPath);
+		this.domainPathsInstance = resolveDomainDbPaths(finalPath);
 
 		// Re-assert + verify busy_timeout AFTER the derived attach (FIX-032).
 		// busy_timeout is CONNECTION-scoped: a schema-qualified
@@ -259,6 +274,10 @@ export class SQLiteStore {
 		this.lastCheckpointAt = now;
 		try {
 			this.db.pragma("wal_checkpoint(PASSIVE)");
+			// Each domain file has its own WAL; the unqualified checkpoint only
+			// drains `main`. Dashboard readers of `tasks`/`kg`/… would otherwise
+			// wait on SQLite's autocheckpoint threshold (TASK-002).
+			checkpointDomainDbs(this.db);
 		} catch (err) {
 			logger.warn("[SQLiteStore] refresh checkpoint failed", { error: String(err) });
 		}
@@ -282,6 +301,14 @@ export class SQLiteStore {
 	 */
 	getDerivedDbPath(): string | null {
 		return this.derivedPathInstance;
+	}
+
+	/**
+	 * Absolute path (or `:memory:`) of each attached domain database, or `null`
+	 * when the store has not attached them (ADR-012 / TASK-002).
+	 */
+	getDomainDbPaths(): Record<DomainSchema, string> | null {
+		return this.domainPathsInstance;
 	}
 
 	/**
@@ -332,6 +359,7 @@ export class SQLiteStore {
 		if (this.db && this.db.open) {
 			try {
 				this.db.pragma("wal_checkpoint(PASSIVE)");
+				checkpointDomainDbs(this.db);
 			} catch {
 				// best effort
 			}

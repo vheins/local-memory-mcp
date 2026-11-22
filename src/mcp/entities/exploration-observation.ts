@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { BaseEntity } from "../storage/base";
 import { fingerprintSymbol } from "../utils/source-fingerprint";
+import { Q_TABLE_EXPLORATION_EVIDENCE, Q_TABLE_EXPLORATION_OBSERVATIONS } from "../utils/constants";
 import type {
 	ExplorationEvidence,
 	ExplorationEvidenceInput,
@@ -123,11 +124,11 @@ export class ExplorationObservationEntity extends BaseEntity {
 		const identityHash = observationIdentity(input);
 		const existing = updateId
 			? this.get<ExplorationObservationRow>(
-					"SELECT *, 0 AS evidence_count FROM exploration_observations WHERE id = ? AND owner = ? AND repo = ?",
+					`SELECT *, 0 AS evidence_count FROM ${Q_TABLE_EXPLORATION_OBSERVATIONS} WHERE id = ? AND owner = ? AND repo = ?`,
 					[updateId, owner, repo]
 				)
 			: this.get<ExplorationObservationRow>(
-					"SELECT *, 0 AS evidence_count FROM exploration_observations WHERE owner = ? AND repo = ? AND identity_hash = ?",
+					`SELECT *, 0 AS evidence_count FROM ${Q_TABLE_EXPLORATION_OBSERVATIONS} WHERE owner = ? AND repo = ? AND identity_hash = ?`,
 					[owner, repo, identityHash]
 				);
 
@@ -141,7 +142,7 @@ export class ExplorationObservationEntity extends BaseEntity {
 				return { observation: this.getById(owner, repo, existing.id, true)!, created: false };
 			}
 			this.run(
-				`UPDATE exploration_observations
+				`UPDATE ${Q_TABLE_EXPLORATION_OBSERVATIONS}
 				 SET subject = ?, fact = ?, confidence = ?, task_id = ?, agent = ?, identity_hash = ?, freshness = ?,
 				     stale_reason = ?, last_verified_at = ?, updated_at = ?
 				 WHERE id = ? AND owner = ? AND repo = ?`,
@@ -169,7 +170,7 @@ export class ExplorationObservationEntity extends BaseEntity {
 		if (updateId) throw new Error(`Exploration observation not found: ${updateId}`);
 		const id = randomUUID();
 		this.run(
-			`INSERT INTO exploration_observations
+			`INSERT INTO ${Q_TABLE_EXPLORATION_OBSERVATIONS}
 			 (id, owner, repo, subject, fact, confidence, task_id, agent, identity_hash, freshness, stale_reason, last_verified_at, created_at, updated_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
@@ -200,13 +201,13 @@ export class ExplorationObservationEntity extends BaseEntity {
 		fingerprints: EvidenceFingerprint[],
 		now: string
 	): void {
-		this.run("DELETE FROM exploration_evidence WHERE observation_id = ?", [observationId]);
+		this.run(`DELETE FROM ${Q_TABLE_EXPLORATION_EVIDENCE} WHERE observation_id = ?`, [observationId]);
 		const unique = new Map(
 			evidence.map((item, index) => [evidenceIdentity(item), { item, fingerprint: fingerprints[index]! }])
 		);
 		for (const { item, fingerprint } of unique.values()) {
 			this.run(
-				`INSERT INTO exploration_evidence
+				`INSERT INTO ${Q_TABLE_EXPLORATION_EVIDENCE}
 				 (id, observation_id, file_path, symbol_id, start_line, end_line,
 				  file_checksum, symbol_fingerprint, indexed_at, commit_sha, created_at)
 				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -230,7 +231,7 @@ export class ExplorationObservationEntity extends BaseEntity {
 	private markSuperseded(owner: string, repo: string, oldId: string, newId: string, now: string): void {
 		if (oldId === newId) throw new Error("An observation cannot supersede itself");
 		const result = this.run(
-			`UPDATE exploration_observations
+			`UPDATE ${Q_TABLE_EXPLORATION_OBSERVATIONS}
 			 SET freshness = 'stale', stale_reason = 'superseded', superseded_by = ?, updated_at = ?
 			 WHERE id = ? AND owner = ? AND repo = ?`,
 			[newId, now, oldId, owner, repo]
@@ -242,10 +243,10 @@ export class ExplorationObservationEntity extends BaseEntity {
 		if (filePaths.length === 0) return 0;
 		const placeholders = filePaths.map(() => "?").join(",");
 		return this.run(
-			`UPDATE exploration_observations
+			`UPDATE ${Q_TABLE_EXPLORATION_OBSERVATIONS}
 			 SET freshness = 'stale', stale_reason = ?, updated_at = ?
 			 WHERE repo = ? AND id IN (
-				SELECT DISTINCT observation_id FROM exploration_evidence WHERE file_path IN (${placeholders})
+				SELECT DISTINCT observation_id FROM ${Q_TABLE_EXPLORATION_EVIDENCE} WHERE file_path IN (${placeholders})
 			 )`,
 			[reason, new Date().toISOString(), repo, ...filePaths]
 		).changes;
@@ -253,9 +254,9 @@ export class ExplorationObservationEntity extends BaseEntity {
 
 	transferEvidencePath(repo: string, oldPath: string, newPath: string): number {
 		return this.run(
-			`UPDATE exploration_evidence SET file_path = ?
+			`UPDATE ${Q_TABLE_EXPLORATION_EVIDENCE} SET file_path = ?
 			 WHERE file_path = ? AND observation_id IN (
-				SELECT id FROM exploration_observations WHERE repo = ?
+				SELECT id FROM ${Q_TABLE_EXPLORATION_OBSERVATIONS} WHERE repo = ?
 			 )`,
 			[newPath, oldPath, repo]
 		).changes;
@@ -276,8 +277,8 @@ export class ExplorationObservationEntity extends BaseEntity {
 		const placeholders = filePaths.map(() => "?").join(",");
 		const rows = this.all<{ owner: string; id: string }>(
 			`SELECT DISTINCT o.owner, o.id
-			 FROM exploration_observations o
-			 JOIN exploration_evidence e ON e.observation_id = o.id
+			 FROM ${Q_TABLE_EXPLORATION_OBSERVATIONS} o
+			 JOIN ${Q_TABLE_EXPLORATION_EVIDENCE} e ON e.observation_id = o.id
 			 WHERE o.repo = ? AND e.file_path IN (${placeholders})
 			 ORDER BY o.id LIMIT ?`,
 			[repo, ...filePaths, limit]
@@ -352,7 +353,7 @@ export class ExplorationObservationEntity extends BaseEntity {
 			);
 		}
 		this.run(
-			`UPDATE exploration_observations
+			`UPDATE ${Q_TABLE_EXPLORATION_OBSERVATIONS}
 			 SET freshness = ?, stale_reason = ?, last_verified_at = ?, updated_at = ?
 			 WHERE id = ? AND owner = ? AND repo = ?`,
 			[
@@ -376,7 +377,7 @@ export class ExplorationObservationEntity extends BaseEntity {
 		indexedAt: string | null
 	): void {
 		this.run(
-			`UPDATE exploration_evidence
+			`UPDATE ${Q_TABLE_EXPLORATION_EVIDENCE}
 			 SET file_checksum = ?, symbol_id = ?, symbol_fingerprint = ?, indexed_at = ?
 			 WHERE id = ?`,
 			[fileChecksum, symbolId, fingerprint, indexedAt, id]
@@ -386,8 +387,8 @@ export class ExplorationObservationEntity extends BaseEntity {
 	getById(owner: string, repo: string, id: string, hydrateEvidence = false): ExplorationObservation | null {
 		const row = this.get<ExplorationObservationRow>(
 			`SELECT o.*, COUNT(e.id) AS evidence_count
-			 FROM exploration_observations o
-			 LEFT JOIN exploration_evidence e ON e.observation_id = o.id
+			 FROM ${Q_TABLE_EXPLORATION_OBSERVATIONS} o
+			 LEFT JOIN ${Q_TABLE_EXPLORATION_EVIDENCE} e ON e.observation_id = o.id
 			 WHERE o.id = ? AND o.owner = ? AND o.repo = ?
 			 GROUP BY o.id`,
 			[id, owner, repo]
@@ -409,21 +410,21 @@ export class ExplorationObservationEntity extends BaseEntity {
 		}
 		if (query.file_path) {
 			conditions.push(
-				"EXISTS (SELECT 1 FROM exploration_evidence ef WHERE ef.observation_id = o.id AND ef.file_path = ?)"
+				`EXISTS (SELECT 1 FROM ${Q_TABLE_EXPLORATION_EVIDENCE} ef WHERE ef.observation_id = o.id AND ef.file_path = ?)`
 			);
 			values.push(query.file_path);
 		}
 		if (query.symbol_id) {
 			conditions.push(
-				"EXISTS (SELECT 1 FROM exploration_evidence es WHERE es.observation_id = o.id AND es.symbol_id = ?)"
+				`EXISTS (SELECT 1 FROM ${Q_TABLE_EXPLORATION_EVIDENCE} es WHERE es.observation_id = o.id AND es.symbol_id = ?)`
 			);
 			values.push(query.symbol_id);
 		}
 		values.push(query.limit ?? 20, query.offset ?? 0);
 		const rows = this.all<ExplorationObservationRow>(
 			`SELECT o.*, COUNT(e.id) AS evidence_count
-			 FROM exploration_observations o
-			 LEFT JOIN exploration_evidence e ON e.observation_id = o.id
+			 FROM ${Q_TABLE_EXPLORATION_OBSERVATIONS} o
+			 LEFT JOIN ${Q_TABLE_EXPLORATION_EVIDENCE} e ON e.observation_id = o.id
 			 WHERE ${conditions.join(" AND ")}
 			 GROUP BY o.id
 			 ORDER BY o.confidence DESC, o.updated_at DESC, o.id ASC
@@ -439,7 +440,7 @@ export class ExplorationObservationEntity extends BaseEntity {
 			observation.evidence = this.all<EvidenceRow>(
 				`SELECT id, observation_id, file_path, symbol_id, start_line, end_line,
 				        file_checksum, symbol_fingerprint, indexed_at, commit_sha, created_at
-				 FROM exploration_evidence WHERE observation_id = ? ORDER BY file_path, start_line, id`,
+				 FROM ${Q_TABLE_EXPLORATION_EVIDENCE} WHERE observation_id = ? ORDER BY file_path, start_line, id`,
 				[row.id]
 			) as ExplorationEvidence[];
 		}

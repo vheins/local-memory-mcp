@@ -1,5 +1,13 @@
 import { logger } from "../../utils/logger";
-import { KG_MAX_CONTEXT_ENTITIES, KG_CONTEXT_TEXT_TOKENS, KG_MAX_CONTEXT_RELATIONS } from "../../utils/constants";
+import {
+	KG_MAX_CONTEXT_ENTITIES,
+	KG_CONTEXT_TEXT_TOKENS,
+	KG_MAX_CONTEXT_RELATIONS,
+	Q_TABLE_ENTITIES,
+	Q_TABLE_ENTITY_NAMES_FTS,
+	Q_TABLE_OBSERVATIONS,
+	Q_TABLE_RELATIONS
+} from "../../utils/constants";
 
 // ---------------------------------------------------------------------------
 // Query runner (TASK-176)
@@ -29,7 +37,7 @@ export function getEntitiesFor(
 	if (entityNames.length === 0) return [];
 	const placeholders = entityNames.map(() => "?").join(",");
 	return runner.all<{ name: string; type: string }>(
-		`SELECT name, type FROM entities WHERE repo = ? AND name IN (${placeholders})`,
+		`SELECT name, type FROM ${Q_TABLE_ENTITIES} WHERE repo = ? AND name IN (${placeholders})`,
 		[repo, ...entityNames]
 	);
 }
@@ -103,9 +111,9 @@ export function getRelationsFor(
 		// Unbounded: still the UNION rewrite (both branches index-served), just
 		// without the ranking/truncation window.
 		return runner.all<{ from: string; to: string; type: string }>(
-			`SELECT ${columns} FROM relations WHERE repo = ? AND from_entity IN (${placeholders})
+			`SELECT ${columns} FROM ${Q_TABLE_RELATIONS} WHERE repo = ? AND from_entity IN (${placeholders})
 			 UNION
-			 SELECT ${columns} FROM relations WHERE repo = ? AND to_entity IN (${placeholders})`,
+			 SELECT ${columns} FROM ${Q_TABLE_RELATIONS} WHERE repo = ? AND to_entity IN (${placeholders})`,
 			[repo, ...entityNames, repo, ...entityNames]
 		);
 	}
@@ -116,13 +124,13 @@ export function getRelationsFor(
 	return runner.all<{ from: string; to: string; type: string }>(
 		`SELECT "from", "to", type FROM (
 		   SELECT * FROM (
-		     SELECT ${columns}, confidence FROM relations
+		     SELECT ${columns}, confidence FROM ${Q_TABLE_RELATIONS}
 		     WHERE repo = ? AND from_entity IN (${placeholders})
 		     ORDER BY confidence DESC LIMIT ?
 		   )
 		   UNION
 		   SELECT * FROM (
-		     SELECT ${columns}, confidence FROM relations
+		     SELECT ${columns}, confidence FROM ${Q_TABLE_RELATIONS}
 		     WHERE repo = ? AND to_entity IN (${placeholders})
 		     ORDER BY confidence DESC LIMIT ?
 		   )
@@ -138,7 +146,7 @@ export function getRelationsFor(
  */
 export function getEntityNamesByObservation(runner: KgQueryRunner, observation: string, repo: string): string[] {
 	const rows = runner.all<{ entity_name: string }>(
-		"SELECT DISTINCT entity_name FROM observations WHERE observation = ? AND repo = ?",
+		`SELECT DISTINCT entity_name FROM ${Q_TABLE_OBSERVATIONS} WHERE observation = ? AND repo = ?`,
 		[observation, repo]
 	);
 	return rows.map((r) => r.entity_name);
@@ -151,7 +159,7 @@ export function getEntityNamesByObservations(runner: KgQueryRunner, observations
 	if (observations.length === 0) return [];
 	const placeholders = observations.map(() => "?").join(",");
 	const rows = runner.all<{ entity_name: string }>(
-		`SELECT DISTINCT entity_name FROM observations WHERE observation IN (${placeholders}) AND repo = ?`,
+		`SELECT DISTINCT entity_name FROM ${Q_TABLE_OBSERVATIONS} WHERE observation IN (${placeholders}) AND repo = ?`,
 		[...observations, repo]
 	);
 	return rows.map((r) => r.entity_name);
@@ -195,7 +203,7 @@ export function getEntityNamesByText(
 
 	try {
 		const rows = runner.all<{ name: string }>(
-			"SELECT name, rank FROM entity_names_fts WHERE repo = ? AND entity_names_fts MATCH ? ORDER BY rank LIMIT ?",
+			`SELECT name, rank FROM ${Q_TABLE_ENTITY_NAMES_FTS} WHERE repo = ? AND entity_names_fts MATCH ? ORDER BY rank LIMIT ?`,
 			[repo, matchQuery, limit]
 		);
 		return rows.map((r) => r.name);
@@ -204,7 +212,7 @@ export function getEntityNamesByText(
 			error: String(error)
 		});
 		const rows = runner.all<{ name: string }>(
-			"SELECT name FROM entities WHERE repo = ? AND INSTR(?, name) > 0 LIMIT ?",
+			`SELECT name FROM ${Q_TABLE_ENTITIES} WHERE repo = ? AND INSTR(?, name) > 0 LIMIT ?`,
 			[repo, text, limit]
 		);
 		return rows.map((r) => r.name);

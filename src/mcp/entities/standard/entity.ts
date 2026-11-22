@@ -8,7 +8,9 @@ import {
 	STANDARD_CONFLICT_CANDIDATES,
 	STANDARD_CANDIDATE_CAP,
 	VECTOR_CANDIDATE_CAP,
-	BULK_UPDATE_CHUNK_SIZE
+	BULK_UPDATE_CHUNK_SIZE,
+	Q_TABLE_CODING_STANDARDS,
+	Q_TABLE_CODING_STANDARDS_FTS
 } from "../../utils/constants";
 import { buildStandardInsert, buildStandardUpdateMap } from "./serializers";
 import { buildNonFtsFilters, buildFtsFilters } from "./filters";
@@ -65,10 +67,10 @@ export class StandardEntity extends BaseEntity {
 			let count = 0;
 			for (const chunk of chunksOf(ids, BULK_UPDATE_CHUNK_SIZE)) {
 				const placeholders = chunk.map(() => "?").join(",");
-				const result = this.run(`UPDATE coding_standards SET ${fields.join(", ")} WHERE id IN (${placeholders})`, [
-					...values,
-					...chunk
-				] as (string | number)[]);
+				const result = this.run(
+					`UPDATE ${Q_TABLE_CODING_STANDARDS} SET ${fields.join(", ")} WHERE id IN (${placeholders})`,
+					[...values, ...chunk] as (string | number)[]
+				);
 				count += result.changes;
 			}
 			return count;
@@ -76,12 +78,12 @@ export class StandardEntity extends BaseEntity {
 	}
 
 	getById(id: string): CodingStandardEntry | null {
-		const row = this.get<CodingStandardRow>("SELECT * FROM coding_standards WHERE id = ?", [id]);
+		const row = this.get<CodingStandardRow>(`SELECT * FROM ${Q_TABLE_CODING_STANDARDS} WHERE id = ?`, [id]);
 		return row ? this.rowToEntry(row) : null;
 	}
 
 	getByCode(code: string, owner?: string, repo?: string): CodingStandardEntry | null {
-		let sql = "SELECT * FROM coding_standards WHERE code = ?";
+		let sql = `SELECT * FROM ${Q_TABLE_CODING_STANDARDS} WHERE code = ?`;
 		const params: (string | null)[] = [code];
 		if (owner && repo) {
 			sql += " AND ((owner = ? AND repo = ?) OR is_global = 1)";
@@ -100,7 +102,7 @@ export class StandardEntity extends BaseEntity {
 	 * is only invoked on the not-found path, so there is no hot-path cost.
 	 */
 	getByCodeAnyScope(code: string): CodingStandardEntry[] {
-		const rows = this.all<CodingStandardRow>("SELECT * FROM coding_standards WHERE code = ?", [code]);
+		const rows = this.all<CodingStandardRow>(`SELECT * FROM ${Q_TABLE_CODING_STANDARDS} WHERE code = ?`, [code]);
 		return rows.map((row) => this.rowToEntry(row));
 	}
 
@@ -139,7 +141,7 @@ export class StandardEntity extends BaseEntity {
 			is_global
 		});
 		const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
-		const sql = `SELECT * FROM coding_standards ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+		const sql = `SELECT * FROM ${Q_TABLE_CODING_STANDARDS} ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
 		params.push(limit, offset);
 
 		const rows = this.all<CodingStandardRow>(sql, params);
@@ -188,7 +190,10 @@ export class StandardEntity extends BaseEntity {
 			is_global
 		});
 		const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
-		const row = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM coding_standards ${whereClause}`, params);
+		const row = this.get<{ count: number }>(
+			`SELECT COUNT(*) as count FROM ${Q_TABLE_CODING_STANDARDS} ${whereClause}`,
+			params
+		);
 		return row?.count ?? 0;
 	}
 
@@ -213,8 +218,8 @@ export class StandardEntity extends BaseEntity {
 
 		const sql = `
 			SELECT cs.*
-			FROM coding_standards_fts fts
-			JOIN coding_standards cs ON cs.rowid = fts.rowid
+			FROM ${Q_TABLE_CODING_STANDARDS_FTS} fts
+			JOIN ${Q_TABLE_CODING_STANDARDS} cs ON cs.rowid = fts.rowid
 			WHERE ${conditions.join(" AND ")}
 			ORDER BY rank
 			LIMIT ? OFFSET ?
@@ -244,8 +249,8 @@ export class StandardEntity extends BaseEntity {
 		const row = this.get<{ count: number }>(
 			`
 			SELECT COUNT(*) as count
-			FROM coding_standards_fts fts
-			JOIN coding_standards cs ON cs.rowid = fts.rowid
+			FROM ${Q_TABLE_CODING_STANDARDS_FTS} fts
+			JOIN ${Q_TABLE_CODING_STANDARDS} cs ON cs.rowid = fts.rowid
 			WHERE ${conditions.join(" AND ")}
 			`,
 			params
@@ -378,7 +383,10 @@ export class StandardEntity extends BaseEntity {
 		const results: CodingStandardEntry[] = [];
 		for (const chunk of chunksOf(ids, BULK_UPDATE_CHUNK_SIZE)) {
 			const placeholders = chunk.map(() => "?").join(",");
-			const rows = this.all<CodingStandardRow>(`SELECT * FROM coding_standards WHERE id IN (${placeholders})`, chunk);
+			const rows = this.all<CodingStandardRow>(
+				`SELECT * FROM ${Q_TABLE_CODING_STANDARDS} WHERE id IN (${placeholders})`,
+				chunk
+			);
 			results.push(...rows.map((row) => this.rowToEntry(row)));
 		}
 		return results;
@@ -396,14 +404,17 @@ export class StandardEntity extends BaseEntity {
 		values.push(new Date().toISOString());
 		values.push(id);
 
-		this.run(`UPDATE coding_standards SET ${fields.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
+		this.run(
+			`UPDATE ${Q_TABLE_CODING_STANDARDS} SET ${fields.join(", ")} WHERE id = ?`,
+			values as (string | number | null)[]
+		);
 	}
 
 	delete(id: string): void {
 		// coding_standards lives in memory.db; its vector lives in the derived
 		// database with NO cross-database FK, so the previously implicit
 		// ON DELETE CASCADE is now an explicit delete (TASK-037).
-		this.run("DELETE FROM coding_standards WHERE id = ?", [id]);
+		this.run(`DELETE FROM ${Q_TABLE_CODING_STANDARDS} WHERE id = ?`, [id]);
 		this.run("DELETE FROM derived.standard_vectors WHERE standard_id = ?", [id]);
 	}
 
@@ -414,7 +425,7 @@ export class StandardEntity extends BaseEntity {
 		for (const chunk of chunksOf(ids, BULK_UPDATE_CHUNK_SIZE)) {
 			const placeholders = chunk.map(() => "?").join(",");
 			this.run(
-				`UPDATE coding_standards
+				`UPDATE ${Q_TABLE_CODING_STANDARDS}
 				 SET hit_count = hit_count + 1,
 				     last_used_at = ?
 				 WHERE id IN (${placeholders})`,
@@ -429,7 +440,7 @@ export class StandardEntity extends BaseEntity {
 	): { standard_id: string; vector: string | Uint8Array }[] {
 		let sql = `SELECT sv.standard_id, sv.vector
 			FROM derived.standard_vectors sv
-			JOIN coding_standards cs ON cs.id = sv.standard_id`;
+			JOIN ${Q_TABLE_CODING_STANDARDS} cs ON cs.id = sv.standard_id`;
 		const params: (string | number)[] = [];
 
 		if (repo) {

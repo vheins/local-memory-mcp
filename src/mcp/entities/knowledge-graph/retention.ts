@@ -1,5 +1,5 @@
 import { BaseEntity } from "../../storage/base";
-import { KG_PRUNE_WINDOW_CHUNK } from "../../utils/constants";
+import { KG_PRUNE_WINDOW_CHUNK, Q_TABLE_OBSERVATIONS, Q_TABLE_RELATIONS, Q_TABLE_TASKS, Q_TABLE_CODING_STANDARDS } from "../../utils/constants";
 
 /** Retention-only SQL kept separate from KG CRUD/query orchestration. */
 export class KnowledgeGraphRetentionEntity extends BaseEntity {
@@ -50,7 +50,7 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 	 */
 	async deleteStaleObservations(cutoff: string, chunkSize = KG_PRUNE_WINDOW_CHUNK): Promise<number> {
 		return await this.deleteWindowed(
-			"observations",
+			Q_TABLE_OBSERVATIONS,
 			`_row.created_at < ?
 			   AND (
 			       -- 1. contract-format, parent document gone
@@ -62,11 +62,11 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 			                             WHERE m.repo = _row.repo
 			                               AND 'Mentioned in memory: ' || m.title = _row.observation))
 			           OR (_row.observation LIKE 'Mentioned in task: %'
-			                AND EXISTS (SELECT 1 FROM tasks t
+			                AND EXISTS (SELECT 1 FROM ${Q_TABLE_TASKS} t
 			                             WHERE t.repo = _row.repo
 			                               AND 'Mentioned in task: ' || t.title = _row.observation))
 			           OR (_row.observation LIKE 'Mentioned in standard: %'
-			                AND EXISTS (SELECT 1 FROM coding_standards s
+			                AND EXISTS (SELECT 1 FROM ${Q_TABLE_CODING_STANDARDS} s
 			                             WHERE 'Mentioned in standard: ' || s.title = _row.observation))
 			           OR (_row.observation LIKE 'Mentioned in codebase: %'
 			                AND EXISTS (SELECT 1 FROM derived.codebase_files f
@@ -77,7 +77,7 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 			       -- 2. inline-format row for an entity with no contract anchor
 			       OR (
 			         _row.observation NOT LIKE 'Mentioned in %'
-			         AND NOT EXISTS (SELECT 1 FROM observations anchor
+			         AND NOT EXISTS (SELECT 1 FROM ${Q_TABLE_OBSERVATIONS} anchor
 			                          WHERE anchor.entity_name = _row.entity_name
 			                            AND anchor.repo = _row.repo
 			                            AND anchor.observation LIKE 'Mentioned in %')
@@ -105,10 +105,10 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 	countPrunableRelations(cutoff: string): number {
 		return (
 			this.get<{ cnt: number }>(
-				`SELECT COUNT(*) AS cnt FROM relations r
+				`SELECT COUNT(*) AS cnt FROM ${Q_TABLE_RELATIONS} r
 				 WHERE r.created_at < ?
-				   AND NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = r.from_entity AND o.repo = r.repo)
-				   AND NOT EXISTS (SELECT 1 FROM observations o2 WHERE o2.entity_name = r.to_entity AND o2.repo = r.repo)`,
+				   AND NOT EXISTS (SELECT 1 FROM ${Q_TABLE_OBSERVATIONS} o WHERE o.entity_name = r.from_entity AND o.repo = r.repo)
+				   AND NOT EXISTS (SELECT 1 FROM ${Q_TABLE_OBSERVATIONS} o2 WHERE o2.entity_name = r.to_entity AND o2.repo = r.repo)`,
 				[cutoff]
 			)?.cnt ?? 0
 		);
@@ -160,7 +160,7 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 		// single index probe (<1ms) instead of paying the correlated NOT EXISTS
 		// scan just to learn there is nothing to do.
 		if (
-			this.get<{ present: number }>("SELECT 1 AS present FROM relations WHERE created_at < ? LIMIT 1", [cutoff]) ===
+			this.get<{ present: number }>(`SELECT 1 AS present FROM ${Q_TABLE_RELATIONS} WHERE created_at < ? LIMIT 1`, [cutoff]) ===
 			undefined
 		) {
 			return 0;
@@ -175,11 +175,11 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 		// into an index range seek, so a run with nothing left to prune costs
 		// ~0ms instead of a full-table scan (measured 2844ms → 0ms on a
 		// 895k-row table).
-		const deleteChunkSql = `DELETE FROM relations WHERE rowid IN (
-			   SELECT r.rowid FROM relations r
+		const deleteChunkSql = `DELETE FROM ${Q_TABLE_RELATIONS} WHERE rowid IN (
+			   SELECT r.rowid FROM ${Q_TABLE_RELATIONS} r
 			   WHERE r.created_at < ?
-			     AND NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = r.from_entity AND o.repo = r.repo)
-			     AND NOT EXISTS (SELECT 1 FROM observations o2 WHERE o2.entity_name = r.to_entity AND o2.repo = r.repo)
+			     AND NOT EXISTS (SELECT 1 FROM ${Q_TABLE_OBSERVATIONS} o WHERE o.entity_name = r.from_entity AND o.repo = r.repo)
+			     AND NOT EXISTS (SELECT 1 FROM ${Q_TABLE_OBSERVATIONS} o2 WHERE o2.entity_name = r.to_entity AND o2.repo = r.repo)
 			   LIMIT ?
 			 )`;
 

@@ -1,10 +1,11 @@
 import { BaseEntity } from "../storage/base";
 import { TaskComment } from "../types";
+import { Q_TABLE_TASK_COMMENTS } from "../utils/constants";
 
 export class TaskCommentEntity extends BaseEntity {
 	insertTaskComment(comment: TaskComment): void {
 		this.run(
-			`INSERT INTO task_comments (
+			`INSERT INTO ${Q_TABLE_TASK_COMMENTS} (
 				id, task_id, repo, owner, comment, agent, role, model, previous_status, next_status, created_at
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
@@ -49,19 +50,19 @@ export class TaskCommentEntity extends BaseEntity {
 
 		values.push(id);
 
-		this.run(`UPDATE task_comments SET ${fields.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
+		this.run(`UPDATE ${Q_TABLE_TASK_COMMENTS} SET ${fields.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
 	}
 
 	deleteTaskComment(id: string): void {
-		this.run("DELETE FROM task_comments WHERE id = ?", [id]);
+		this.run(`DELETE FROM ${Q_TABLE_TASK_COMMENTS} WHERE id = ?`, [id]);
 	}
 
 	getTaskCommentById(id: string): TaskComment | null {
-		return this.get<TaskComment>("SELECT * FROM task_comments WHERE id = ?", [id]) ?? null;
+		return this.get<TaskComment>(`SELECT * FROM ${Q_TABLE_TASK_COMMENTS} WHERE id = ?`, [id]) ?? null;
 	}
 
 	getTaskCommentsByTaskId(taskId: string): TaskComment[] {
-		return this.all<TaskComment>(`SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at DESC, id DESC`, [
+		return this.all<TaskComment>(`SELECT * FROM ${Q_TABLE_TASK_COMMENTS} WHERE task_id = ? ORDER BY created_at DESC, id DESC`, [
 			taskId
 		]);
 	}
@@ -81,7 +82,7 @@ export class TaskCommentEntity extends BaseEntity {
 			const placeholders = chunk.map(() => "?").join(",");
 			out.push(
 				...this.all<TaskComment>(
-					`SELECT * FROM task_comments WHERE task_id IN (${placeholders}) ORDER BY created_at DESC, id DESC`,
+					`SELECT * FROM ${Q_TABLE_TASK_COMMENTS} WHERE task_id IN (${placeholders}) ORDER BY created_at DESC, id DESC`,
 					chunk
 				)
 			);
@@ -90,7 +91,7 @@ export class TaskCommentEntity extends BaseEntity {
 	}
 
 	getAllTaskCommentsByRepo(owner: string, repo: string, limit?: number, offset?: number): TaskComment[] {
-		let sql = `SELECT * FROM task_comments WHERE owner = ? AND repo = ? ORDER BY created_at DESC, id DESC`;
+		let sql = `SELECT * FROM ${Q_TABLE_TASK_COMMENTS} WHERE owner = ? AND repo = ? ORDER BY created_at DESC, id DESC`;
 		const params: (string | number)[] = [owner, repo];
 		if (limit !== undefined) {
 			sql += " LIMIT ?";
@@ -110,6 +111,6 @@ export class TaskCommentEntity extends BaseEntity {
 	 * comments under the old scope). Returns the number of comment rows updated.
 	 */
 	updateTaskCommentsOwnerByTaskId(taskId: string, owner: string): number {
-		return this.run("UPDATE task_comments SET owner = ? WHERE task_id = ?", [owner, taskId]).changes;
+		return this.run(`UPDATE ${Q_TABLE_TASK_COMMENTS} SET owner = ? WHERE task_id = ?`, [owner, taskId]).changes;
 	}
 }

@@ -1,6 +1,6 @@
 import { BaseEntity } from "../../storage/base";
 import { MemoryEntry, MemoryRow } from "../../types";
-import { TABLE_MEMORIES, TABLE_TASKS, TABLE_CLAIMS, TABLE_HANDOFFS } from "../../utils/constants";
+import { TABLE_MEMORIES, Q_TABLE_TASKS, Q_TABLE_CLAIMS, Q_TABLE_HANDOFFS } from "../../utils/constants";
 import {
 	TASK_STATUS_BACKLOG,
 	TASK_STATUS_PENDING,
@@ -46,9 +46,9 @@ export class SystemEntity extends BaseEntity {
 	listRepos(owner?: string): string[] {
 		let sql: string;
 		if (owner) {
-			sql = `SELECT DISTINCT repo FROM ${TABLE_MEMORIES} WHERE owner = ? UNION SELECT DISTINCT repo FROM ${TABLE_TASKS} WHERE owner = ?`;
+			sql = `SELECT DISTINCT repo FROM ${TABLE_MEMORIES} WHERE owner = ? UNION SELECT DISTINCT repo FROM ${Q_TABLE_TASKS} WHERE owner = ?`;
 		} else {
-			sql = `SELECT DISTINCT repo FROM ${TABLE_MEMORIES} UNION SELECT DISTINCT repo FROM ${TABLE_TASKS}`;
+			sql = `SELECT DISTINCT repo FROM ${TABLE_MEMORIES} UNION SELECT DISTINCT repo FROM ${Q_TABLE_TASKS}`;
 		}
 		const params = owner ? [owner, owner] : [];
 		const rows = this.all<{ repo: string }>(sql, params);
@@ -74,19 +74,19 @@ export class SystemEntity extends BaseEntity {
 		const ownerParams = owner ? [owner] : [];
 
 		const activeClaimRows = this.all<{ repo: string; count: number }>(
-			`SELECT repo, COUNT(*) as count FROM ${TABLE_CLAIMS} WHERE released_at IS NULL${ownerFilter} GROUP BY repo`,
+			`SELECT repo, COUNT(*) as count FROM ${Q_TABLE_CLAIMS} WHERE released_at IS NULL${ownerFilter} GROUP BY repo`,
 			ownerParams
 		);
 		const pendingHandoffRows = this.all<{ repo: string; count: number }>(
-			`SELECT repo, COUNT(*) as count FROM ${TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}'${ownerFilter} GROUP BY repo`,
+			`SELECT repo, COUNT(*) as count FROM ${Q_TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}'${ownerFilter} GROUP BY repo`,
 			ownerParams
 		);
 		const unassignedHandoffRows = this.all<{ repo: string; count: number }>(
-			`SELECT repo, COUNT(*) as count FROM ${TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}' AND to_agent IS NULL${ownerFilter} GROUP BY repo`,
+			`SELECT repo, COUNT(*) as count FROM ${Q_TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}' AND to_agent IS NULL${ownerFilter} GROUP BY repo`,
 			ownerParams
 		);
 		const staleClaimRows = this.all<{ repo: string; count: number }>(
-			`SELECT repo, COUNT(*) as count FROM ${TABLE_CLAIMS} WHERE released_at IS NULL AND claimed_at <= datetime('now', '-1 day')${ownerFilter} GROUP BY repo`,
+			`SELECT repo, COUNT(*) as count FROM ${Q_TABLE_CLAIMS} WHERE released_at IS NULL AND claimed_at <= datetime('now', '-1 day')${ownerFilter} GROUP BY repo`,
 			ownerParams
 		);
 
@@ -106,7 +106,7 @@ export class SystemEntity extends BaseEntity {
 
 		// Aggregate task status counts per repo (single query instead of N)
 		const taskAggRows = this.all<{ repo: string; status: string; count: number }>(
-			`SELECT repo, status, COUNT(*) as count FROM ${TABLE_TASKS}${ownerWhere} GROUP BY repo, status`,
+			`SELECT repo, status, COUNT(*) as count FROM ${Q_TABLE_TASKS}${ownerWhere} GROUP BY repo, status`,
 			ownerParams
 		);
 		const taskCountsByRepo: Record<string, { total: number; byStatus: Record<string, number> }> = {};
@@ -123,7 +123,7 @@ export class SystemEntity extends BaseEntity {
 			`SELECT repo, MAX(updated_at) as last FROM (
 				SELECT repo, updated_at FROM ${TABLE_MEMORIES}${ownerWhere}
 				UNION ALL
-				SELECT repo, updated_at FROM ${TABLE_TASKS}${ownerWhere}
+				SELECT repo, updated_at FROM ${Q_TABLE_TASKS}${ownerWhere}
 			) GROUP BY repo`,
 			owner ? [owner, owner] : []
 		);
@@ -198,7 +198,7 @@ export class SystemEntity extends BaseEntity {
 		});
 
 		const taskRows = this.all<{ status: string; count: number }>(
-			`SELECT status, COUNT(*) as count FROM ${TABLE_TASKS} WHERE owner = ? AND repo = ? GROUP BY status`,
+			`SELECT status, COUNT(*) as count FROM ${Q_TABLE_TASKS} WHERE owner = ? AND repo = ? GROUP BY status`,
 			[owner, repo]
 		);
 
@@ -285,7 +285,7 @@ export class SystemEntity extends BaseEntity {
 			`SELECT type, COUNT(*) as count FROM ${TABLE_MEMORIES} GROUP BY type`
 		);
 		const taskRows = this.all<{ status: string; count: number }>(
-			`SELECT status, COUNT(*) as count FROM ${TABLE_TASKS} GROUP BY status`
+			`SELECT status, COUNT(*) as count FROM ${Q_TABLE_TASKS} GROUP BY status`
 		);
 		const repos = this.listRepoNavigation().sort((a, b) => {
 			const pressureA =
@@ -301,22 +301,22 @@ export class SystemEntity extends BaseEntity {
 		});
 
 		const activeClaimsRow = this.get<{ count: number }>(
-			`SELECT COUNT(*) as count FROM ${TABLE_CLAIMS} WHERE released_at IS NULL`
+			`SELECT COUNT(*) as count FROM ${Q_TABLE_CLAIMS} WHERE released_at IS NULL`
 		);
 		const agentsClaimingRow = this.get<{ count: number }>(
-			`SELECT COUNT(DISTINCT agent) as count FROM ${TABLE_CLAIMS} WHERE released_at IS NULL`
+			`SELECT COUNT(DISTINCT agent) as count FROM ${Q_TABLE_CLAIMS} WHERE released_at IS NULL`
 		);
 		const pendingHandoffsRow = this.get<{ count: number }>(
-			`SELECT COUNT(*) as count FROM ${TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}'`
+			`SELECT COUNT(*) as count FROM ${Q_TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}'`
 		);
 		const unassignedHandoffsRow = this.get<{ count: number }>(
-			`SELECT COUNT(*) as count FROM ${TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}' AND to_agent IS NULL`
+			`SELECT COUNT(*) as count FROM ${Q_TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}' AND to_agent IS NULL`
 		);
 		const staleClaimsRow = this.get<{ count: number }>(
-			`SELECT COUNT(*) as count FROM ${TABLE_CLAIMS} WHERE released_at IS NULL AND claimed_at <= datetime('now', '-1 day')`
+			`SELECT COUNT(*) as count FROM ${Q_TABLE_CLAIMS} WHERE released_at IS NULL AND claimed_at <= datetime('now', '-1 day')`
 		);
 		const staleHandoffsRow = this.get<{ count: number }>(
-			`SELECT COUNT(*) as count FROM ${TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}' AND created_at <= datetime('now', '-1 day')`
+			`SELECT COUNT(*) as count FROM ${Q_TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}' AND created_at <= datetime('now', '-1 day')`
 		);
 
 		return {
@@ -345,7 +345,7 @@ export class SystemEntity extends BaseEntity {
 
 	getGlobalStats(): { totalMemories: number; totalTasks: number; totalRepos: number } {
 		const totalMemoriesRow = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM ${TABLE_MEMORIES}`);
-		const totalTasksRow = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM ${TABLE_TASKS}`);
+		const totalTasksRow = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM ${Q_TABLE_TASKS}`);
 		const totalRepos = this.listRepos().length;
 
 		return {
@@ -364,7 +364,7 @@ export class SystemEntity extends BaseEntity {
 			[owner, repo]
 		);
 		const taskCountRow = this.get<{ count: number }>(
-			`SELECT COUNT(*) as count FROM ${TABLE_TASKS} WHERE owner = ? AND repo = ?`,
+			`SELECT COUNT(*) as count FROM ${Q_TABLE_TASKS} WHERE owner = ? AND repo = ?`,
 			[owner, repo]
 		);
 		const languagesRows = this.all<{ language: string }>(

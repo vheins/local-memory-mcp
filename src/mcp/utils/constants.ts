@@ -74,6 +74,49 @@ export const TABLE_COLD_MEMORIES = "cold_memories";
 export const DERIVED_DB_FILENAME = "codebase.db";
 export const DERIVED_SCHEMA = "derived";
 
+// ── Domain databases (ADR-012 / TASK-002) ───────────────────────────────
+// The hot store is split into five PHYSICAL files on one connection: the
+// existing `memory.db` keeps the `core` group (memories + everything written
+// in the same transaction as a memory), and four attached files own the
+// remaining domains. `_schema_version` stays in `memory.db` (`main`), which is
+// what makes `memory.db` the core file rather than a fifth attached schema.
+// See storage/domain-db.ts.
+export const DOMAIN_TASKS_DB_FILENAME = "tasks.db";
+export const DOMAIN_STANDARDS_DB_FILENAME = "standards.db";
+export const DOMAIN_KG_DB_FILENAME = "kg.db";
+export const DOMAIN_OBSERVABILITY_DB_FILENAME = "observability.db";
+
+export const DOMAIN_SCHEMA_TASKS = "tasks";
+export const DOMAIN_SCHEMA_STANDARDS = "standards";
+export const DOMAIN_SCHEMA_KG = "kg";
+export const DOMAIN_SCHEMA_OBSERVABILITY = "observability";
+
+/**
+ * Schema-qualified table names for every table that does NOT live in `main`.
+ *
+ * Production SQL must use these (`${Q_TABLE_TASKS}`) while SQL migrations keep
+ * the unqualified `TABLE_*` constants: migrations run BEFORE the split, when the
+ * tables still exist in `main`, and are frozen history once applied. Prefixing
+ * production SQL means a broken/partial domain migration fails loudly instead of
+ * silently writing to a stale `main` copy (SQLite resolves an unqualified name to
+ * `main` first, so an ambiguous name would hit the wrong file).
+ */
+export const Q_TABLE_TASKS = `${DOMAIN_SCHEMA_TASKS}.tasks`;
+export const Q_TABLE_TASK_COMMENTS = `${DOMAIN_SCHEMA_TASKS}.task_comments`;
+export const Q_TABLE_CLAIMS = `${DOMAIN_SCHEMA_TASKS}.claims`;
+export const Q_TABLE_HANDOFFS = `${DOMAIN_SCHEMA_TASKS}.handoffs`;
+export const Q_TABLE_CODING_STANDARDS = `${DOMAIN_SCHEMA_STANDARDS}.coding_standards`;
+export const Q_TABLE_CODING_STANDARDS_FTS = `${DOMAIN_SCHEMA_STANDARDS}.coding_standards_fts`;
+export const Q_TABLE_STANDARD_TAGS = `${DOMAIN_SCHEMA_STANDARDS}.standard_tags`;
+export const Q_TABLE_STANDARD_STACK = `${DOMAIN_SCHEMA_STANDARDS}.standard_stack`;
+export const Q_TABLE_ENTITIES = `${DOMAIN_SCHEMA_KG}.entities`;
+export const Q_TABLE_RELATIONS = `${DOMAIN_SCHEMA_KG}.relations`;
+export const Q_TABLE_OBSERVATIONS = `${DOMAIN_SCHEMA_KG}.observations`;
+export const Q_TABLE_KG_DEGREES = `${DOMAIN_SCHEMA_KG}.kg_degrees`;
+export const Q_TABLE_ENTITY_NAMES_FTS = `${DOMAIN_SCHEMA_KG}.entity_names_fts`;
+export const Q_TABLE_EXPLORATION_OBSERVATIONS = `${DOMAIN_SCHEMA_OBSERVABILITY}.exploration_observations`;
+export const Q_TABLE_EXPLORATION_EVIDENCE = `${DOMAIN_SCHEMA_OBSERVABILITY}.exploration_evidence`;
+
 // ── Time (ms) — TTL building blocks (single source) ─────────────────────
 // Declared before RECENCY_HALF_LIFE_MS so derived constants can reference
 // them. Replace inline `60*60*1000` / `24*60*60*1000` math with these.
