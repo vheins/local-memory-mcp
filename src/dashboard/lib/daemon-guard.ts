@@ -17,9 +17,13 @@
  * no migration pass, no embedding worker — and fails fast with an actionable
  * message.
  *
+ * FIX-012 extends the same module with the writer the daemon check cannot see:
+ * `DASHBOARD_ENABLE_MCP=true` spawns an MCP server child that opens its own
+ * store over the same file.
+ *
  * Deliberately free of storage imports: `src/dashboard/server.ts` must be able
- * to run this check before `./lib/context` (and therefore `./app`, which pulls
- * the same context through the service layer) is evaluated.
+ * to run these checks before `./lib/context` (and therefore `./app`, which
+ * pulls the same context through the service layer) is evaluated.
  */
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { isProcessAlive, readDaemonPid, resolveDaemonPaths } from "../../mcp/cli/daemon";
@@ -149,4 +153,51 @@ export function assertStandaloneDashboardAllowed(options: DetectDaemonOptions = 
 	const holder = detectDaemonHolder(options);
 	if (holder === null) return;
 	throw new DashboardDaemonConflictError(formatDaemonConflict(holder, options.env), holder.pid);
+}
+
+/** Operator-facing warning about the embedded MCP child writer (FIX-012). */
+export interface EmbeddedWriterWarning {
+	/** Ready-to-log text: names the child writer, the contention, and the supported setups. */
+	message: string;
+}
+
+/**
+ * Detect the second writer the daemon guard cannot see (FIX-012).
+ *
+ * `DASHBOARD_ENABLE_MCP=true` makes the standalone dashboard eagerly call
+ * `mcpClient.start()`, which spawns `node <mcp server>` over stdio
+ * (`src/mcp/client.ts`). That child is a separate process that builds its OWN
+ * `SQLiteStore` + `WriteLock` over the SAME `memory.db`, so the
+ * one-writer-per-database rule FIX-008 enforces is broken from inside the
+ * dashboard itself — no `daemon.pid` involved, so {@link detectDaemonHolder}
+ * never fires.
+ *
+ * This returns a warning rather than a refusal because the standalone
+ * dashboard is a supported entry point and the same client is also started
+ * lazily by dashboard services on MCP-dependent routes; failing boot on the
+ * eager flag would break a working configuration without removing the writer.
+ *
+ * @param env Environment to read `DASHBOARD_ENABLE_MCP` from. Defaults to `process.env`.
+ * @returns The warning to log once at boot, or `null` when the flag is off.
+ */
+export function detectEmbeddedWriterWarning(env: NodeJS.ProcessEnv = process.env): EmbeddedWriterWarning | null {
+	if (env.DASHBOARD_ENABLE_MCP !== "true") return null;
+	return { message: formatEmbeddedWriterWarning() };
+}
+
+/**
+ * Build the warning text for {@link detectEmbeddedWriterWarning}.
+ *
+ * Names the concrete child process, the files it opens, the symptom the
+ * operator would otherwise have to diagnose, and the two supported setups.
+ */
+export function formatEmbeddedWriterWarning(): string {
+	return [
+		"DASHBOARD_ENABLE_MCP=true makes the standalone dashboard spawn its own MCP server child process",
+		"(node <mcp server>), which builds a second SQLiteStore + WriteLock over the same memory.db.",
+		"Dashboard and child then contend for memory.db.lock: a compound write in either process stalls for",
+		'up to ~50s and fails with "Failed to acquire exclusive write lock".',
+		"One writer per database: unset DASHBOARD_ENABLE_MCP for a standalone dashboard, or run",
+		"`local-memory-mcp daemon`, which serves this dashboard and the MCP endpoint (/mcp) from one process."
+	].join(" ");
 }

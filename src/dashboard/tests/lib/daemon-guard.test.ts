@@ -15,7 +15,9 @@ import {
 	assertStandaloneDashboardAllowed,
 	DashboardDaemonConflictError,
 	detectDaemonHolder,
+	detectEmbeddedWriterWarning,
 	formatDaemonConflict,
+	formatEmbeddedWriterWarning,
 	resolveDaemonDashboardUrl
 } from "../../lib/daemon-guard";
 
@@ -122,5 +124,38 @@ describe("daemon guard (FIX-008)", () => {
 
 		const holder = { pid: 12, dir, logFile };
 		expect(resolveDaemonDashboardUrl(holder, { PORT: "4000" })).toBe("http://127.0.0.1:7777");
+	});
+});
+
+describe("embedded MCP child writer (FIX-012)", () => {
+	it('stays quiet when DASHBOARD_ENABLE_MCP is unset or not exactly "true"', () => {
+		expect(detectEmbeddedWriterWarning({})).toBeNull();
+		expect(detectEmbeddedWriterWarning({ DASHBOARD_ENABLE_MCP: "false" })).toBeNull();
+		// server.ts gates on the exact string, so the guard must agree with it.
+		expect(detectEmbeddedWriterWarning({ DASHBOARD_ENABLE_MCP: "TRUE" })).toBeNull();
+		expect(detectEmbeddedWriterWarning({ DASHBOARD_ENABLE_MCP: "1" })).toBeNull();
+	});
+
+	it("warns about the child writer and the contention it creates when the flag is on", () => {
+		const warning = detectEmbeddedWriterWarning({ DASHBOARD_ENABLE_MCP: "true" });
+
+		expect(warning).not.toBeNull();
+		const message = warning?.message ?? "";
+		// Names the cause ...
+		expect(message).toContain("DASHBOARD_ENABLE_MCP=true");
+		expect(message).toContain("child process");
+		expect(message).toContain("second SQLiteStore + WriteLock");
+		expect(message).toContain("memory.db.lock");
+		// ... the symptom ...
+		expect(message).toContain("~50s");
+		expect(message).toContain("Failed to acquire exclusive write lock");
+		// ... and both supported setups.
+		expect(message).toContain("unset DASHBOARD_ENABLE_MCP");
+		expect(message).toContain("local-memory-mcp daemon");
+		expect(message).toContain("/mcp");
+	});
+
+	it("formats the same warning text the detector returns", () => {
+		expect(detectEmbeddedWriterWarning({ DASHBOARD_ENABLE_MCP: "true" })?.message).toBe(formatEmbeddedWriterWarning());
 	});
 });

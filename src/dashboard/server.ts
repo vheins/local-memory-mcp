@@ -17,8 +17,16 @@
  * imported, so the refusal is immediate and costs no lock wait, migration pass
  * or embedding worker. The daemon itself is unaffected: it loads
  * `./lib/context` directly, never this file.
+ *
+ * FIX-012: the same guard module warns once when `DASHBOARD_ENABLE_MCP=true`
+ * would spawn an MCP server child that opens a second store over the same file
+ * — the writer the daemon PID check cannot see.
  */
-import { assertStandaloneDashboardAllowed, DashboardDaemonConflictError } from "./lib/daemon-guard";
+import {
+	assertStandaloneDashboardAllowed,
+	DashboardDaemonConflictError,
+	detectEmbeddedWriterWarning
+} from "./lib/daemon-guard";
 
 // FIX-008: fail fast, before ANY module that opens the database is evaluated.
 // `./app` (and the service layer behind it) imports `./lib/context`, so both
@@ -43,7 +51,12 @@ const PORT = Number(process.env.PORT) || 3456;
 const HOST = process.env.DASHBOARD_HOST || "127.0.0.1";
 
 // --- Start Server ---
+// FIX-012: warn once about the embedded MCP child writer. The flag keeps its
+// existing effect (eager start) — the warning only makes the second writer
+// explicit instead of leaving the operator with a silent ~50s lock stall.
 if (process.env.DASHBOARD_ENABLE_MCP === "true") {
+	const warning = detectEmbeddedWriterWarning();
+	if (warning !== null) logger.warn(warning.message);
 	mcpClient.start().catch((e) => logger.error("MCP Client failed", { error: e.message }));
 }
 
