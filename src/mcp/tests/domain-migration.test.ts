@@ -15,7 +15,7 @@ import os from "os";
 import path from "path";
 import { MigrationManager } from "../storage/migrations";
 import { SQLiteStore } from "../storage/sqlite";
-import { ensureDomainReady, resolveDomainDbPaths } from "../storage/domain-db";
+import { ensureDomainReady, attachDomainDbs, initDomainSchemas, resolveDomainDbPaths } from "../storage/domain-db";
 import { DOMAIN_GROUP_TABLES, runDomainMigration } from "../storage/domain-migration";
 import { DOMAIN_SCHEMAS } from "../storage/domain-schema";
 
@@ -473,6 +473,113 @@ describe("disk guard", () => {
 			expect(
 				db.prepare("SELECT 1 AS present FROM main.sqlite_master WHERE type = 'table' AND name = 'tasks'").get()
 			).toBeDefined();
+		} finally {
+			db.close();
+		}
+	});
+});
+
+describe("peer holding the write lock on a domain file", () => {
+	/**
+	 * Open a second connection to the FIRST domain file the copy touches (`tasks`
+	 * leads DOMAIN_SCHEMAS) and hold its WAL write lock with `BEGIN IMMEDIATE`.
+	 * The peer's own `busy_timeout = 0` keeps its setup from waiting on us.
+	 */
+	function holdTasksWriteLock(tasksPath: string): Database.Database {
+		const peer = new Database(tasksPath);
+		peer.pragma("busy_timeout = 0");
+		peer.exec("BEGIN IMMEDIATE");
+		return peer;
+	}
+
+	it("retries, then fails with concurrent-start guidance instead of a raw SQLITE_BUSY", () => {
+		const dbDir = makeTempDir();
+		const dbPath = makeDbPath(dbDir);
+		createLegacyDb(dbPath);
+
+		const db = new Database(dbPath);
+		const paths = resolveDomainDbPaths(dbPath);
+		let error: unknown;
+		try {
+			attachDomainDbs(db, dbPath);
+			initDomainSchemas(db);
+
+			const peer = holdTasksWriteLock(paths.tasks);
+			try {
+				runDomainMigration(db, dbPath);
+			} catch (err) {
+				error = err;
+			} finally {
+				peer.exec("ROLLBACK");
+				peer.close();
+			}
+
+			// The run FAILED rather than reporting a completed move. If a busy target
+			// were mapped to `concurrent: true`, the table would drop out of
+			// `movedTables`/`dropMainSideObjects` and the caller would believe the
+			// move succeeded while a table was never copied.
+			expect(error).toBeInstanceOf(Error);
+			const message = (error as Error).message;
+			expect(message).toMatch(/domain migration on tasks\.tasks blocked by another process/);
+			expect(message).toMatch(/stop the peer and restart/);
+			expect(message).toMatch(/safe to retry/i);
+			// The driver error survives as `cause`/`code`, so classifiers still see it.
+			expect((error as { code?: string }).code).toBe("SQLITE_BUSY");
+			expect((error as { cause?: unknown }).cause).toBeInstanceOf(Error);
+
+			// A permanent lock must never retire a `main` table: nothing was copied,
+			// so every source table (and its rows) is still in `main`.
+			for (const schema of DOMAIN_SCHEMAS) {
+				for (const spec of DOMAIN_GROUP_TABLES[schema]) {
+					expect(
+						db.prepare("SELECT 1 AS present FROM main.sqlite_master WHERE type = 'table' AND name = ?").get(spec.table)
+					).toBeDefined();
+				}
+			}
+			expect((db.prepare("SELECT COUNT(*) AS c FROM main.tasks").get() as { c: number }).c).toBe(1);
+		} finally {
+			db.close();
+		}
+	});
+
+	it("completes the move once the peer releases the lock", () => {
+		const dbDir = makeTempDir();
+		const dbPath = makeDbPath(dbDir);
+		createLegacyDb(dbPath);
+
+		const db = new Database(dbPath);
+		const paths = resolveDomainDbPaths(dbPath);
+		try {
+			attachDomainDbs(db, dbPath);
+			initDomainSchemas(db);
+
+			const peer = holdTasksWriteLock(paths.tasks);
+			let blocked: unknown;
+			try {
+				runDomainMigration(db, dbPath);
+			} catch (err) {
+				blocked = err;
+			} finally {
+				peer.exec("ROLLBACK");
+				peer.close();
+			}
+			expect(blocked).toBeInstanceOf(Error);
+
+			// The peer is gone: the retry converges and moves every table.
+			const retry = runDomainMigration(db, dbPath);
+			expect(retry.moved).toBe(true);
+			expect(retry.tablesMoved).toContain("tasks");
+
+			const task = db.prepare("SELECT title FROM tasks.tasks WHERE id = ?").get("task-1") as { title: string };
+			expect(task.title).toBe("legacy task");
+
+			for (const schema of DOMAIN_SCHEMAS) {
+				for (const spec of DOMAIN_GROUP_TABLES[schema]) {
+					expect(
+						db.prepare("SELECT 1 AS present FROM main.sqlite_master WHERE type = 'table' AND name = ?").get(spec.table)
+					).toBeUndefined();
+				}
+			}
 		} finally {
 			db.close();
 		}
