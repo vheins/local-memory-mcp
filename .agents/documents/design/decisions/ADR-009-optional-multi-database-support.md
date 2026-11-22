@@ -14,6 +14,8 @@ The schema and search layer are also SQLite-specific. The repository has 38 numb
 
 The current SQLite deployment already separates some data physically. `src/mcp/storage/derived-db.ts` uses `ATTACH DATABASE` to expose `codebase.db` as the `derived` schema, while `src/mcp/storage/cold-archive.ts` opens a separate SQLite connection for the cold archive. `ATTACH` has no direct cross-database equivalent that preserves the same schema and query behavior across PostgreSQL, MariaDB, and MySQL. The derived migration is explicitly not wrapped in a transaction because WAL makes cross-file SQLite transactions non-atomic (`derived-db.ts:330-332`). Those boundaries must be redesigned before a multi-database adapter can claim equivalent atomicity.
 
+Physical split of the hot store is now an accepted decision in its own right: ADR-012 splits `memory.db` into five domain files (`core.db`, `tasks.db`, `standards.db`, `kg.db`, `observability.db`) attached on one connection, without this storage port as a prerequisite. That split adds schema-prefix coupling the port will later have to absorb, and it does not provide multi-database support.
+
 The immediate multi-client contention problem is addressed separately by ADR-010: an opt-in Streamable HTTP daemon lets many clients share one process, store, and worker set while stdio remains the default. That transport change reduces the need for multiple independent SQLite writers; it does not provide multi-database support.
 
 ## Decision
@@ -81,6 +83,7 @@ The abstraction work must account for the direct `better-sqlite3` constructor an
 
 - `adr-001-use-sqlite.md` — original SQLite and local-search decision
 - `ADR-010-streamable-http-transport.md` — immediate many-client daemon decision
+- `ADR-012-split-memory-db-per-domain-files.md` — accepted physical five-file split of the hot store, built without this storage port as a prerequisite
 - `src/mcp/storage/base.ts` — direct `better-sqlite3` entity base and synchronous transaction wrapper
 - `src/mcp/storage/migrations/` — 38 numbered migrations with raw SQLite SQL
 - `src/mcp/storage/derived-db.ts` — `ATTACH DATABASE`, `derived` schema, FTS5 placement, and non-atomic cross-file migration note

@@ -1,9 +1,11 @@
 # ADR-011 — Split `memory.db` Per Domain
 
 **Date:** 2026-09-19
-**Status:** Accepted
+**Status:** Superseded by [ADR-012](ADR-012-split-memory-db-per-domain-files.md) (2026-11-22)
 **Deciders:** Muhammad Rheza Alfin
 **Tags:** `storage`, `sqlite`, `wal`, `domain-isolation`, `derived-db`
+
+> **SUPERSEDED — 2026-11-22.** The owner chose a physical five-file split after being shown this evaluation. [ADR-012 — Split `memory.db` Per Domain Into Five Files](ADR-012-split-memory-db-per-domain-files.md) is now the active decision. This ADR is kept as history: its table inventory, its 0.0% contention measurement, and its cost analysis remain valid, and the supersession is a decision rather than a change in evidence. No re-open condition recorded below had fired.
 
 > **DECISION: keep the single-file hot store.** A full or hybrid per-domain split of `memory.db` is **rejected** for now. The measured contention is concentrated on the single writer and is already mitigated by WAL + `busy_timeout` + bounded retry + the one-daemon HTTP transport (ADR-010). The existing partial splits (`codebase.db` as `derived`, `cold-archive.db`) are preserved as-is. This ADR records the evaluation, the domain/table inventory, and the conditions under which a future split would be re-opened (see §7). No source code is changed by this ADR.
 
