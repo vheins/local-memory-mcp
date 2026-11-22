@@ -75,33 +75,71 @@ const KIND_PLURALS: Record<PurgeEntityKind, string> = {
 };
 
 /**
- * The queue purge shares the 500-chunk invariant with the entity bulk paths
- * (OPT-PERF-11): a single un-chunked `IN (...)` over the whole batch would
- * exceed SQLite's bound-variable limit (~999 default, 32766 with
- * SQLITE_MAX_VARIABLE_NUMBER) and abort the transaction with "too many SQL
- * variables" (TASK-139). The chunking now goes through the shared `chunksOf`
- * helper with BULK_UPDATE_CHUNK_SIZE as the single home of that bound.
+ * Phase 1 of the purge contract: delete the pending embedding-queue jobs of
+ * `items`, in its own transaction.
+ *
+ * ORDER IS THE SAFETY MECHANISM (FIX-006). `queue_jobs` lives in `memory.db`
+ * (core) while task/standard rows live in `tasks.db` / `standards.db`
+ * (ADR-012), and a transaction spanning attached databases is NOT atomic under
+ * WAL — the repo records that in `domain-migration.ts` / `derived-db.ts`.
+ * Running this phase FIRST makes the crash residue safe: should the process die
+ * right after it, the entity still exists and simply has no pending job (it
+ * stops being re-embedded), whereas the reverse order could leave a job that
+ * points at a deleted/canceled row and re-embeds its vector or re-runs KG
+ * extraction afterwards (TASK-042 / MEM-427). Never move this after the entity
+ * mutation.
+ *
+ * Idempotent by construction: deleting an already-absent job row is a no-op, so
+ * repeating the purge after a later-phase failure converges.
  */
+function purgeQueueJobs(db: SQLiteStore, kind: PurgeEntityKind, items: PurgeEntityItem[]): void {
+	// Chunked at BULK_UPDATE_CHUNK_SIZE via the shared chunksOf helper — a single
+	// un-chunked IN(...) over the whole batch would exceed SQLite's
+	// bound-variable limit on select-all bulk deletes and abort the transaction
+	// (TASK-139).
+	db.db
+		.transaction(() => {
+			for (const chunk of chunksOf(items, BULK_UPDATE_CHUNK_SIZE)) {
+				const placeholders = chunk.map(() => "?").join(",");
+				db.db
+					.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)
+					.run(kind, ...chunk.map((item) => item.id));
+			}
+		})
+		.immediate();
+}
 
 /**
- * Runs the full delete contract for a batch of entities of one kind:
+ * Runs the full delete contract for a batch of entities of one kind as four
+ * ordered phases. No phase relies on a commit that spans two database files
+ * (see the standard-vector residual below).
  *
- * 1. Entity delete/cancel (kind-specific) + coordination/vector cleanup +
- *    queue_jobs purge — all in ONE transaction. A mid-batch failure rolls back
- *    everything (no partial state), and a stale queue_jobs row could otherwise
- *    re-embed the vector / re-run KG extraction for a deleted entity
- *    (TASK-042 / MEM-427).
- * 2. KG cleanup — best-effort (never throws), atomic, once per batch, each
+ * 1. `queue_jobs` purge — FIRST, own transaction ({@link purgeQueueJobs}). The
+ *    safe-first order is documented there.
+ * 2. Entity mutation — own transaction, per kind: archive memories / hard-delete
+ *    standards / cancel tasks with their coordination cleanup (claim release,
+ *    handoff expiry, child detach). If this phase fails, phase 1 is NOT rolled
+ *    back — it cannot be, the writes live in different files under WAL. That
+ *    residue is the harmless one (job gone, entity still present) and phase 1 is
+ *    idempotent, so a retry completes the purge. A partially-scanned batch can
+ *    roll back its own entity writes, since those share one file group.
+ * 3. Derived vector cleanup for tasks — own transaction. Leftover
+ *    `derived.task_vectors` rows are inert (every vector read JOINs its parent
+ *    table), so this is cleanup, not a consistency dependency.
+ * 4. KG cleanup — best-effort (never throws), atomic, once per batch, each
  *    (text, repo) pair scoped to the entity's OWN repo so identical titles
  *    across repos never cross-delete (TASK-045/043); orphans are checked via
  *    observations UNION relations so relation-referenced entities are KEPT
  *    (REFACTOR-KG-006 / TASK-004).
  *
- * Vector removal is part of the contract: task vectors are dropped explicitly
- * (`derived.task_vectors`); standard vectors are dropped explicitly inside
- * `StandardEntity.delete` (the derived database has no cross-database FK to
- * `coding_standards`); archived memories legitimately keep their vector rows —
- * they stay searchable with `includeArchived`.
+ * Known residual: `StandardEntity.delete` drops the `coding_standards` row and
+ * its `derived.standard_vectors` row in one call, so phase 2 reaches into
+ * `codebase.db` for standards. Nothing depends on that co-commit — a leftover
+ * standard vector is unreachable (`getVectorCandidates` JOINs
+ * `coding_standards`) — and it is not part of the crash-safety argument above.
+ *
+ * Archived memories legitimately keep their vector rows — they stay searchable
+ * with `includeArchived`.
  *
  * @returns The number of items purged (=== `items.length`).
  */
@@ -116,6 +154,8 @@ export function purgeEntityAndCleanup(
 	const onProgress = opts?.onProgress;
 	const total = items.length;
 	const now = new Date().toISOString();
+
+	purgeQueueJobs(db, kind, items);
 
 	db.db
 		.transaction(() => {
@@ -136,34 +176,34 @@ export function purgeEntityAndCleanup(
 				case "task":
 					// Soft cancel + coordination cleanup: detach children so no
 					// stale enqueued worker snapshot re-derives KG relations,
-					// drop the task vector, release claims and expire linked
-					// handoffs (TASK-065 / MEM-473).
+					// release claims and expire linked handoffs
+					// (TASK-065 / MEM-473). The task vector is removed in the
+					// next phase instead, so this transaction stays inside
+					// tasks.db.
 					for (const item of items) {
 						db.tasks.updateTask(item.id, { status: "canceled", canceled_at: now });
 						db.tasks.clearChildrenParent(item.id);
-						db.tasks.removeTaskVector(item.id);
 						db.handoffs.releaseClaimsForTask(item.id);
 						db.handoffs.updatePendingHandoffsForTask(item.id, "expired");
 					}
 					break;
 			}
-
-			// Purge pending embedding-queue jobs so a stale job can never
-			// re-embed the vector / re-run KG extraction for a deleted entity.
-			// Chunked at BULK_UPDATE_CHUNK_SIZE via the shared chunksOf helper —
-			// a single un-chunked IN(...)
-			// over the whole batch would exceed SQLite's bound-variable limit on
-			// select-all bulk deletes and abort the transaction (TASK-139).
-			for (const chunk of chunksOf(items, BULK_UPDATE_CHUNK_SIZE)) {
-				const placeholders = chunk.map(() => "?").join(",");
-				db.db
-					.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)
-					.run(kind, ...chunk.map((item) => item.id));
-			}
 		})
 		.immediate();
 
-	// Progress (when requested): per item, then a final total call.
+	if (kind === "task") {
+		// Phase 3: derived (`codebase.db`) cleanup in its own transaction. A
+		// canceled task keeps its vector row until here; that row is reachable
+		// (the task still exists), so a crash between the phases is harmless.
+		db.db
+			.transaction(() => {
+				for (const item of items) db.tasks.removeTaskVector(item.id);
+			})
+			.immediate();
+	}
+
+	// Progress (when requested): per item, then a final total call. Fired after
+	// the entity mutation commits — the point at which the item is purged.
 	if (onProgress) {
 		for (let progress = 0; progress < total; progress++) {
 			onProgress(progress, total);

@@ -8,8 +8,11 @@
  * write paths the split would have broken keep their current transaction
  * discipline:
  *
- *   1. `purgeEntityAndCleanup` — entity mutation + `queue_jobs` purge in ONE
- *      `BEGIN IMMEDIATE` transaction (`src/mcp/utils/purge-entity-cleanup.ts:120`).
+ *   1. `purgeEntityAndCleanup` — `queue_jobs` purge FIRST, in its own
+ *      `BEGIN IMMEDIATE` transaction, then the entity mutation in another
+ *      (`src/mcp/utils/purge-entity-cleanup.ts`, FIX-006). Cross-file atomicity
+ *      is not available under WAL, so the ORDER carries the guarantee; the
+ *      real-file proof lives in `purge-entity-cleanup-wal.test.ts`.
  *   2. task→memory archival — `archiveCompletedTasks` runs the archive under
  *      `withExclusiveWrite` (`src/mcp/tools/task-write/update-status.ts:101`).
  *   3. maintenance sweep — the whole compound sweep runs under ONE
@@ -123,10 +126,10 @@ describe("TASK-429 cross-domain atomicity (ADR-011 item 3)", () => {
 	});
 
 	// -----------------------------------------------------------------------
-	// 1. purgeEntityAndCleanup — entity + queue_jobs in ONE transaction
+	// 1. purgeEntityAndCleanup — queue_jobs purge first, then the entity
 	// -----------------------------------------------------------------------
 
-	describe("purgeEntityAndCleanup (entity + queue_jobs, one transaction)", () => {
+	describe("purgeEntityAndCleanup (queue purge first, entity in its own transaction)", () => {
 		it("cancels the task AND deletes its queue_jobs row together", () => {
 			const task = makeTask("aaaaaaaa-0000-4000-a000-000000000001", { status: "pending" });
 			db.tasks.insertTask(task);
@@ -143,10 +146,12 @@ describe("TASK-429 cross-domain atomicity (ADR-011 item 3)", () => {
 			expect(countQueueJobs(db, "task", task.id)).toBe(0);
 		});
 
-		it("rolls back BOTH the entity delete and the queue purge on a mid-transaction failure", () => {
+		it("rolls back the entity delete on a mid-transaction failure, with the queue purge already committed", () => {
 			// Two standards + two queue_jobs rows. The second delete throws, so
-			// the whole transaction must roll back: both standards survive AND
-			// the queue purge (which runs after the delete loop) never happens.
+			// the entity transaction must roll back: both standards survive. The
+			// queue purge ran BEFORE it, in its own transaction, so both jobs are
+			// already gone — that ordering is what keeps a crash from leaving a
+			// job pointing at a purged entity (FIX-006).
 			const a = makeStandard("bbbbbbbb-0000-4000-a000-000000000001");
 			const b = makeStandard("bbbbbbbb-0000-4000-a000-000000000002");
 			db.standards.insert(a);
@@ -170,12 +175,13 @@ describe("TASK-429 cross-domain atomicity (ADR-011 item 3)", () => {
 			).toThrow("injected mid-transaction failure");
 
 			// Rollback proof — the FIRST standard's successful delete was undone
-			// with the rest of the transaction.
+			// with the rest of the entity transaction.
 			expect(db.standards.getById(a.id)).not.toBeNull();
 			expect(db.standards.getById(b.id)).not.toBeNull();
-			// Queue purge never ran, so both outbox rows are intact.
-			expect(countQueueJobs(db, "standard", a.id)).toBe(1);
-			expect(countQueueJobs(db, "standard", b.id)).toBe(1);
+			// Phase 1 committed first, so neither job survives; the retry below
+			// finishes the purge without re-creating them.
+			expect(countQueueJobs(db, "standard", a.id)).toBe(0);
+			expect(countQueueJobs(db, "standard", b.id)).toBe(0);
 		});
 	});
 
