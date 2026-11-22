@@ -26,6 +26,7 @@ import { ColdArchiveStore, resolveColdArchivePath } from "./cold-archive";
 import type { ColdArchiveEntry, ColdArchiveSearchOptions } from "./cold-archive";
 import { ensureDerivedReady, resolveDerivedDbPath } from "./derived-db";
 import { checkpointDomainDbs, ensureDomainReady, resolveDomainDbPaths } from "./domain-db";
+import type { DomainMigrationResult } from "./domain-migration";
 import type { DomainSchema } from "./domain-schema";
 import { logger } from "../utils/logger";
 import { MEMORY_DB_BUSY_TIMEOUT_MS, WAL_CHECKPOINT_INTERVAL_MS } from "../utils/constants";
@@ -160,13 +161,24 @@ export class SQLiteStore {
 		ensureDerivedReady(this.db, finalPath);
 		this.derivedPathInstance = resolveDerivedDbPath(finalPath);
 
-		// Split the hot store into five physical files (ADR-012 / TASK-002). Runs
-		// BEFORE entity construction so every entity prepares its schema-qualified
-		// SQL against the final layout, and AFTER the migrations above, which still
-		// run against `main` (the only connection-level schema that holds a version
-		// ledger). `core` stays in `memory.db` (`main`) so all core SQL is unchanged.
-		ensureDomainReady(this.db, finalPath);
+		// Split the hot store into five physical files (ADR-012 / TASK-002/003).
+		// Runs BEFORE entity construction so every entity prepares its
+		// schema-qualified SQL against the final layout, and AFTER the migrations
+		// above, which still run against `main` (the only connection-level schema
+		// that holds a version ledger). `core` stays in `memory.db` (`main`) so all
+		// core SQL is unchanged.
+		//
+		// Data-preserving and idempotent: the move copies with an explicit column
+		// list, verifies every row by primary key, audits the three FTS indexes,
+		// and only then drops the `main` copies. A failure THROWS (see
+		// `ensureDomainReady`) — starting with a half-empty qualified read path
+		// would silently lose rows, so a broken split must stop the process and be
+		// retried on the next startup. Nothing here takes `BEGIN IMMEDIATE`: a long
+		// copy must never push a second process (daemon + MCP server) past its
+		// `busy_timeout`, so concurrent starts converge instead of fighting.
+		const domainMigration = ensureDomainReady(this.db, finalPath);
 		this.domainPathsInstance = resolveDomainDbPaths(finalPath);
+		this.logDomainMigration(domainMigration, finalPath);
 
 		// Re-assert + verify busy_timeout AFTER the derived attach (FIX-032).
 		// busy_timeout is CONNECTION-scoped: a schema-qualified
@@ -195,6 +207,40 @@ export class SQLiteStore {
 		this.reuseTelemetry = new ReuseTelemetryEntity(this.db);
 		this.bugReports = new BugReportEntity(this.db);
 		this.lock = new WriteLock(finalPath);
+	}
+
+	/**
+	 * Log the outcome of the one-time domain split at a level that matches its
+	 * cost (ADR-012 / TASK-003).
+	 *
+	 * A first run copies every row and is worth an `info` line with the per-table
+	 * counts and the elapsed time, so an operator can see what moved. An already
+	 * split store is the common case after the first start, so it stays at
+	 * `debug` and does not add noise to every startup — unless the FTS audit
+	 * repaired a drifted index, which is a degraded-read signal worth `warn`.
+	 *
+	 * @param result - Outcome returned by `ensureDomainReady`.
+	 * @param memoryDbPath - Hot-store path, for the log record.
+	 */
+	private logDomainMigration(result: DomainMigrationResult, memoryDbPath: string): void {
+		const detail = {
+			memoryDbPath,
+			durationMs: result.durationMs,
+			tablesMoved: result.tablesMoved,
+			copiedRows: result.copiedRows,
+			ftsVerified: result.ftsVerified,
+			ftsRepaired: result.ftsRepaired
+		};
+
+		if (result.moved) {
+			logger.info("[SQLiteStore] Domain split complete", detail);
+			return;
+		}
+		if (result.ftsRepaired.length > 0) {
+			logger.warn("[SQLiteStore] Domain split already applied; repaired drifted FTS index(es)", detail);
+			return;
+		}
+		logger.debug("[SQLiteStore] Domain split already applied", { memoryDbPath, durationMs: result.durationMs });
 	}
 
 	/**
