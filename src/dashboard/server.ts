@@ -8,10 +8,34 @@
  * (`src/mcp/cli/combined-server.ts`) reuses the same factory to mount the
  * dashboard routes next to the MCP `/mcp` handler on one port
  * (FEAT-DAEMON-001) — this file only owns the standalone socket lifecycle.
+ *
+ * FIX-008 (runtime topology): this entry point refuses to start when the
+ * combined daemon already owns the same `memory.db`. Both processes would
+ * build their own `SQLiteStore` + `WriteLock` over one file and fight for
+ * `memory.db.lock`, which surfaces as a ~50s stall followed by
+ * "Failed to acquire exclusive write lock". The guard runs BEFORE the store is
+ * imported, so the refusal is immediate and costs no lock wait, migration pass
+ * or embedding worker. The daemon itself is unaffected: it loads
+ * `./lib/context` directly, never this file.
  */
-import { db, vectors, mcpClient, logger, embeddingWorker } from "./lib/context";
-import { reuseTelemetry } from "../mcp/utils/reuse-telemetry";
-import { createExpressApp } from "./app";
+import { assertStandaloneDashboardAllowed, DashboardDaemonConflictError } from "./lib/daemon-guard";
+
+// FIX-008: fail fast, before ANY module that opens the database is evaluated.
+// `./app` (and the service layer behind it) imports `./lib/context`, so both
+// the context and the app must be loaded dynamically AFTER this check.
+try {
+	assertStandaloneDashboardAllowed();
+} catch (error) {
+	if (error instanceof DashboardDaemonConflictError) {
+		process.stderr.write(`\n${error.message}\n`);
+		process.exit(1);
+	}
+	throw error;
+}
+
+const { db, vectors, mcpClient, logger, embeddingWorker } = await import("./lib/context");
+const { reuseTelemetry } = await import("../mcp/utils/reuse-telemetry");
+const { createExpressApp } = await import("./app");
 
 const { app, pkg } = createExpressApp({ db, vectors });
 
