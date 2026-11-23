@@ -49,6 +49,51 @@ describe("Dashboard Controllers — Coordination API", () => {
 			expect(body.meta).toHaveProperty("page");
 			expect(body.meta).toHaveProperty("totalItems");
 		});
+
+		// TASK-010: the create route must succeed end to end against the REAL
+		// in-process dispatcher (this file does not mock `callLocalTool`).
+		// Regression: `handoff-write` emits `structuredContent` only with
+		// json:true; without it the service returned undefined and the
+		// JSON:API adapter threw a 500 AFTER committing the row.
+		it("POST /api/coordination/handoffs creates a handoff (200, row persisted, defined payload)", async () => {
+			const repo = "handoff-create-int-repo";
+
+			const res = await fetch(`${baseUrl}/api/coordination/handoffs`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: {
+						type: "handoff-create",
+						attributes: {
+							owner: "test-owner",
+							repo,
+							from_agent: "backend",
+							to_agent: "tester",
+							summary: "TASK-010 POST create integration"
+						}
+					}
+				})
+			});
+
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as {
+				data: { type: string; id: string; attributes: Record<string, unknown> };
+			};
+			expect(body.data.type).toBe("handoff-create");
+			// A defined payload is the whole point: undefined would surface as
+			// the "system" fallback id here and as a 500 on the real route.
+			expect(typeof body.data.id).toBe("string");
+			expect(body.data.id).not.toBe("system");
+			expect(body.data.attributes).toBeDefined();
+
+			const persisted = db.handoffs.getHandoffById(body.data.id);
+			expect(persisted).not.toBeNull();
+			expect(persisted?.repo).toBe(repo);
+			expect(persisted?.from_agent).toBe("backend");
+			expect(persisted?.to_agent).toBe("tester");
+			expect(persisted?.summary).toBe("TASK-010 POST create integration");
+			expect(persisted?.status).toBe("pending");
+		});
 	});
 
 	// ── Write-lock scope (TASK-102) — Coordination subset ──────────────────

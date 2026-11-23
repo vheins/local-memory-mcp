@@ -249,8 +249,15 @@ export const SystemService = {
 		res.end();
 	},
 
-	/** Delegates a raw tool call through the in-process dispatcher (FIX-013). */
+	/**
+	 * Delegates a raw tool call through the in-process dispatcher (FIX-013).
+	 *
+	 * Defaults `json: true` so tools whose `structuredContent` is gated on the
+	 * `json` flag (handoff-write, …) still return a payload for the JSON:API
+	 * adapter (TASK-010); the default is spread FIRST so an explicit caller
+	 * value keeps precedence.
+	 */
 	async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-		return callLocalTool(name, args);
+		return callLocalTool(name, { json: true, ...args });
 	}
 };

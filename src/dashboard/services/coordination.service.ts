@@ -95,9 +95,11 @@ export const CoordinationService = {
 	async createHandoff(attributes: Record<string, unknown>): Promise<unknown> {
 		// FIX-013: in-process dispatch through the dashboard's own store — the
 		// old `mcpClient.start()` opened a second writer over the same memory.db.
-		// `callLocalTool` already returns the tool's final structured payload, so
-		// there is no envelope left to unwrap here.
-		return callLocalTool("handoff-write", attributes);
+		// `callLocalTool` returns `McpResponse.structuredContent`, which
+		// `handoff-write` emits only when `json` is true — without it the route
+		// 500s AFTER the row is already committed (TASK-010). This flag is the
+		// JSON:API contract of this dashboard endpoint, not the MCP default.
+		return callLocalTool("handoff-write", { ...attributes, json: true });
 	},
 
 	async releaseClaim(attributes: Record<string, unknown>): Promise<Record<string, unknown>> {

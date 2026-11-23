@@ -308,7 +308,9 @@ describe("SystemService.callTool", () => {
 		// FIX-013: the raw tool runner no longer opens a second writer process.
 		expect(mocks.mcpClient.start).not.toHaveBeenCalled();
 		expect(mocks.mcpClient.callTool).not.toHaveBeenCalled();
-		expect(mocks.callLocalTool).toHaveBeenCalledWith("memory-read", { query: "q" });
+		// TASK-010: json defaults to true so the JSON:API adapter always gets a
+		// payload (tools like handoff-write emit structuredContent only then).
+		expect(mocks.callLocalTool).toHaveBeenCalledWith("memory-read", { json: true, query: "q" });
 		expect(result).toEqual({ ok: true });
 	});
 
@@ -317,8 +319,16 @@ describe("SystemService.callTool", () => {
 
 		await SystemService.callTool("task-update", { id: "t" });
 
-		expect(mocks.callLocalTool).toHaveBeenCalledWith("task-update", { id: "t" });
+		expect(mocks.callLocalTool).toHaveBeenCalledWith("task-update", { json: true, id: "t" });
 		expect(mocks.mcpClient.start).not.toHaveBeenCalled();
+	});
+
+	it("keeps an explicit caller json value over the json:true default", async () => {
+		vi.mocked(mocks.callLocalTool).mockResolvedValue({ ok: true });
+
+		await SystemService.callTool("handoff-write", { summary: "s", json: false });
+
+		expect(mocks.callLocalTool).toHaveBeenLastCalledWith("handoff-write", { json: false, summary: "s" });
 	});
 });
 

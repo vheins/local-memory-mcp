@@ -21,6 +21,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import express from "express";
 import type { Router } from "express";
 import type { AddressInfo } from "node:net";
+// The mocked module (vi.mock below is hoisted) — the TASK-010 test re-programs
+// it to reproduce the real `json`-gated structuredContent contract.
+import { callLocalTool } from "../../lib/local-tools";
 
 // ── Mock context.ts (must precede any import that transitively loads it) ──
 
@@ -231,6 +234,25 @@ describe("System routes", () => {
 			expect(res.status).toBe(200);
 			const body = (await res.json()) as JsonApiBody;
 			expect(!Array.isArray(body.data) && body.data?.type).toBe("tool-result");
+		});
+
+		// TASK-010: the truthy envelope mock above masks the real dispatcher
+		// contract — `handoff-write` (and friends) emit `structuredContent` only
+		// when `json` is true, and an undefined payload made jsonApiRes throw a
+		// 500. This test models that contract to prove the service-level
+		// `json: true` default keeps the route green without an explicit arg.
+		it("POST /api/tools/:name/call does not 500 when the tool emits structuredContent only with json:true", async () => {
+			vi.mocked(callLocalTool).mockImplementationOnce(async (_name, args) =>
+				args?.json === true ? { id: "handoff-json-true", success: true } : undefined
+			);
+
+			const res = await fetch(`${baseUrl}/api/tools/handoff-write/call`, jsonBody({ summary: "s" }));
+
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as JsonApiBody;
+			expect(!Array.isArray(body.data) && body.data?.id).toBe("handoff-json-true");
+			// The default is injected by the service, not mutated from the wire.
+			expect(vi.mocked(callLocalTool)).toHaveBeenLastCalledWith("handoff-write", { json: true, summary: "s" });
 		});
 	});
 

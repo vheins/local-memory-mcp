@@ -229,7 +229,9 @@ describe("CoordinationService.createHandoff", () => {
 		expect(mocks.mcpClient.callTool).not.toHaveBeenCalled();
 		// FIX-026: `structured: true` was a pre-FIX-013 client flag that the
 		// handler never read (Zod strips unknown keys), so it is not sent anymore.
-		expect(mocks.callLocalTool).toHaveBeenCalledWith("handoff-write", { summary: "hello" });
+		// TASK-010: `json: true` is the flag the handler DOES read — it gates
+		// `structuredContent`, which the JSON:API route requires.
+		expect(mocks.callLocalTool).toHaveBeenCalledWith("handoff-write", { summary: "hello", json: true });
 		expect(result).toEqual({ id: "h-9" });
 	});
 
