@@ -272,7 +272,12 @@ describe("guard-before-store invariant (FIX-013 / N4)", () => {
 	 * (extension-less: `./lib/context`) and REPO-RELATIVE FILE PATHS resolved
 	 * by the transitive walk (`src/dashboard/lib/context.ts`), so the pattern
 	 * must accept both — a `context` path segment with an optional extension
-	 * (`.[cm]?[jt]s`), and the storage filenames with or without theirs.
+	 * (`.[cm]?[jt]sx?`) or an optional directory form (`/index`), and the
+	 * storage filenames with or without theirs.
+	 *
+	 * The extension and directory forms matter because the resolver accepts
+	 * `<base>.ts`, `<base>.tsx` and `<base>/index.ts`: a store module that
+	 * moves to a directory or arrives as a `.tsx` file must be caught too.
 	 *
 	 * The direct-import pin below only sees the guard's own specifiers, so an
 	 * intermediary could pull the store in transitively (`daemon-guard.ts` →
@@ -281,7 +286,7 @@ describe("guard-before-store invariant (FIX-013 / N4)", () => {
 	 * module defends. The transitive walk below closes that hole; both checks
 	 * share this one constant.
 	 */
-	const STORAGE_MODULE_PATTERN = /(^|\/)context(\.[cm]?[jt]s)?$|storage\/(sqlite|write-lock)/;
+	const STORAGE_MODULE_PATTERN = /(^|\/)context(\/index)?(\.[cm]?[jt]sx?)?$|storage\/(sqlite|write-lock)/;
 
 	it("keeps the guard module free of storage imports", () => {
 		const file = path.resolve(import.meta.dirname, "../../lib/daemon-guard.ts");
