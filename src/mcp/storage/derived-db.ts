@@ -20,8 +20,9 @@ import { DERIVED_DB_FILENAME, DERIVED_SCHEMA, MEMORY_DB_BUSY_TIMEOUT_MS } from "
  *
  * Cross-database foreign keys are omitted (SQLite rejects an FK whose target
  * lives in another database); the affected vector tables therefore carry no
- * FK. Cleanup that used to rely on FK cascade is explicit where it matters
- * (see `StandardEntity.delete`).
+ * FK. Cleanup that used to rely on FK cascade is explicit where it matters:
+ * phase 3 of `purgeEntityAndCleanup` calls `removeStandardVector` (FIX-011 —
+ * `StandardEntity.delete` is row-only and never touches the vector).
  *
  * The same-schema self-FK on `codebase_symbols.parent_symbol_id` is KEPT (it
  * is a real integrity guard: an unknown parent id must be rejected, not

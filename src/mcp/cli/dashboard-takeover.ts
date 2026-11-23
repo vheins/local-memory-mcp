@@ -33,7 +33,8 @@ import { spawnSync } from "node:child_process";
 import lockfile from "proper-lockfile";
 import { resolveConfigDir } from "../utils/config-file";
 import { resolveDbPath } from "../utils/db-path";
-import { isProcessAlive, readPidFile, removePidFile, removePidFileIfOwner, writePidFile } from "../utils/pid-file";
+import { LOCK_STALE_MS } from "../utils/lock-timing";
+import { isProcessAlive, readPidFile, removePidFileIfOwner, writePidFile } from "../utils/pid-file";
 
 /** Marker file name, placed next to `memory.db` / `daemon.pid`. */
 export const DASHBOARD_PID_FILENAME = "dashboard.pid";
@@ -46,12 +47,6 @@ const DEFAULT_KILL_TIMEOUT_MS = 1_000;
 const DEFAULT_LOCK_TIMEOUT_MS = 2_000;
 /** Poll interval for the bounded waits above. */
 const DEFAULT_POLL_INTERVAL_MS = 100;
-/**
- * A `memory.db.lock` older than this is abandoned, not held: proper-lockfile
- * treats it as stale at 30s, so a short window here is a strict subset of that
- * and only asks "was it refreshed very recently?".
- */
-const LOCK_FRESH_MS = 2_000;
 
 /** Path of the standalone-dashboard PID marker for the resolved config dir. */
 export function resolveDashboardPidFile(env: NodeJS.ProcessEnv = process.env): string {
@@ -156,10 +151,17 @@ export function isDashboardCommandLine(cmdline: string): boolean {
 	return false;
 }
 
-/** Whether a `memory.db.lock` is currently held (refreshed within {@link LOCK_FRESH_MS}). */
+/**
+ * Whether a `memory.db.lock` is currently held.
+ *
+ * The staleness threshold MUST match the one the holder acquires with
+ * ({@link LOCK_STALE_MS}, shared with `WriteLock.acquire`): proper-lockfile
+ * refreshes the lock mtime every `stale / 2`, so a probe with a smaller
+ * threshold reports a live lock as free for most of that window.
+ */
 export function isDbWriteLockHeld(dbPath: string): boolean {
 	try {
-		return lockfile.checkSync(dbPath, { realpath: false, stale: LOCK_FRESH_MS });
+		return lockfile.checkSync(dbPath, { realpath: false, stale: LOCK_STALE_MS });
 	} catch {
 		// An unreadable lock path is not evidence of a live holder; the fork's own
 		// lock acquisition will surface a real problem.
@@ -230,6 +232,28 @@ export function formatUnidentifiedHolder(pid: number, markerFile: string, dbPath
 		`  ps -o pid,args -p ${pid}`,
 		`  lsof ${dbPath}`,
 		`If ${pid} is unrelated, remove the stale marker: rm -f ${markerFile}`,
+		""
+	].join("\n");
+}
+
+/**
+ * Fail-fast message: the marker names a PID this start must never signal
+ * (PID 1, itself, its parent, or the running daemon worker).
+ *
+ * Deliberately does NOT claim the process is not a dashboard: identity was never
+ * checked for a protected PID, and asserting it would state a fact the code did
+ * not establish.
+ */
+export function formatProtectedPid(pid: number, markerFile: string, dbPath: string): string {
+	return [
+		`Cannot start the daemon: the memory database at ${dbPath} is write-locked, and the PID marker ${markerFile}`,
+		`names ${pid}, a protected process this start never signals (PID 1, the starting process, its parent, or the daemon worker).`,
+		`Its identity was not checked and nothing was signalled.`,
+		"",
+		"Find the actual holder, stop it, then retry `local-memory-mcp daemon start`:",
+		`  lsof ${dbPath}`,
+		`  ps -o pid,args -p ${pid}`,
+		`If ${pid} is unrelated to the dashboard, remove the stale marker: rm -f ${markerFile}`,
 		""
 	].join("\n");
 }
@@ -321,9 +345,11 @@ export async function takeOverDatabaseFromStandaloneDashboard(
 		return { kind: "none", reason: "no-marker" };
 	}
 
-	// Dead owner: the marker is stale, clean it and let the start proceed.
+	// Dead owner: the marker is stale, clean it and let the start proceed. Remove
+	// it only while it still records that PID — a dashboard that claimed the
+	// marker between the read and the unlink must keep it.
 	if (!isAlive(markerPid)) {
-		removePidFile(pidFile);
+		removePidFileIfOwner(pidFile, markerPid);
 		return { kind: "stale-marker", pid: markerPid };
 	}
 
@@ -332,7 +358,7 @@ export async function takeOverDatabaseFromStandaloneDashboard(
 		markerPid === 1 || markerPid === process.pid || markerPid === process.ppid || markerPid === daemonPid;
 
 	if (protectedPid) {
-		if (isLockHeld(dbPath)) throw new Error(formatUnidentifiedHolder(markerPid, pidFile, dbPath));
+		if (isLockHeld(dbPath)) throw new Error(formatProtectedPid(markerPid, pidFile, dbPath));
 		return { kind: "refused", pid: markerPid, reason: "protected-pid" };
 	}
 

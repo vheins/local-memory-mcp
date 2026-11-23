@@ -26,8 +26,8 @@ import lockfile from "proper-lockfile";
 import path from "path";
 import fs from "fs";
 import { logger } from "../utils/logger";
+import { LOCK_STALE_MS } from "../utils/lock-timing";
 
-const LOCK_STALE_MS = 30_000; // consider lock stale after 30s (handles crashed processes)
 const LOCK_RETRY_DELAY_MS = 200;
 const LOCK_RETRY_COUNT = 250; // 250 * 200ms = 50s max wait
 /**

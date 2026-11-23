@@ -7,7 +7,7 @@
  * database is still locked. All process/filesystem effects are injected or
  * confined to a temp dir — no real process is ever signalled.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -210,6 +210,28 @@ describe("daemon start takeover (FIX-009)", () => {
 		expect(existsSync(marker)).toBe(false);
 	});
 
+	it("keeps a marker a new dashboard claimed between the read and the cleanup", async () => {
+		const { marker, dbPath, env } = setup();
+		writePidFile(marker, 4242);
+
+		const outcome = await takeOverDatabaseFromStandaloneDashboard(
+			takeoverIo({
+				env,
+				dbPath,
+				// The liveness probe runs after the marker was read and before the
+				// cleanup, so it stands in for a fresh dashboard claiming the marker
+				// in that window.
+				isAlive: () => {
+					writePidFile(marker, 9999);
+					return false;
+				}
+			})
+		);
+
+		expect(outcome).toEqual({ kind: "stale-marker", pid: 4242 });
+		expect(readFileSync(marker, "utf8")).toBe("9999\n");
+	});
+
 	it("never signals a live PID whose command line is not a dashboard (PID reuse)", async () => {
 		const { marker, dbPath, env } = setup();
 		writePidFile(marker, 4242);
@@ -273,6 +295,23 @@ describe("daemon start takeover (FIX-009)", () => {
 
 		expect(outcome).toEqual({ kind: "refused", pid: protectedPid, reason: "protected-pid" });
 		expect(kill).not.toHaveBeenCalled();
+	});
+
+	it("names a protected PID as protected without claiming an identity check", async () => {
+		const { marker, dbPath, env } = setup();
+		writePidFile(marker, 1);
+
+		const error = await takeOverDatabaseFromStandaloneDashboard(
+			takeoverIo({ env, dbPath, isAlive: () => true, isLockHeld: () => true })
+		).catch((caught: Error) => caught);
+
+		expect(error).toBeInstanceOf(Error);
+		const message = (error as Error).message;
+		// Identity was never checked for a protected PID, so the message must not
+		// assert that the process is not this project's dashboard.
+		expect(message).toContain("names 1");
+		expect(message).toMatch(/a protected process this start never signals/);
+		expect(message).not.toMatch(/unidentified process|is not this project's standalone dashboard/);
 	});
 
 	it("stops a verified dashboard with SIGTERM and removes the marker", async () => {
@@ -340,10 +379,38 @@ describe("daemon start takeover (FIX-009)", () => {
 		).rejects.toThrow(new RegExp(`still write-locked after stopping the standalone dashboard \\(pid 4242\\)`));
 	});
 
-	it("treats a stale lock file as free", () => {
+	it("treats an absent lock file as free", () => {
 		const { dbPath } = setup();
 		writeFileSync(dbPath, "");
 		// No `<dbPath>.lock` directory exists → not held.
 		expect(isDbWriteLockHeld(dbPath)).toBe(false);
+	});
+
+	/**
+	 * Regression for the probe threshold. `WriteLock.acquire` creates the lock
+	 * with `stale: 30_000`, so proper-lockfile refreshes its mtime every 15s and
+	 * only treats an older mtime as abandoned. A probe with a shorter window
+	 * (the original 2s) reports a live lock as free for 13 of every 15 seconds.
+	 */
+	describe("lock staleness follows the writer's contract", () => {
+		/** Create `<dbPath>.lock` the way proper-lockfile does, aged by `ageMs`. */
+		function writeLockDir(dbPath: string, ageMs: number): void {
+			const lockDir = `${dbPath}.lock`;
+			mkdirSync(lockDir, { recursive: true });
+			const aged = new Date(Date.now() - ageMs);
+			utimesSync(lockDir, aged, aged);
+		}
+
+		it("reports a lock refreshed 5s ago as held", () => {
+			const { dbPath } = setup();
+			writeLockDir(dbPath, 5_000);
+			expect(isDbWriteLockHeld(dbPath)).toBe(true);
+		});
+
+		it("reports a lock older than the writer's 30s staleness as free", () => {
+			const { dbPath } = setup();
+			writeLockDir(dbPath, 31_000);
+			expect(isDbWriteLockHeld(dbPath)).toBe(false);
+		});
 	});
 });
