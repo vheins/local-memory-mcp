@@ -27,7 +27,10 @@ import type { McpResponse } from "../../mcp/utils/mcp-response";
 import { createSessionContext } from "../../mcp/session";
 import type { SessionContext } from "../../mcp/session";
 import { buildExecutors } from "../../mcp/tools";
+import { logToolAction } from "../../mcp/utils/action-log";
 import { logger } from "../../mcp/utils/logger";
+import { metrics } from "../../mcp/utils/metrics";
+import { reuseTelemetry } from "../../mcp/utils/reuse-telemetry";
 import { toErrorResponse, ToolError } from "../../mcp/utils/mcp-error";
 import { normalizeToolArguments } from "../../mcp/utils/normalize-args";
 import { TOOL_ALIASES, WRITE_TOOLS } from "../../mcp/utils/tool-plumbing";
@@ -72,6 +75,7 @@ export async function callLocalTool(toolName: string, args: Record<string, unkno
 	}
 
 	const run = () => executor(normalizedArgs, db, vectors);
+	const toolStartMs = performance.now();
 	let response: McpResponse;
 	try {
 		// Write tools hold the write lock exactly as both MCP transports do;
@@ -81,15 +85,49 @@ export async function callLocalTool(toolName: string, args: Record<string, unkno
 		// Same canonical envelope the MCP transports emit, so the dashboard
 		// reports the same code/message it would have received over the wire.
 		const envelope = toErrorResponse(err);
+		// Error-path instrumentation mirrors tools/index.ts:287-306: a
+		// fast-failing tool must still show up in per-tool latency stats and
+		// produce its (gated) action_log row for the error envelope.
+		metrics.recordTool(name, performance.now() - toolStartMs, "error");
+		logToolAction(db, name, normalizedArgs, envelope, String(normalizedArgs.owner ?? ""));
 		const structured = envelope.structuredContent as { code?: string; message?: string } | undefined;
 		if (err instanceof ToolError) throw err;
 		throw new ToolError(structured?.code ?? "INTERNAL_ERROR", structured?.message ?? "Internal tool error");
 	}
 
+	const durationMs = performance.now() - toolStartMs;
+	// Outcome derivation mirrors the SDK transport exactly (tools/index.ts:310-319):
+	// PARTIAL_FAILURE → "partial", any other error envelope → "error",
+	// degraded payload → "degraded", otherwise "success".
+	const structured = response.structuredContent as { code?: unknown; degraded?: unknown } | undefined;
+	const outcome = response.isError
+		? structured?.code === "PARTIAL_FAILURE"
+			? "partial"
+			: "error"
+		: structured?.degraded === true
+			? "degraded"
+			: "success";
+	metrics.recordTool(name, durationMs, outcome);
+
 	if (response.isError) {
 		const structured = response.structuredContent as { code?: string; message?: string } | undefined;
 		logger.warn("[local-tools] tool returned an error envelope", { toolName: name, code: structured?.code });
 	}
+
+	// Action logging + reuse telemetry — the same ONE shared policy the two MCP
+	// transports use (utils/action-log.ts). The ACTION_LOG_TOOLS gate inside
+	// logToolAction skips read tools entirely; POLICY 1 holds (logToolAction
+	// takes no file lock), so the FIX-013 single-writer guarantee is unchanged.
+	logToolAction(db, name, normalizedArgs, response, String(normalizedArgs.owner ?? ""));
+	reuseTelemetry.recordTool({
+		owner: String(normalizedArgs.owner ?? ""),
+		repo: String(normalizedArgs.repo ?? "unknown"),
+		session: [session.sessionId, normalizedArgs.task_code ?? normalizedArgs.task_id ?? ""].join(":"),
+		toolName: name,
+		args: normalizedArgs,
+		result: response
+	});
+	reuseTelemetry.flushIfNeeded(db);
 
 	return response.structuredContent;
 }
