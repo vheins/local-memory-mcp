@@ -4,7 +4,9 @@ import path from "node:path";
 import { handleCodebaseRead } from "../../tools/codebase.read";
 import { CodebaseReadSchema } from "../../tools/schemas/codebase-read.js";
 import { data, setupIntegrationFixture } from "./mcp-tools.integration.shared.js";
-import { clearDuplicatesCaches } from "../../codebase-index/services/duplicates.js";
+import { clearDuplicatesCaches, analyzeDuplicates } from "../../codebase-index/services/duplicates.js";
+import { renderDuplicatesText } from "../../tools/codebase-read/duplicates.js";
+import type { DuplicateCandidateRow } from "../../types.js";
 import type { SQLiteStore } from "../../storage/sqlite.js";
 import type { VectorStore } from "../../types.js";
 
@@ -367,6 +369,14 @@ describe("handleCodebaseRead (duplicates mode)", () => {
 		expect(d.groups).toEqual([]);
 		expect((d.summary as Record<string, unknown>).files_unreadable).toBe(1);
 		expect(d.unreadable_files).toEqual(["src/gone.ts"]);
+
+		// The coverage gap belongs to the cached analysis, not to the call: a
+		// cache hit must not report 0 unreadable files (FIX-021 review nit).
+		const cached = await runDuplicates(repo);
+		const cachedSummary = cached.d.summary as Record<string, unknown>;
+		expect(cachedSummary.cache_hit).toBe(true);
+		expect(cachedSummary.files_unreadable).toBe(1);
+		expect(cached.d.unreadable_files).toEqual(["src/gone.ts"]);
 	});
 
 	it("is deterministic and serves the repeat call from the fingerprint cache", async () => {
@@ -536,5 +546,132 @@ describe("handleCodebaseRead (duplicates mode) parameter-list shapes", () => {
 
 		const { d } = await runDuplicates(repo);
 		expect(d.groups).toEqual([]);
+	});
+});
+
+// ── FIX-021: near-pass coverage honesty ─────────────────────────────────
+
+describe("duplicates near-pass coverage reporting", () => {
+	/**
+	 * One bucket of `count` symbols (same kind, language and line count) whose
+	 * bodies share a long prefix, so every prefix shingle's document frequency
+	 * equals `count` and exceeds DUPLICATES_POSTING_CAP (200).
+	 */
+	async function analyzeCrowdedBucket(count: number) {
+		const lines: string[] = [];
+		const symbols: DuplicateCandidateRow[] = [];
+		for (let i = 0; i < count; i++) {
+			const start = lines.length + 1;
+			lines.push(
+				`function f${i}(a) {`,
+				"\tlet total = 0;",
+				"\tfor (const item of items) {",
+				`\t\ttotal += item${" + 1".repeat(i)};`,
+				"\t}",
+				"\treturn total;",
+				"}"
+			);
+			symbols.push({
+				id: `crowd-${i}`,
+				name: `f${i}`,
+				kind: "function",
+				file_path: "src/crowd.ts",
+				signature: null,
+				start_line: start,
+				end_line: lines.length,
+				source_fingerprint: `fp-crowd-${i}`
+			});
+		}
+		const content = lines.join("\n");
+		return analyzeDuplicates({
+			repo: "dups-crowd",
+			symbols,
+			languageByFile: () => "typescript",
+			readFile: async () => content,
+			minSimilarity: 0.9,
+			minLines: 1,
+			limit: 20
+		});
+	}
+
+	it("reports skipped postings and partial near coverage when the posting cap drops candidates", async () => {
+		const result = await analyzeCrowdedBucket(205);
+
+		expect(result.summary.postings_skipped).toBeGreaterThan(0);
+		expect(result.summary.near_coverage).toBe("partial");
+		// The pair cap was never hit — the gap is purely the posting cap.
+		expect(result.summary.pairs_truncated).toBe(false);
+
+		const text = renderDuplicatesText(result, {
+			repo: "dups-crowd",
+			kinds: ["function"],
+			minSimilarity: 0.9,
+			minLines: 1,
+			limit: 20
+		});
+		expect(text).toContain("Near coverage is partial");
+		expect(text).toContain("selectivity cap");
+	});
+
+	it("reports full coverage when every posting is selective", async () => {
+		const lines = [
+			"function first(items: number[]) {",
+			"\tlet total = 0;",
+			"\tfor (const item of items) {",
+			"\t\ttotal += item;",
+			"\t}",
+			"\treturn total;",
+			"}",
+			"function second(items: number[]) {",
+			"\tlet total = 0;",
+			"\tfor (const item of items) {",
+			"\t\ttotal += item;",
+			"\t}",
+			"\treturn total;",
+			"}"
+		];
+		const symbols: DuplicateCandidateRow[] = [
+			{
+				id: "sel-1",
+				name: "first",
+				kind: "function",
+				file_path: "src/sel.ts",
+				signature: null,
+				start_line: 1,
+				end_line: 7,
+				source_fingerprint: "fp-sel-1"
+			},
+			{
+				id: "sel-2",
+				name: "second",
+				kind: "function",
+				file_path: "src/sel.ts",
+				signature: null,
+				start_line: 8,
+				end_line: 14,
+				source_fingerprint: "fp-sel-2"
+			}
+		];
+
+		const result = await analyzeDuplicates({
+			repo: "dups-selective",
+			symbols,
+			languageByFile: () => "typescript",
+			readFile: async () => lines.join("\n"),
+			minSimilarity: 0.9,
+			minLines: 1,
+			limit: 20
+		});
+
+		expect(result.summary.postings_skipped).toBe(0);
+		expect(result.summary.near_coverage).toBe("full");
+		const text = renderDuplicatesText(result, {
+			repo: "dups-selective",
+			kinds: ["function"],
+			minSimilarity: 0.9,
+			minLines: 1,
+			limit: 20
+		});
+		expect(text).not.toContain("Near coverage is partial");
 	});
 });

@@ -81,6 +81,17 @@ export interface DuplicateAnalysisSummary {
 	groups_truncated: boolean;
 	/** True when the near-pass pair cap was reached — near coverage is partial. */
 	pairs_truncated: boolean;
+	/**
+	 * Shingle postings skipped because their document frequency exceeded
+	 * `DUPLICATES_POSTING_CAP`. Each skipped posting drops every pair that
+	 * shares only that shingle, so a non-zero value means near coverage is
+	 * partial even when `pairs_truncated` is false.
+	 */
+	postings_skipped: number;
+	/** `partial` when either near-pass cap dropped candidates, else `full`. */
+	near_coverage: "full" | "partial";
+	/** Indexed files whose content could not be read (their symbols were skipped). */
+	files_unreadable: number;
 	/** True when the whole-analysis result cache served this call. */
 	cache_hit: boolean;
 }
@@ -88,6 +99,8 @@ export interface DuplicateAnalysisSummary {
 export interface DuplicateAnalysisResult {
 	groups: DuplicateGroup[];
 	summary: DuplicateAnalysisSummary;
+	/** Sorted repo-relative paths that could not be read during the producing run. */
+	unreadable_files: string[];
 }
 
 export interface AnalyzeDuplicatesOptions {
@@ -274,8 +287,13 @@ export async function analyzeDuplicates(options: AnalyzeDuplicatesOptions): Prom
 	if (cached) {
 		lruSet(analysisCache, cacheKey, cached, DUPLICATES_CACHE_MAX_ENTRIES);
 		// This call read no files; the cached counters describe the run that
-		// produced the groups. `cache_hit` makes the distinction explicit.
-		return { groups: cached.groups, summary: { ...cached.summary, files_read: 0, cache_hit: true } };
+		// produced the groups (including its unreadable-file coverage gap).
+		// `cache_hit` makes the distinction explicit.
+		return {
+			groups: cached.groups,
+			summary: { ...cached.summary, files_read: 0, cache_hit: true },
+			unreadable_files: cached.unreadable_files
+		};
 	}
 
 	// ── Extract derived bodies, one file at a time (bounded peak memory) ──
@@ -287,13 +305,19 @@ export async function analyzeDuplicates(options: AnalyzeDuplicatesOptions): Prom
 	}
 
 	const derived: DerivedSymbol[] = [];
+	const unreadableFiles: string[] = [];
 	let filesRead = 0;
 	for (const [filePath, fileSymbols] of byFile) {
 		const language = languageByFile(filePath);
 		const missing = fileSymbols.filter((symbol) => !derivedCache.has(derivedCacheKey(symbol, language)));
 		if (missing.length > 0) {
 			const content = await readFile(filePath);
-			if (content === null) continue;
+			if (content === null) {
+				// Recorded on the result (and therefore in the cache entry) so a
+				// later cache hit still reports the producing run's coverage gap.
+				unreadableFiles.push(filePath);
+				continue;
+			}
 			filesRead++;
 			const lines = content.split(/\r?\n/);
 			for (const symbol of missing) {
@@ -350,6 +374,9 @@ export async function analyzeDuplicates(options: AnalyzeDuplicatesOptions): Prom
 	const nearGroups: DuplicateGroup[] = [];
 	let pairsCompared = 0;
 	let pairsTruncated = false;
+	let postingsSkipped = 0;
+	/** Distinct shingles already counted as skipped, so the counter is per posting. */
+	const skippedPostingKeys = new Set<number>();
 
 	for (const bucket of nearBuckets.values()) {
 		if (pairsCompared >= DUPLICATES_MAX_PAIRS) {
@@ -374,7 +401,17 @@ export async function analyzeDuplicates(options: AnalyzeDuplicatesOptions): Prom
 		for (let index = 0; index < bucket.length; index++) {
 			for (const shingle of bucket[index].shingles) {
 				const frequency = df.get(shingle) ?? 0;
-				if (frequency < 2 || frequency > DUPLICATES_POSTING_CAP) continue;
+				if (frequency > DUPLICATES_POSTING_CAP) {
+					// Counted once per shingle (not once per member): the posting is
+					// the unit that was dropped, and every pair it would have
+					// contributed is missing from this run.
+					if (!skippedPostingKeys.has(shingle)) {
+						skippedPostingKeys.add(shingle);
+						postingsSkipped++;
+					}
+					continue;
+				}
+				if (frequency < 2) continue;
 				const list = postings.get(shingle);
 				if (list) list.push(index);
 				else postings.set(shingle, [index]);
@@ -429,8 +466,12 @@ export async function analyzeDuplicates(options: AnalyzeDuplicatesOptions): Prom
 			near_groups: nearGroups.length,
 			groups_truncated: allGroups.length > groups.length,
 			pairs_truncated: pairsTruncated,
+			postings_skipped: postingsSkipped,
+			near_coverage: pairsTruncated || postingsSkipped > 0 ? "partial" : "full",
+			files_unreadable: unreadableFiles.length,
 			cache_hit: false
-		}
+		},
+		unreadable_files: unreadableFiles.sort()
 	};
 
 	lruSet(analysisCache, cacheKey, result, DUPLICATES_CACHE_MAX_ENTRIES);

@@ -69,21 +69,29 @@ export function renderDuplicatesText(
 		minSimilarity: number;
 		minLines: number;
 		limit: number;
-		unreadableFiles: string[];
 	}
 ): string {
-	const { groups, summary } = result;
+	const { groups, summary, unreadable_files: unreadableFiles } = result;
 	const thresholds = `min_similarity=${options.minSimilarity}, min_lines=${options.minLines}, kinds=${options.kinds.join(",")}, limit=${options.limit}`;
 	let out = `### Duplicate groups: ${summary.groups_total} (exact ${summary.exact_groups} · near ${summary.near_groups})\n`;
 	out +=
 		`Scanned ${summary.symbols_scanned} symbols in "${options.repo}" (${summary.symbols_compared} compared, ` +
 		`${summary.files_read} files read, ${summary.pairs_compared} near pairs scored; ${thresholds}).`;
-	if (options.unreadableFiles.length > 0) {
-		const sample = options.unreadableFiles.slice(0, 5).join(", ");
-		const more = options.unreadableFiles.length > 5 ? ` and ${options.unreadableFiles.length - 5} more` : "";
-		out += ` Skipped ${options.unreadableFiles.length} unreadable file(s): ${sample}${more}.`;
+	if (unreadableFiles.length > 0) {
+		const sample = unreadableFiles.slice(0, 5).join(", ");
+		const more = unreadableFiles.length > 5 ? ` and ${unreadableFiles.length - 5} more` : "";
+		out += ` Skipped ${unreadableFiles.length} unreadable file(s): ${sample}${more}.`;
 	}
-	if (summary.pairs_truncated) out += " Near pass hit the pair cap; near coverage is partial.";
+	// State WHY near coverage is partial: a caller must never read a short
+	// near-group list as proof that no near duplicates exist.
+	if (summary.near_coverage === "partial") {
+		const reasons: string[] = [];
+		if (summary.pairs_truncated) reasons.push("the pair cap was reached");
+		if (summary.postings_skipped > 0) {
+			reasons.push(`${summary.postings_skipped} shingle posting(s) exceeded the selectivity cap`);
+		}
+		out += ` Near coverage is partial (${reasons.join("; ")}); near duplicates may be missing.`;
+	}
 	out += "\n";
 
 	if (groups.length === 0) {
@@ -149,17 +157,14 @@ export async function handleDuplicatesMode(validated: CodebaseReadInput, db: SQL
 		checksumByPath.set(file.file_path, file.checksum);
 	}
 
-	const unreadable = new Set<string>();
+	// A read failure is reported by the analysis itself (it owns the coverage
+	// counters and caches them), so the handler only returns null here.
 	const readFile = async (filePath: string): Promise<string | null> => {
 		const absolutePath = resolveRepoFilePath(repoPath, filePath);
-		if (!absolutePath) {
-			unreadable.add(filePath);
-			return null;
-		}
+		if (!absolutePath) return null;
 		try {
 			return await codeSearchCache.getContent(repo, filePath, checksumByPath.get(filePath) ?? null, absolutePath);
 		} catch (err) {
-			unreadable.add(filePath);
 			logger.debug("[handleDuplicatesMode] file read failed", {
 				repo,
 				filePath,
@@ -190,14 +195,13 @@ export async function handleDuplicatesMode(validated: CodebaseReadInput, db: SQL
 		});
 	}
 
-	const unreadableFiles = [...unreadable].sort();
+	const unreadableFiles = result.unreadable_files;
 	const contentSummary = renderDuplicatesText(result, {
 		repo,
 		kinds,
 		minSimilarity,
 		minLines,
-		limit,
-		unreadableFiles
+		limit
 	});
 
 	return createMcpResponse(
@@ -208,7 +212,7 @@ export async function handleDuplicatesMode(validated: CodebaseReadInput, db: SQL
 			thresholds: { min_similarity: minSimilarity, min_lines: minLines, kinds },
 			limit,
 			groups: result.groups,
-			summary: { ...result.summary, files_unreadable: unreadableFiles.length },
+			summary: result.summary,
 			unreadable_files: unreadableFiles.slice(0, 20),
 			unreadable_files_truncated: unreadableFiles.length > 20
 		},
