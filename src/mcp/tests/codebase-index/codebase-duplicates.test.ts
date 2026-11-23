@@ -419,3 +419,122 @@ describe("handleCodebaseRead (duplicates mode)", () => {
 		expect(CodebaseReadSchema.safeParse({ action: "duplicates", min_similarity: 0.95 }).success).toBe(true);
 	});
 });
+
+// ── FIX-020: declaration shapes the indexer records as function/method ──
+
+describe("handleCodebaseRead (duplicates mode) parameter-list shapes", () => {
+	/** One-line arrows and short methods: min_lines 1 keeps them in scope. */
+	const SINGLE_LINE = { min_lines: 1 };
+
+	it("groups expression-bodied arrows whose body holds a top-level call", async () => {
+		const repo = "dups-arrow-expr";
+		const file = new FixtureFile();
+		const one = file.add(["const mapAll = (items) => items.map(x => x * 2);"]);
+		file.gap();
+		const two = file.add(["const mapAll2 = (items, factor) => items.map(x => x * 2);"]);
+		indexFixture(repo, "src/arrows.ts", file, [
+			{ file: "src/arrows.ts", name: "mapAll", kind: "function", span: one },
+			{ file: "src/arrows.ts", name: "mapAll2", kind: "function", span: two }
+		]);
+
+		const { d } = await runDuplicates(repo, SINGLE_LINE);
+		const groups = d.groups as Array<Record<string, unknown>>;
+		expect(groups).toHaveLength(1);
+		expect(groups[0].class).toBe("exact");
+
+		const diff = groups[0].params_diff as { param_sets: string[][] };
+		// The declared parameters, never the `.map(x => …)` call argument.
+		expect(diff.param_sets).toEqual([["items"], ["items", "factor"]]);
+		const hint = groups[0].merge_hint as string;
+		expect(hint).toContain("items");
+		expect(hint).toContain("factor");
+		expect(hint).not.toContain("params x");
+		expect(hint).toContain("optional params (factor optional)");
+	});
+
+	it("groups type-annotated arrow declarators", async () => {
+		const repo = "dups-arrow-typed";
+		const file = new FixtureFile();
+		const one = file.add(["const h1: Handler = (a) => a + 1;"]);
+		file.gap();
+		const two = file.add(["const h2: Handler = (a, b) => a + 1;"]);
+		indexFixture(repo, "src/typed.ts", file, [
+			{ file: "src/typed.ts", name: "h1", kind: "function", span: one },
+			{ file: "src/typed.ts", name: "h2", kind: "function", span: two }
+		]);
+
+		const { d } = await runDuplicates(repo, SINGLE_LINE);
+		const groups = d.groups as Array<Record<string, unknown>>;
+		expect(groups).toHaveLength(1);
+		expect(groups[0].class).toBe("exact");
+		expect((groups[0].params_diff as { param_sets: string[][] }).param_sets).toEqual([["a"], ["a", "b"]]);
+	});
+
+	it("groups generic methods constrained to an object type", async () => {
+		const repo = "dups-generic-object";
+		const file = new FixtureFile();
+		const one = file.add(["method<T extends { a: number }>(x: T): T {", "\tconst copy = x;", "\treturn copy;", "}"]);
+		file.gap();
+		const two = file.add([
+			"method2<T extends { a: number }>(x: T, y: T): T {",
+			"\tconst copy = x;",
+			"\treturn copy;",
+			"}"
+		]);
+		indexFixture(repo, "src/generic.ts", file, [
+			{ file: "src/generic.ts", name: "method", kind: "method", span: one },
+			{ file: "src/generic.ts", name: "method2", kind: "method", span: two }
+		]);
+
+		const { d } = await runDuplicates(repo, SINGLE_LINE);
+		const groups = d.groups as Array<Record<string, unknown>>;
+		expect(groups).toHaveLength(1);
+		expect(groups[0].class).toBe("exact");
+		expect((groups[0].params_diff as { param_sets: string[][] }).param_sets).toEqual([["x"], ["x", "y"]]);
+	});
+
+	it("keeps brace-bodied declarations on their declared parameters", async () => {
+		const repo = "dups-brace-body";
+		const file = new FixtureFile();
+		const one = file.add([
+			"export function scan(items: number[]) {",
+			"\treturn items.map(x => x * 2);",
+			"}",
+			"",
+			"// trailing comment keeps the span above min_lines"
+		]);
+		file.gap();
+		const two = file.add([
+			"export function scanAll(items: number[], factor: number) {",
+			"\treturn items.map(x => x * 2);",
+			"}",
+			"",
+			"// trailing comment keeps the span above min_lines"
+		]);
+		indexFixture(repo, "src/brace.ts", file, [
+			{ file: "src/brace.ts", name: "scan", kind: "function", span: one },
+			{ file: "src/brace.ts", name: "scanAll", kind: "function", span: two }
+		]);
+
+		const { d } = await runDuplicates(repo);
+		const groups = d.groups as Array<Record<string, unknown>>;
+		expect(groups).toHaveLength(1);
+		// The `.map(x => …)` call inside the body is not the parameter list.
+		expect((groups[0].params_diff as { param_sets: string[][] }).param_sets).toEqual([["items"], ["items", "factor"]]);
+	});
+
+	it("still separates bodies that differ structurally", async () => {
+		const repo = "dups-different-body";
+		const file = new FixtureFile();
+		const one = file.add(BODY("accumulate", "items: number[]", "+="));
+		file.gap();
+		const two = file.add(BODY("accumulateAll", "items: number[]", "-="));
+		indexFixture(repo, "src/diff.ts", file, [
+			{ file: "src/diff.ts", name: "accumulate", kind: "function", span: one },
+			{ file: "src/diff.ts", name: "accumulateAll", kind: "function", span: two }
+		]);
+
+		const { d } = await runDuplicates(repo);
+		expect(d.groups).toEqual([]);
+	});
+});

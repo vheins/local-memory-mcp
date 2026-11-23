@@ -2,8 +2,8 @@
  * Parameter-list handling and merge-hint shaping for the DUPLICATES mode
  * (FEAT-001). Split from `duplicates-normalize.ts` (file-size limit):
  *
- * - `findParameterGroup` locates the declaration's parameter list in a token
- *   stream (see that function's doc for the heuristics).
+ * - `findDeclarationHeader` locates the declaration header boundary, the
+ *   declaration's own name token, and its parameter group in a token stream.
  * - `splitParameterList` / `parameterName` reduce raw parameter declarations
  *   to comparable display names.
  * - `describeParamDiff` / `buildMergeHint` shape the DRY merge hint the mode
@@ -18,38 +18,134 @@ export interface ParameterGroup {
 	closeIndex: number;
 }
 
+/** What `findDeclarationHeader` recovers from a declaration's token stream. */
+export interface DeclarationHeader {
+	/** Token index where the header ends (the body starts here, or `tokens.length`). */
+	endIndex: number;
+	/** Token index of the declaration's own name, when one can be identified. */
+	nameIndex: number | null;
+	/** The declaration's parameter group, when the shape has one. */
+	group: ParameterGroup | null;
+}
+
 /**
- * Index of the token where the declaration body starts: the first `{` (or `:`)
- * at parenthesis depth 0. Everything before it is the declaration header.
+ * Identifier-shaped token test. Keyword tokens keep their verbatim value and
+ * punctuation/literals are single characters or `LIT`, so a leading letter or
+ * `_`/`$` distinguishes identifiers from everything else without a token-kind
+ * flag — `function`, `double` and `items` are all identifier-shaped.
  */
-function bodyMarkerIndex(tokens: NormalizedToken[]): number {
-	let depth = 0;
+function isIdentifierToken(token: NormalizedToken | undefined): boolean {
+	return token !== undefined && /^[A-Za-z_$\u0080-\uffff]/.test(token.value) && token.value !== "LIT";
+}
+
+/**
+ * Keywords that introduce a declaration and are therefore NOT its name
+ * (`function foo`, `export default async function foo`, `const f = …`,
+ * `def f`, `fn f`). A name that happens to collide with one of these (e.g. a
+ * function literally named `const`) is not recoverable, which costs only the
+ * name canonicalization — the parameter group is unaffected.
+ */
+const DECLARATION_INTRODUCERS = new Set([
+	"abstract",
+	"async",
+	"await",
+	"const",
+	"declare",
+	"default",
+	"def",
+	"export",
+	"extern",
+	"final",
+	"fn",
+	"func",
+	"fun",
+	"function",
+	"inline",
+	"internal",
+	"lambda",
+	"let",
+	"mut",
+	"override",
+	"private",
+	"protected",
+	"pub",
+	"public",
+	"readonly",
+	"static",
+	"sub",
+	"unsafe",
+	"var",
+	"virtual"
+]);
+
+/** Keywords that may introduce an anonymous declaration (`function (a) {}`). */
+const ANONYMOUS_FUNCTION_KEYWORDS = new Set(["def", "fn", "func", "fun", "function", "lambda", "sub"]);
+
+/** Skip leading decorators (`@dec`, `@a.b(1, 2)`) and return the next index. */
+function skipDecorators(tokens: NormalizedToken[], end: number): number {
+	let i = 0;
+	while (i < end && tokens[i].value === "@") {
+		i++;
+		while (i < end && (isIdentifierToken(tokens[i]) || tokens[i].value === ".")) i++;
+		if (i < end && tokens[i].value === "(") {
+			let depth = 0;
+			for (; i < end; i++) {
+				if (tokens[i].value === "(") depth++;
+				else if (tokens[i].value === ")") {
+					depth--;
+					if (depth === 0) {
+						i++;
+						break;
+					}
+				}
+			}
+		}
+	}
+	return i;
+}
+
+/**
+ * Index where the declaration header ends: the first `{` at paren/brace/angle
+ * depth 0 (a block body), or the `=>` of an arrow declaration (expression OR
+ * block body). A `:` never ends the header — it may belong to a type
+ * annotation, a return type, a Python body start, or an object type literal —
+ * and the parameter group is located positionally, so no colon heuristic is
+ * needed. `{`/`<` inside a generic constraint (`<T extends { a: number }>`) are
+ * tracked by brace/angle depth instead of ending the header.
+ */
+function headerEndIndex(tokens: NormalizedToken[]): number {
+	let paren = 0;
+	let brace = 0;
+	let angle = 0;
 	for (let i = 0; i < tokens.length; i++) {
 		const value = tokens[i].value;
 		if (value === "(") {
-			depth++;
+			paren++;
 		} else if (value === ")") {
-			depth = Math.max(0, depth - 1);
-		} else if (depth === 0 && (value === "{" || value === ":")) {
+			paren = Math.max(0, paren - 1);
+		} else if (value === "{") {
+			if (paren === 0 && brace === 0 && angle === 0) return i;
+			brace++;
+		} else if (value === "}") {
+			brace = Math.max(0, brace - 1);
+		} else if (value === "<") {
+			// Generic opener only when it follows an identifier (`Map<`, `method<`).
+			if (/[A-Za-z0-9_$]$/.test(tokens[i - 1]?.value ?? "")) angle++;
+		} else if (value === ">") {
+			if (angle > 0) angle--;
+		} else if (value === "=" && paren === 0 && brace === 0 && angle === 0 && tokens[i + 1]?.value === ">") {
 			return i;
 		}
 	}
 	return tokens.length;
 }
 
-/**
- * Locate the declaration's parameter list: the last top-level balanced `( … )`
- * group that ends before the body marker, preferring groups whose opening
- * paren follows an identifier (the declared name). That preference skips
- * decorator arguments (`@dec(x)`) and Go's trailing result tuple
- * (`func f(a int) (int, error)`).
- */
-export function findParameterGroup(tokens: NormalizedToken[]): ParameterGroup | null {
-	const marker = bodyMarkerIndex(tokens);
+/** Every top-level balanced `( … )` group inside `[start, end)`. */
+function topLevelGroups(tokens: NormalizedToken[], start: number, end: number): ParameterGroup[] {
 	const groups: ParameterGroup[] = [];
 	let depth = 0;
 	let openIndex = -1;
-	for (let i = 0; i < marker; i++) {
+	for (let i = start; i < end; i++) {
 		const value = tokens[i].value;
 		if (value === "(") {
 			if (depth === 0) openIndex = i;
@@ -62,9 +158,55 @@ export function findParameterGroup(tokens: NormalizedToken[]): ParameterGroup | 
 			}
 		}
 	}
-	if (groups.length === 0) return null;
-	const named = groups.filter((group) => group.openIndex > 0 && tokens[group.openIndex - 1].kind === "id");
-	return named.length > 0 ? named[named.length - 1] : groups[groups.length - 1];
+	return groups;
+}
+
+/**
+ * Locate a declaration's header boundary, own name and parameter group.
+ *
+ * The parameter group is chosen positionally, in this precedence order, which
+ * is unambiguous for every shape the indexer records as `function`/`method`:
+ *
+ * 1. a group preceded by `=` — arrow declarators (`mapAll = (items) => …`,
+ *    `h1: Handler = (a) => …`), where the type annotation is irrelevant;
+ * 2. a group preceded by `>` — generic declaration (`method<T>(x: T)`);
+ * 3. a group preceded by an anonymous-function keyword (`function (a) {}`);
+ * 4. a group preceded by an identifier — plain declarations (`function foo(a)`,
+ *    class methods `reset(): void`, Python `def f(a)`);
+ * 5. the first top-level group — anonymous arrows (`(a) => …`).
+ *
+ * Because the search is bounded by {@link headerEndIndex}, a call in the body is
+ * never a candidate: `function f(a) { return items.map(x => x * 2); }` ends at
+ * the body `{`, so only `(a)` is in scope.
+ */
+export function findDeclarationHeader(tokens: NormalizedToken[]): DeclarationHeader {
+	const endIndex = headerEndIndex(tokens);
+	const start = skipDecorators(tokens, endIndex);
+
+	let nameIndex: number | null = null;
+	for (let i = start; i < endIndex; i++) {
+		if (!isIdentifierToken(tokens[i])) continue;
+		if (DECLARATION_INTRODUCERS.has(tokens[i].value)) continue;
+		nameIndex = i;
+		break;
+	}
+
+	const groups = topLevelGroups(tokens, start, endIndex);
+	const pick = (predicate: (group: ParameterGroup) => boolean): ParameterGroup | null => groups.find(predicate) ?? null;
+
+	const group =
+		pick((g) => g.openIndex > 0 && tokens[g.openIndex - 1].value === "=") ??
+		pick((g) => g.openIndex > 0 && tokens[g.openIndex - 1].value === ">") ??
+		pick((g) => g.openIndex > 0 && ANONYMOUS_FUNCTION_KEYWORDS.has(tokens[g.openIndex - 1].value)) ??
+		pick((g) => g.openIndex > 0 && isIdentifierToken(tokens[g.openIndex - 1])) ??
+		(groups.length > 0 ? groups[0] : null);
+
+	return { endIndex, nameIndex, group };
+}
+
+/** Locate only the declaration's parameter group. */
+export function findParameterGroup(tokens: NormalizedToken[]): ParameterGroup | null {
+	return findDeclarationHeader(tokens).group;
 }
 
 /**
