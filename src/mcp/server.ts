@@ -48,7 +48,7 @@ if (process.argv.includes("--daemon-worker")) {
 if (process.argv.includes("daemon")) {
 	const { runDaemonCli } = await import("./cli/daemon");
 	// runDaemonCli always calls process.exit — unreachable
-	runDaemonCli(process.argv.slice(process.argv.indexOf("daemon") + 1));
+	await runDaemonCli(process.argv.slice(process.argv.indexOf("daemon") + 1));
 }
 
 // --- CLI Doctor Mode ---

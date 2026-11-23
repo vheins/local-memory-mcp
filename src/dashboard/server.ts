@@ -21,12 +21,22 @@
  * FIX-012: the same guard module warns once when `DASHBOARD_ENABLE_MCP=true`
  * would spawn an MCP server child that opens a second store over the same file
  * — the writer the daemon PID check cannot see.
+ *
+ * FIX-009: this process claims the `<configDir>/dashboard.pid` marker before the
+ * store opens and releases it on every shutdown path. `local-memory-mcp daemon
+ * start` uses it to identify (command line verified) and stop a manual dashboard
+ * instead of forking a second writer over the same database.
  */
 import {
 	assertStandaloneDashboardAllowed,
 	DashboardDaemonConflictError,
 	detectEmbeddedWriterWarning
 } from "./lib/daemon-guard";
+import {
+	claimDashboardPidMarker,
+	releaseDashboardPidMarker,
+	type DashboardPidClaim
+} from "../mcp/cli/dashboard-takeover";
 
 // FIX-008: fail fast, before ANY module that opens the database is evaluated.
 // `./app` (and the service layer behind it) imports `./lib/context`, so both
@@ -40,6 +50,23 @@ try {
 	}
 	throw error;
 }
+
+// FIX-009: record this process as the database owner BEFORE the store opens, so
+// a concurrent `local-memory-mcp daemon start` can identify and stop it instead
+// of forking a second writer. Removed on every shutdown path below.
+let pidMarker: DashboardPidClaim | null = null;
+try {
+	pidMarker = claimDashboardPidMarker();
+} catch (error) {
+	console.warn(`Could not write the dashboard PID marker: ${error instanceof Error ? error.message : String(error)}`);
+}
+function releasePidMarker(): void {
+	if (pidMarker === null) return;
+	const claim = pidMarker;
+	pidMarker = null;
+	releaseDashboardPidMarker(claim);
+}
+process.on("exit", releasePidMarker);
 
 const { db, vectors, mcpClient, logger, embeddingWorker } = await import("./lib/context");
 const { reuseTelemetry } = await import("../mcp/utils/reuse-telemetry");
@@ -79,6 +106,7 @@ function startServer() {
 			console.log(
 				`${new Date().toISOString()} DASHBOARD_ALREADY_RUNNING Dashboard already running on port ${PORT}. Exiting.`
 			);
+			releasePidMarker();
 			process.exit(0);
 		}
 		throw err;
@@ -91,6 +119,7 @@ process.on("SIGINT", () => {
 	embeddingWorker.stop();
 	mcpClient.stop();
 	reuseTelemetry.flush(db);
+	releasePidMarker();
 	db.close();
 	process.exit(0);
 });
@@ -98,6 +127,7 @@ process.on("SIGTERM", () => {
 	embeddingWorker.stop();
 	mcpClient.stop();
 	reuseTelemetry.flush(db);
+	releasePidMarker();
 	db.close();
 	process.exit(0);
 });

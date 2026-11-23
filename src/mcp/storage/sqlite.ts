@@ -1,7 +1,6 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
-import os from "os";
 import { MigrationManager } from "./migrations";
 import { MemoryEntity } from "../entities/memory";
 import { MemoryVectorEntity } from "../entities/memory.vector";
@@ -30,31 +29,11 @@ import type { DomainMigrationResult } from "./domain-migration";
 import type { DomainSchema } from "./domain-schema";
 import { logger } from "../utils/logger";
 import { MEMORY_DB_BUSY_TIMEOUT_MS, WAL_CHECKPOINT_INTERVAL_MS } from "../utils/constants";
-
-function resolveDbPath(): string {
-	if (process.env.MEMORY_DB_PATH) return process.env.MEMORY_DB_PATH;
-
-	const standardConfigDir =
-		process.platform === "win32"
-			? path.join(os.homedir(), ".local-memory-mcp")
-			: process.platform === "darwin"
-				? path.join(os.homedir(), "Library", "Application Support", "local-memory-mcp")
-				: path.join(os.homedir(), ".config", "local-memory-mcp");
-
-	const standardPath = path.join(standardConfigDir, "memory.db");
-	if (fs.existsSync(standardPath)) return standardPath;
-
-	const legacyPath = path.join(os.homedir(), ".config", "local-memory-mcp", "memory.db");
-	if (fs.existsSync(legacyPath)) return legacyPath;
-
-	const localCwdFile = path.join(process.cwd(), "storage", "memory.db");
-	if (fs.existsSync(localCwdFile)) return localCwdFile;
-
-	return standardPath;
-}
+// Shared with the daemon-start takeover probe (FIX-009), which must inspect the
+// lock next to the SAME file this store opens.
+import { resolveDbPath } from "../utils/db-path";
 
 const DB_PATH = resolveDbPath();
-
 export class SQLiteStore {
 	public db: Database.Database;
 	public memories: MemoryEntity;

@@ -41,6 +41,8 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { loadConfigFileEnv, resolveConfigDir, type EnvMap } from "../utils/config-file";
+import { isProcessAlive, readPidFile, removePidFile, writePidFile } from "../utils/pid-file";
+import { takeOverDatabaseFromStandaloneDashboard } from "./dashboard-takeover";
 
 /** Absolute paths the daemon manages. */
 export interface DaemonPaths {
@@ -223,44 +225,24 @@ export function resolveDaemonPaths(env: NodeJS.ProcessEnv = process.env): Daemon
  * empty, or does not contain a positive integer.
  */
 export function readDaemonPid(pidFile: string): number | null {
-	try {
-		const raw = fs.readFileSync(pidFile, "utf8").trim();
-		const pid = Number.parseInt(raw, 10);
-		return Number.isInteger(pid) && pid > 0 ? pid : null;
-	} catch {
-		return null;
-	}
+	return readPidFile(pidFile);
 }
 
 /** Persist the daemon PID (creates the directory when missing). */
 export function writeDaemonPid(pidFile: string, pid: number): void {
-	fs.mkdirSync(path.dirname(pidFile), { recursive: true });
-	fs.writeFileSync(pidFile, `${pid}\n`, "utf8");
+	writePidFile(pidFile, pid);
 }
 
 /** Best-effort PID-file removal. */
 export function removeDaemonPid(pidFile: string): void {
-	try {
-		fs.unlinkSync(pidFile);
-	} catch {
-		/* already gone — best effort */
-	}
+	removePidFile(pidFile);
 }
 
 /**
- * Whether a process with `pid` is alive. `process.kill(pid, 0)` performs the
- * existence check without delivering a signal; `EPERM` means the process
- * exists but is owned by another user, so it counts as alive.
+ * Whether a process with `pid` is alive (re-exported from `utils/pid-file` so
+ * the dashboard guard keeps its single import site).
  */
-export function isProcessAlive(pid: number): boolean {
-	if (!Number.isInteger(pid) || pid <= 0) return false;
-	try {
-		process.kill(pid, 0);
-		return true;
-	} catch (error) {
-		return (error as NodeJS.ErrnoException).code === "EPERM";
-	}
-}
+export { isProcessAlive };
 
 /** Overwrite the pid recorded in the lock file (best effort). */
 export function writeLockPid(lockFile: string, pid: number): void {
@@ -975,9 +957,14 @@ function parseWorkingDirArg(argv: string[]): string | undefined {
  * Dispatch the `daemon` subcommand. Always exits the parent process:
  * `start` forks and returns to the shell, `stop`/`status` complete inline.
  *
+ * FIX-009: `start` first takes the database over from a manually started
+ * standalone dashboard (verified PID marker → SIGTERM → bounded wait → SIGKILL
+ * only on escalation), then forks. The takeover is bounded by its own 5s/1s/2s
+ * windows, so a start against a live dashboard completes well under 10s.
+ *
  * @param argv - Arguments AFTER the `daemon` token (`process.argv.slice(3)`).
  */
-export function runDaemonCli(argv: string[] = process.argv.slice(3)): void {
+export async function runDaemonCli(argv: string[] = process.argv.slice(3)): Promise<void> {
 	const sub = argv[0];
 	try {
 		if (sub === "stop") {
@@ -989,6 +976,8 @@ export function runDaemonCli(argv: string[] = process.argv.slice(3)): void {
 		} else if (sub === "uninstall") {
 			uninstallDaemon();
 		} else if (sub === undefined || sub === "start") {
+			// FIX-009: stop a manual dashboard holding the same DB before forking.
+			await takeOverDatabaseFromStandaloneDashboard();
 			startDaemon();
 		} else {
 			process.stderr.write(
