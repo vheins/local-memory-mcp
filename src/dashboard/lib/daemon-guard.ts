@@ -21,12 +21,19 @@
  * `DASHBOARD_ENABLE_MCP=true` spawns an MCP server child that opens its own
  * store over the same file.
  *
+ * FIX-013 removed the LAZY second-writer path: MCP-dependent dashboard routes
+ * now dispatch the tool in-process through the dashboard's own store
+ * (`src/dashboard/lib/local-tools.ts`) and never start the embedded client, so
+ * only the explicit eager opt-in above can still create a child writer.
+ * N2 also hardened {@link detectDaemonHolder} against PID reuse.
+ *
  * Deliberately free of storage imports: `src/dashboard/server.ts` must be able
  * to run these checks before `./lib/context` (and therefore `./app`, which
  * pulls the same context through the service layer) is evaluated.
  */
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { isProcessAlive, readDaemonPid, resolveDaemonPaths } from "../../mcp/cli/daemon";
+import { readProcessCommandLine } from "../../mcp/cli/dashboard-takeover";
 
 /** A live daemon process that owns the memory database this process resolves. */
 export interface DaemonHolder {
@@ -44,6 +51,14 @@ export interface DetectDaemonOptions {
 	env?: NodeJS.ProcessEnv;
 	/** PID liveness probe. Defaults to the daemon CLI's `process.kill(pid, 0)` check. */
 	isAlive?: (pid: number) => boolean;
+	/**
+	 * Process command-line reader used to reject a reused PID (N2). Defaults to
+	 * the same `/proc/<pid>/cmdline` reader the dashboard-takeover uses, so both
+	 * guards apply the same identity rule.
+	 */
+	readCommandLine?: (pid: number) => string | null;
+	/** Log sink for the PID-reuse advisory. Defaults to `console.warn`. */
+	log?: (message: string) => void;
 }
 
 /**
@@ -71,6 +86,15 @@ export class DashboardDaemonConflictError extends Error {
  * than assuming the platform default. A stale PID file (recorded process gone)
  * is NOT a conflict: the daemon is not running, so the dashboard may own the DB.
  *
+ * N2 (PID reuse): a recorded PID that is alive but whose command line is not a
+ * daemon worker belongs to an unrelated process that inherited the number after
+ * a reboot/crash. Treating it as the database owner would refuse a dashboard
+ * whose real daemon is gone, so the holder is rejected, and a ONE-LINE advisory
+ * names the reused PID instead of failing silently. When the command line cannot
+ * be read at all the check stays permissive (identity must be CONFIRMED, the
+ * same rule `dashboard-takeover.ts` applies before signalling a PID), so a
+ * non-Linux host without `ps` still gets the conservative liveness check.
+ *
  * @returns The live daemon, or `null` when no daemon holds the database.
  */
 export function detectDaemonHolder(options: DetectDaemonOptions = {}): DaemonHolder | null {
@@ -79,7 +103,32 @@ export function detectDaemonHolder(options: DetectDaemonOptions = {}): DaemonHol
 	const paths = resolveDaemonPaths(env);
 	const pid = readDaemonPid(paths.pidFile);
 	if (pid === null || !isAlive(pid)) return null;
+
+	const readCommandLine = options.readCommandLine ?? readProcessCommandLine;
+	const cmdline = readCommandLine(pid);
+	if (cmdline !== null && !isDaemonCommandLine(cmdline)) {
+		const log = options.log ?? ((message: string) => console.warn(message));
+		log(
+			`[daemon-guard] Ignoring ${paths.pidFile}: it records pid ${pid}, but that process is not a ` +
+				`local-memory-mcp daemon worker (stale PID file, PID reused after a restart). ` +
+				`The standalone dashboard proceeds; run "local-memory-mcp daemon status" to confirm.`
+		);
+		return null;
+	}
+
 	return { pid, dir: paths.dir, logFile: paths.logFile };
+}
+
+/**
+ * Whether a process command line is the combined daemon worker.
+ *
+ * `daemon start` forks `<execPath> <workerArg> --daemon-worker` and the
+ * OS-service registrations launch `<entry> daemon --daemon-worker`, so the
+ * `--daemon-worker` flag is the invariant that identifies OUR worker on every
+ * platform. Mirrors {@link isDashboardCommandLine}'s negative rule.
+ */
+function isDaemonCommandLine(cmdline: string): boolean {
+	return /(^|\s)--daemon-worker(\s|$)/.test(cmdline);
 }
 
 /** Bytes of the daemon log tail scanned for the last `DAEMON_READY` line. */
@@ -172,10 +221,11 @@ export interface EmbeddedWriterWarning {
  * dashboard itself — no `daemon.pid` involved, so {@link detectDaemonHolder}
  * never fires.
  *
- * This returns a warning rather than a refusal because the standalone
- * dashboard is a supported entry point and the same client is also started
- * lazily by dashboard services on MCP-dependent routes; failing boot on the
- * eager flag would break a working configuration without removing the writer.
+ * This returns a warning rather than a refusal because the standalone dashboard
+ * is a supported entry point: failing boot on the eager flag would break a
+ * working configuration. FIX-013 closed the lazy twin of this path — dashboard
+ * routes dispatch tools in-process now — so this explicit opt-in is the only
+ * remaining route to a child writer.
  *
  * @param env Environment to read `DASHBOARD_ENABLE_MCP` from. Defaults to `process.env`.
  * @returns The warning to log once at boot, or `null` when the flag is off.

@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
-import { db, mcpClient } from "../lib/context";
+import { db } from "../lib/context";
+import { callLocalTool } from "../lib/local-tools";
 import { ServiceError } from "../lib/jsonApi";
 import { purgeEntityAndCleanup } from "../../mcp/utils/purge-entity-cleanup";
 import type { Task } from "../../mcp/types";
@@ -156,11 +157,12 @@ export const TaskService = {
 		const existingTask = db.tasks.getTaskById(id);
 		if (!existingTask) throw new ServiceError(404, "Task not found");
 
-		if (!mcpClient.isConnected()) await mcpClient.start();
-
 		const toolArgs = buildToolArgs(existingTask, attributes);
 
-		await mcpClient.callTool("task-update", toolArgs);
+		// FIX-013: dispatch in-process through this dashboard's own store. The
+		// previous `mcpClient.start()` spawned a second SQLiteStore + WriteLock
+		// over the same memory.db (a ~50s lock stall on a standalone dashboard).
+		await callLocalTool("task-update", toolArgs);
 		await db.refresh();
 
 		const updatedTask = db.tasks.getTaskById(id);
@@ -242,8 +244,6 @@ export const TaskService = {
 				throw new ServiceError(400, "'updates' required for update/status action");
 			}
 
-			if (!mcpClient.isConnected()) await mcpClient.start();
-
 			const errors: string[] = [];
 			for (const id of ids) {
 				const existingTask = db.tasks.getTaskById(id);
@@ -255,7 +255,8 @@ export const TaskService = {
 				const toolArgs = buildToolArgs(existingTask, updates, id);
 
 				try {
-					await mcpClient.callTool("task-update", toolArgs);
+					// FIX-013: in-process dispatch — no embedded MCP child writer.
+					await callLocalTool("task-update", toolArgs);
 					count++;
 				} catch (e) {
 					errors.push(`Task ${id}: ${e instanceof Error ? e.message : String(e)}`);

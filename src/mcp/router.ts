@@ -29,7 +29,7 @@ import { TOOL_DEFINITIONS } from "./tools/tool-definitions";
 import { complete, type CompletionRequest } from "./completion";
 import { normalizeToolArguments } from "./utils/normalize-args";
 import { buildExecutors } from "./tools";
-import { collectAffectedResourceUris, normalizePageLimit, WRITE_TOOLS } from "./utils/tool-plumbing";
+import { collectAffectedResourceUris, normalizePageLimit, TOOL_ALIASES, WRITE_TOOLS } from "./utils/tool-plumbing";
 import { toErrorResponse } from "./utils/mcp-error";
 import { SQLiteStore } from "./storage/sqlite";
 import { VectorStore } from "./types";
@@ -47,13 +47,9 @@ type RouterOptions = {
 	onResourcesMutated?: (uris: string[]) => void;
 };
 
-// Backward-compat tool names resolved to their canonical executor keys. The
-// SDK registry (registerAllTools) only registers canonical names, so aliases
-// must be resolved here before dispatch.
-const TOOL_ALIASES: Record<string, string> = {
-	"claim-release": "claim-manage",
-	"task-update": "task-write"
-};
+// Backward-compat tool names resolved to their canonical executor keys live in
+// utils/tool-plumbing.ts (TOOL_ALIASES) — shared with tools/index.ts and the
+// dashboard's in-process dispatcher so the map cannot drift.
 
 export function createRouter(
 	db: SQLiteStore,

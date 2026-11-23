@@ -1,13 +1,29 @@
 // ── Shared tool plumbing ──────────────────────────────────────────────────
-// Single source of truth for the write-tool set, resource-mutation URI
-// derivation, and page-limit normalization.
+// Single source of truth for the write-tool set, the tool-name alias map,
+// resource-mutation URI derivation, and page-limit normalization.
 //
-// Consumed by BOTH dispatch paths so they cannot drift:
-//   - router.ts        (MCP protocol router — thin test adapter)
-//   - tools/index.ts   (native MCP SDK tool registration — production)
+// Consumed by EVERY dispatch path so they cannot drift:
+//   - router.ts             (MCP protocol router — thin test adapter)
+//   - tools/index.ts        (native MCP SDK tool registration — production)
+//   - dashboard/lib/local-tools.ts (in-process dispatch for the dashboard, FIX-013)
 //
 // Keep this file free of store/vector dependencies: it is pure logic shared
-// by two transports.
+// by every transport.
+
+/**
+ * Backward-compat tool names resolved to their canonical executor keys.
+ *
+ * The SDK registry (`registerAllTools`) registers canonical names only, and
+ * the dashboard passes legacy names (`task-update`, `claim-release`) the way a
+ * long-standing UI already does — so every dispatcher resolves aliases BEFORE
+ * looking up an executor. Living here (pure, dependency-free) lets `router.ts`,
+ * `tools/index.ts` and the dashboard's in-process dispatcher share ONE map
+ * instead of drifting copies.
+ */
+export const TOOL_ALIASES: Readonly<Record<string, string>> = {
+	"claim-release": "claim-manage",
+	"task-update": "task-write"
+};
 
 /**
  * Tools that mutate the DB — must run under write lock.
@@ -91,8 +107,7 @@ export function collectAffectedResourceUris(
 	result: unknown
 ): string[] {
 	const structuredContent = ((result as Record<string, unknown> | undefined)?.structuredContent ?? undefined) as
-		| Record<string, unknown>
-		| undefined;
+		Record<string, unknown> | undefined;
 
 	const repo =
 		(args?.repo as string) ||
@@ -133,8 +148,7 @@ export function collectAffectedResourceUris(
 	// so column order can never drift the extraction.
 	const addTableIds = (prefix: "memory" | "task", key?: string): void => {
 		const table = (key ? structuredContent?.[key] : structuredContent) as
-			| { columns?: unknown; rows?: unknown }
-			| undefined;
+			{ columns?: unknown; rows?: unknown } | undefined;
 		if (!table || !Array.isArray(table.columns) || !Array.isArray(table.rows)) return;
 		const idIndex = table.columns.indexOf("id");
 		if (idIndex === -1) return;

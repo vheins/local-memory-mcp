@@ -7,7 +7,7 @@
  * stale PID file is left behind. All filesystem fixtures live in a temp dir —
  * never in the repo tree and never in the real config dir.
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -53,8 +53,9 @@ describe("daemon guard (FIX-008)", () => {
 		const dir = tempConfigDir();
 		writeDaemonPid(dir, 4242);
 		const env = { LOCAL_MEMORY_DAEMON_DIR: dir };
+		const readCommandLine = () => "node bin/mcp-memory-server.js daemon --daemon-worker";
 
-		expect(detectDaemonHolder({ env, isAlive: () => true })).toEqual({
+		expect(detectDaemonHolder({ env, isAlive: () => true, readCommandLine })).toEqual({
 			pid: 4242,
 			dir,
 			logFile: path.join(dir, "daemon.log")
@@ -62,7 +63,7 @@ describe("daemon guard (FIX-008)", () => {
 
 		let caught: unknown;
 		try {
-			assertStandaloneDashboardAllowed({ env, isAlive: () => true });
+			assertStandaloneDashboardAllowed({ env, isAlive: () => true, readCommandLine });
 		} catch (error) {
 			caught = error;
 		}
@@ -93,8 +94,57 @@ describe("daemon guard (FIX-008)", () => {
 		const dir = tempConfigDir();
 		writeDaemonPid(dir, process.pid);
 
-		expect(detectDaemonHolder({ env: { LOCAL_MEMORY_DAEMON_DIR: dir } })).toEqual({
+		expect(
+			detectDaemonHolder({
+				env: { LOCAL_MEMORY_DAEMON_DIR: dir },
+				readCommandLine: () => "node bin/mcp-memory-server.js daemon --daemon-worker"
+			})
+		).toEqual({
 			pid: process.pid,
+			dir,
+			logFile: path.join(dir, "daemon.log")
+		});
+	});
+
+	it("rejects a reused PID instead of refusing the dashboard (N2)", () => {
+		const dir = tempConfigDir();
+		writeDaemonPid(dir, 5150);
+		const env = { LOCAL_MEMORY_DAEMON_DIR: dir };
+		const advisories: string[] = [];
+
+		// Alive, but its command line is an unrelated process that inherited the PID.
+		expect(
+			detectDaemonHolder({
+				env,
+				isAlive: () => true,
+				readCommandLine: () => "python3 /opt/unrelated/worker.py",
+				log: (message) => advisories.push(message)
+			})
+		).toBeNull();
+		expect(() =>
+			assertStandaloneDashboardAllowed({
+				env,
+				isAlive: () => true,
+				readCommandLine: () => "python3 /opt/unrelated/worker.py",
+				log: () => {}
+			})
+		).not.toThrow();
+
+		// Not silent: one advisory names the PID file, the PID, and the way to confirm.
+		expect(advisories).toHaveLength(1);
+		expect(advisories[0]).toContain("daemon.pid");
+		expect(advisories[0]).toContain("5150");
+		expect(advisories[0]).toContain("local-memory-mcp daemon status");
+	});
+
+	it("stays permissive when the command line cannot be read (identity unconfirmed)", () => {
+		const dir = tempConfigDir();
+		writeDaemonPid(dir, 6161);
+		const env = { LOCAL_MEMORY_DAEMON_DIR: dir };
+
+		// A non-Linux host without `ps` yields null: never treat that as a match.
+		expect(detectDaemonHolder({ env, isAlive: () => true, readCommandLine: () => null })).toEqual({
+			pid: 6161,
 			dir,
 			logFile: path.join(dir, "daemon.log")
 		});
@@ -157,5 +207,44 @@ describe("embedded MCP child writer (FIX-012)", () => {
 
 	it("formats the same warning text the detector returns", () => {
 		expect(detectEmbeddedWriterWarning({ DASHBOARD_ENABLE_MCP: "true" })?.message).toBe(formatEmbeddedWriterWarning());
+	});
+});
+
+describe("guard-before-store invariant (FIX-013 / N4)", () => {
+	/**
+	 * Static import specifiers of a module, read from source.
+	 *
+	 * The guard must be evaluated BEFORE any module that constructs
+	 * `SQLiteStore`. `server.ts` enforces that by dynamically importing
+	 * `./lib/context` and `./app` after the guard call, so this test pins the
+	 * invariant at the source level: a re-introduced static import of the store
+	 * would be evaluated before the guard and silently reopen the second-writer
+	 * path this whole module defends.
+	 */
+	const staticImportSources = (source: string): string[] => {
+		const specifiers: string[] = [];
+		const pattern = /^\s*import\s+(?:type\s+)?[^;]*?\bfrom\s+["']([^"']+)["']/gm;
+		for (const match of source.matchAll(pattern)) specifiers.push(match[1]);
+		return specifiers;
+	};
+
+	it("keeps ./lib/context and ./app out of server.ts's static imports", () => {
+		const file = path.resolve(import.meta.dirname, "../../server.ts");
+		const sources = staticImportSources(readFileSync(file, "utf8"));
+
+		// Sanity: the guard itself is a static import (it must run first).
+		expect(sources).toContain("./lib/daemon-guard");
+		// The store + app graph are loaded dynamically, AFTER the guard.
+		expect(sources.some((source) => source.includes("lib/context"))).toBe(false);
+		expect(sources.some((source) => source.includes("/app"))).toBe(false);
+	});
+
+	it("keeps the guard module free of storage imports", () => {
+		const file = path.resolve(import.meta.dirname, "../../lib/daemon-guard.ts");
+		const sources = staticImportSources(readFileSync(file, "utf8"));
+
+		for (const source of sources) {
+			expect(source).not.toMatch(/(^|\/)context$|storage\/sqlite|write-lock/);
+		}
 	});
 });

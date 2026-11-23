@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => {
 	return {
 		db,
 		purge: vi.fn(() => 1),
+		callLocalTool: vi.fn(),
 		mcpClient: {
 			start: vi.fn(),
 			stop: vi.fn(),
@@ -69,6 +70,13 @@ vi.mock("../../lib/context", () => ({
 
 vi.mock("../../../mcp/utils/purge-entity-cleanup", () => ({
 	purgeEntityAndCleanup: mocks.purge
+}));
+
+// FIX-013: the services dispatch tools in-process through the dashboard store.
+// Stub the dispatcher so these unit tests keep asserting the ARGS each route
+// builds without constructing a real executor graph.
+vi.mock("../../lib/local-tools", () => ({
+	callLocalTool: mocks.callLocalTool
 }));
 
 import { TaskService } from "../../services/task.service";
@@ -119,7 +127,7 @@ beforeEach(() => {
 		added: 2
 	});
 	vi.mocked(mocks.db.taskStats.getTaskComparisonSeries).mockReturnValue([]);
-	vi.mocked(mocks.mcpClient.callTool).mockResolvedValue({ structuredContent: { success: true } });
+	vi.mocked(mocks.callLocalTool).mockResolvedValue({ success: true, task: makeTask() });
 	vi.mocked(mocks.mcpClient.isConnected).mockReturnValue(false);
 });
 
@@ -243,10 +251,10 @@ describe("TaskService.update", () => {
 			status: 404,
 			message: "Task not found"
 		});
-		expect(mocks.mcpClient.callTool).not.toHaveBeenCalled();
+		expect(mocks.callLocalTool).not.toHaveBeenCalled();
 	});
 
-	it("delegates through the MCP client and reloads the updated task", async () => {
+	it("dispatches in-process (no embedded MCP client) and reloads the updated task", async () => {
 		vi.mocked(mocks.db.tasks.getTaskById)
 			.mockReturnValueOnce(makeTask()) // pre-read
 			.mockReturnValueOnce({ ...makeTask(), title: "Renamed" }); // post-refresh read
@@ -255,8 +263,10 @@ describe("TaskService.update", () => {
 		const result = await TaskService.update("task-1", { title: "Renamed" });
 
 		expect(result.title).toBe("Renamed");
-		expect(mocks.mcpClient.start).toHaveBeenCalledTimes(1);
-		expect(mocks.mcpClient.callTool).toHaveBeenCalledWith(
+		// FIX-013: the lazy second writer is gone — no child process is spawned.
+		expect(mocks.mcpClient.start).not.toHaveBeenCalled();
+		expect(mocks.mcpClient.callTool).not.toHaveBeenCalled();
+		expect(mocks.callLocalTool).toHaveBeenCalledWith(
 			"task-update",
 			expect.objectContaining({
 				repo: "app",
@@ -280,7 +290,7 @@ describe("TaskService.update", () => {
 
 		await TaskService.update("task-1", { title: "Renamed", owner: "attacker" });
 
-		const toolArgs = mocks.mcpClient.callTool.mock.calls[0][1] as Record<string, unknown>;
+		const toolArgs = mocks.callLocalTool.mock.calls[0][1] as Record<string, unknown>;
 		expect(toolArgs.owner).toBe("acme");
 	});
 
@@ -292,7 +302,7 @@ describe("TaskService.update", () => {
 
 		await TaskService.update("task-1", { status: TASK_STATUS_COMPLETED });
 
-		const toolArgs = mocks.mcpClient.callTool.mock.calls[0][1] as Record<string, unknown>;
+		const toolArgs = mocks.callLocalTool.mock.calls[0][1] as Record<string, unknown>;
 		expect(toolArgs.comment).toBe("Status updated via dashboard to completed");
 	});
 
@@ -304,7 +314,7 @@ describe("TaskService.update", () => {
 
 		await TaskService.update("task-1", { status: TASK_STATUS_COMPLETED });
 
-		const toolArgs = mocks.mcpClient.callTool.mock.calls[0][1] as Record<string, unknown>;
+		const toolArgs = mocks.callLocalTool.mock.calls[0][1] as Record<string, unknown>;
 		expect(toolArgs.est_tokens).toBe(100);
 		expect(toolArgs.commit_id).toBe("abc123");
 		expect(toolArgs.changed_files).toEqual(["src/a.ts"]);
@@ -390,7 +400,7 @@ describe("TaskService.bulkAction", () => {
 			status: 400,
 			message: "'updates' required for update/status action"
 		});
-		expect(mocks.mcpClient.callTool).not.toHaveBeenCalled();
+		expect(mocks.callLocalTool).not.toHaveBeenCalled();
 	});
 
 	it("rejects an unknown action with 400", async () => {
@@ -401,7 +411,7 @@ describe("TaskService.bulkAction", () => {
 		});
 	});
 
-	it("status action routes each id through the MCP client and reports 422 when all fail", async () => {
+	it("status action dispatches each id in-process and reports 422 when all fail", async () => {
 		vi.mocked(mocks.db.tasks.getTaskById).mockReturnValue(null); // every id unknown
 		vi.mocked(mocks.db.refresh).mockResolvedValue(undefined);
 
@@ -421,8 +431,10 @@ describe("TaskService.bulkAction", () => {
 		const n = await TaskService.bulkAction("status", ["task-1", "task-2"], { status: TASK_STATUS_PENDING });
 
 		expect(n).toBe(2);
-		expect(mocks.mcpClient.callTool).toHaveBeenCalledTimes(2);
-		expect(mocks.mcpClient.callTool).toHaveBeenCalledWith(
+		// FIX-013: no embedded MCP child; each id is a local in-process call.
+		expect(mocks.mcpClient.start).not.toHaveBeenCalled();
+		expect(mocks.callLocalTool).toHaveBeenCalledTimes(2);
+		expect(mocks.callLocalTool).toHaveBeenCalledWith(
 			"task-update",
 			expect.objectContaining({ id: "task-1", status: TASK_STATUS_PENDING })
 		);

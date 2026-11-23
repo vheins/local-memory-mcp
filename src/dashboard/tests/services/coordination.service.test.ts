@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
 	};
 	return {
 		db,
+		callLocalTool: vi.fn(),
 		mcpClient: {
 			start: vi.fn(),
 			stop: vi.fn(),
@@ -47,6 +48,11 @@ vi.mock("../../lib/context", () => ({
 	vectors: mocks.vectors,
 	logger: mocks.logger,
 	startTime: mocks.startTime
+}));
+
+// FIX-013: handoff creation dispatches in-process through the dashboard store.
+vi.mock("../../lib/local-tools", () => ({
+	callLocalTool: mocks.callLocalTool
 }));
 
 import { CoordinationService } from "../../services/coordination.service";
@@ -213,20 +219,28 @@ describe("CoordinationService.updateHandoffStatus", () => {
 });
 
 describe("CoordinationService.createHandoff", () => {
-	it("starts the MCP client when disconnected and delegates with structured: true", async () => {
-		vi.mocked(mocks.mcpClient.isConnected).mockReturnValue(false);
-		vi.mocked(mocks.mcpClient.callTool).mockResolvedValue({ structuredContent: { id: "h-9" } });
+	it("dispatches in-process (no embedded MCP client) with structured: true", async () => {
+		vi.mocked(mocks.callLocalTool).mockResolvedValue({ id: "h-9" });
 
 		const result = await CoordinationService.createHandoff({ summary: "hello" });
 
-		expect(mocks.mcpClient.start).toHaveBeenCalledTimes(1);
-		expect(mocks.mcpClient.callTool).toHaveBeenCalledWith("handoff-write", { summary: "hello", structured: true });
+		// FIX-013: the lazy second writer is gone — no child process is spawned.
+		expect(mocks.mcpClient.start).not.toHaveBeenCalled();
+		expect(mocks.mcpClient.callTool).not.toHaveBeenCalled();
+		expect(mocks.callLocalTool).toHaveBeenCalledWith("handoff-write", { summary: "hello", structured: true });
 		expect(result).toEqual({ id: "h-9" });
 	});
 
+	it("unwraps a structuredContent payload when the tool wraps it", async () => {
+		vi.mocked(mocks.callLocalTool).mockResolvedValue({ structuredContent: { id: "h-10" } });
+
+		const result = await CoordinationService.createHandoff({ summary: "hello" });
+
+		expect(result).toEqual({ id: "h-10" });
+	});
+
 	it("falls back to the raw result when the tool returns no structuredContent", async () => {
-		vi.mocked(mocks.mcpClient.isConnected).mockReturnValue(true);
-		vi.mocked(mocks.mcpClient.callTool).mockResolvedValue({ content: [] });
+		vi.mocked(mocks.callLocalTool).mockResolvedValue({ content: [] });
 
 		const result = await CoordinationService.createHandoff({ summary: "hello" });
 

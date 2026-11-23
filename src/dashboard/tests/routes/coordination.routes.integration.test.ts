@@ -74,6 +74,12 @@ vi.mock("../../../dashboard/lib/context", async () => {
 	};
 });
 
+// FIX-013: handoff creation dispatches in-process through the dashboard store
+// instead of spawning an embedded MCP child writer.
+vi.mock("../../lib/local-tools", () => ({
+	callLocalTool: vi.fn().mockResolvedValue({ structuredContent: { id: "h-route" } })
+}));
+
 // ── Route table introspection (Express 5 router.stack) ────────────────────
 
 interface RegisteredRoute {
@@ -185,7 +191,7 @@ describe("Coordination routes", () => {
 			expect(body.data).toEqual([]);
 		});
 
-		it("POST /api/coordination/handoffs is wired to the handler (200 via mocked mcp client)", async () => {
+		it("POST /api/coordination/handoffs is wired to the handler (200 via in-process dispatch)", async () => {
 			const res = await fetch(`${baseUrl}/api/coordination/handoffs`, POST_JSON);
 			expect(res.status).toBe(200);
 			const body = (await res.json()) as JsonApiBody;

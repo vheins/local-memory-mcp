@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import type { Response } from "express";
 import { db, mcpClient, startTime, embeddingWorker } from "../lib/context";
+import { callLocalTool } from "../lib/local-tools";
 import { metrics } from "../../mcp/utils/metrics";
 import { condenseRecentActions, type CondensedRecentAction } from "../lib/helpers";
 import type { RecentAction } from "../lib/interfaces";
@@ -248,9 +249,8 @@ export const SystemService = {
 		res.end();
 	},
 
-	/** Delegates a raw MCP tool call through the client. */
+	/** Delegates a raw tool call through the in-process dispatcher (FIX-013). */
 	async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-		if (!mcpClient.isConnected()) await mcpClient.start();
-		return mcpClient.callTool(name, args);
+		return callLocalTool(name, args);
 	}
 };

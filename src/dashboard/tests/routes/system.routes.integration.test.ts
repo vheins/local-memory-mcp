@@ -74,6 +74,12 @@ vi.mock("../../../dashboard/lib/context", async () => {
 	};
 });
 
+// FIX-013: the raw tool runner dispatches in-process through the dashboard
+// store instead of spawning an embedded MCP child writer.
+vi.mock("../../lib/local-tools", () => ({
+	callLocalTool: vi.fn().mockResolvedValue({ structuredContent: { success: true } })
+}));
+
 // ── Route table introspection (Express 5 router.stack) ────────────────────
 
 interface RegisteredRoute {
@@ -220,7 +226,7 @@ describe("System routes", () => {
 			expect(!Array.isArray(body.data) && body.data?.type).toBe("arena-overview");
 		});
 
-		it("POST /api/tools/:name/call is wired to the handler (200 via mocked mcp client)", async () => {
+		it("POST /api/tools/:name/call is wired to the handler (200 via in-process dispatch)", async () => {
 			const res = await fetch(`${baseUrl}/api/tools/route-test/call`, jsonBody({ some: "arg" }));
 			expect(res.status).toBe(200);
 			const body = (await res.json()) as JsonApiBody;

@@ -1,4 +1,5 @@
-import { db, mcpClient } from "../lib/context";
+import { db } from "../lib/context";
+import { callLocalTool } from "../lib/local-tools";
 import type { Claim, Handoff } from "../../mcp/types";
 
 export interface ClaimListParams {
@@ -92,12 +93,10 @@ export const CoordinationService = {
 	},
 
 	async createHandoff(attributes: Record<string, unknown>): Promise<unknown> {
-		if (!mcpClient.isConnected()) await mcpClient.start();
-		const result = (await mcpClient.callTool("handoff-write", {
-			...attributes,
-			structured: true
-		})) as { structuredContent?: Record<string, unknown> };
-		return result.structuredContent || result;
+		// FIX-013: in-process dispatch through the dashboard's own store — the
+		// old `mcpClient.start()` opened a second writer over the same memory.db.
+		const result = await callLocalTool("handoff-write", { ...attributes, structured: true });
+		return (result as { structuredContent?: Record<string, unknown> } | undefined)?.structuredContent ?? result;
 	},
 
 	async releaseClaim(attributes: Record<string, unknown>): Promise<Record<string, unknown>> {

@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
 	};
 	return {
 		db,
+		callLocalTool: vi.fn(),
 		mcpClient: {
 			start: vi.fn(),
 			stop: vi.fn(),
@@ -50,6 +51,11 @@ vi.mock("../../lib/context", () => ({
 	vectors: mocks.vectors,
 	logger: mocks.logger,
 	startTime: mocks.startTime
+}));
+
+// FIX-013: the raw tool runner dispatches in-process through the dashboard store.
+vi.mock("../../lib/local-tools", () => ({
+	callLocalTool: mocks.callLocalTool
 }));
 
 vi.mock("../../../mcp/types/tool-definitions", () => ({
@@ -294,25 +300,25 @@ describe("SystemService.getCapabilities", () => {
 });
 
 describe("SystemService.callTool", () => {
-	it("starts the MCP client when disconnected, then delegates", async () => {
-		vi.mocked(mocks.mcpClient.isConnected).mockReturnValue(false);
-		vi.mocked(mocks.mcpClient.callTool).mockResolvedValue({ ok: true });
+	it("dispatches in-process without starting the embedded MCP client", async () => {
+		vi.mocked(mocks.callLocalTool).mockResolvedValue({ ok: true });
 
 		const result = await SystemService.callTool("memory-read", { query: "q" });
 
-		expect(mocks.mcpClient.start).toHaveBeenCalledTimes(1);
-		expect(mocks.mcpClient.callTool).toHaveBeenCalledWith("memory-read", { query: "q" });
+		// FIX-013: the raw tool runner no longer opens a second writer process.
+		expect(mocks.mcpClient.start).not.toHaveBeenCalled();
+		expect(mocks.mcpClient.callTool).not.toHaveBeenCalled();
+		expect(mocks.callLocalTool).toHaveBeenCalledWith("memory-read", { query: "q" });
 		expect(result).toEqual({ ok: true });
 	});
 
-	it("skips start when the client is already connected", async () => {
-		vi.mocked(mocks.mcpClient.isConnected).mockReturnValue(true);
-		vi.mocked(mocks.mcpClient.callTool).mockResolvedValue({ ok: true });
+	it("passes a legacy tool name through unchanged for the dispatcher to alias", async () => {
+		vi.mocked(mocks.callLocalTool).mockResolvedValue({ ok: true });
 
-		await SystemService.callTool("memory-read", {});
+		await SystemService.callTool("task-update", { id: "t" });
 
+		expect(mocks.callLocalTool).toHaveBeenCalledWith("task-update", { id: "t" });
 		expect(mocks.mcpClient.start).not.toHaveBeenCalled();
-		expect(mocks.mcpClient.callTool).toHaveBeenCalledTimes(1);
 	});
 });
 
