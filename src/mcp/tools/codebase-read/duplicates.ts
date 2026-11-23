@@ -178,6 +178,7 @@ export async function handleDuplicatesMode(validated: CodebaseReadInput, db: SQL
 	try {
 		result = await analyzeDuplicates({
 			repo,
+			repoRoot: repoPath,
 			symbols: candidates,
 			languageByFile: (filePath) => languageByPath.get(filePath) ?? null,
 			readFile,

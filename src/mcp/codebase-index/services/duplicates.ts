@@ -14,21 +14,21 @@
  *    structure; the total scored pairs are capped, keeping the pass bounded
  *    independent of repo size. Similarity is Jaccard over token-shingle sets.
  *
- * Caching (no schema change, no new dependency):
- * - Derived per-symbol bodies are cached by `symbol id + source_fingerprint`
- *   (the index's SHA-256 of the symbol's raw source range), so unchanged
- *   symbols are never re-tokenized.
- * - Whole-analysis results are cached by a key that includes a digest over
- *   every candidate's `id:source_fingerprint`. A re-indexed symbol changes its
- *   fingerprint, which changes the key — the cache can never serve a stale
- *   result for changed source. Both caches are bounded LRUs (see constants).
+ * Caching (no schema change, no new dependency; see `duplicates-cache.ts`):
+ * - Derived per-symbol bodies are cached by `repo root + symbol id +
+ *   source_fingerprint` (the index's SHA-256 of the symbol's raw source range),
+ *   so unchanged symbols are never re-tokenized.
+ * - Whole-analysis results are cached by a key that includes the resolved repo
+ *   root and a digest over every candidate's `id:source_fingerprint`. A
+ *   re-indexed symbol changes its fingerprint, which changes the key — the
+ *   cache can never serve a stale result for changed source. A candidate set
+ *   with a NULL fingerprint is never cached at all.
  *
  * Output is deterministic for the same index state: candidates are ordered by
  * (file_path, start_line), groups are sorted exact-first then by similarity,
  * kind, name, and file.
  */
 
-import { createHash } from "node:crypto";
 import type { DuplicateCandidateRow } from "../../types/codebase-symbol";
 import {
 	DUPLICATES_CACHE_MAX_ENTRIES,
@@ -36,8 +36,21 @@ import {
 	DUPLICATES_POSTING_CAP,
 	DUPLICATES_SYMBOL_CACHE_MAX_ENTRIES
 } from "../../utils/constants";
+import {
+	analysisCache,
+	buildAnalysisCacheKey,
+	canProveFreshness,
+	derivedCache,
+	derivedCacheKey,
+	lruSet,
+	type DerivedSymbol
+} from "./duplicates-cache";
 import { describeParamDiff, buildMergeHint, type ParamDiff } from "./duplicates-params";
-import { normalizeSymbolBody, type NormalizedSymbolBody } from "./duplicates-normalize";
+import { normalizeSymbolBody } from "./duplicates-normalize";
+
+// Cache helpers live in `duplicates-cache.ts` (file-size limit); re-exported so
+// callers and tests keep one import path for the DUPLICATES surface.
+export { buildAnalysisCacheKey, clearDuplicatesCaches, fingerprintDigest } from "./duplicates-cache";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PUBLIC TYPES
@@ -105,6 +118,12 @@ export interface DuplicateAnalysisResult {
 
 export interface AnalyzeDuplicatesOptions {
 	repo: string;
+	/**
+	 * Resolved absolute repo ROOT the symbol bodies are read from. Part of the
+	 * analysis cache key: two roots registered under one repo name must never
+	 * share a cached result.
+	 */
+	repoRoot: string;
 	/** Candidate rows (slim projection) ordered however the caller likes; output re-sorts. */
 	symbols: DuplicateCandidateRow[];
 	/** File language lookup (`codebase_files.language`); null when unknown. */
@@ -119,64 +138,6 @@ export interface AnalyzeDuplicatesOptions {
 	limit: number;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CACHES (bounded, process-shared)
-// ═══════════════════════════════════════════════════════════════════════════
-
-interface DerivedSymbol extends NormalizedSymbolBody {
-	symbol: DuplicateCandidateRow;
-	language: string | null;
-	lines: number;
-}
-
-/** Derived-body cache entry: keyed by symbol id + fingerprint (+ language). */
-const derivedCache = new Map<string, DerivedSymbol>();
-/** Whole-analysis result cache entry, keyed by repo + thresholds + fingerprint digest. */
-const analysisCache = new Map<string, DuplicateAnalysisResult>();
-
-function derivedCacheKey(symbol: DuplicateCandidateRow, language: string | null): string {
-	return `${symbol.id}\u0000${symbol.source_fingerprint ?? ""}\u0000${language ?? ""}`;
-}
-
-/** Insert into a bounded LRU map, evicting the oldest entry past `cap`. */
-function lruSet<V>(map: Map<string, V>, key: string, value: V, cap: number): void {
-	map.delete(key);
-	map.set(key, value);
-	while (map.size > cap) {
-		const oldest = map.keys().next().value;
-		if (oldest === undefined) break;
-		map.delete(oldest);
-	}
-}
-
-/**
- * Digest over every candidate's `id:source_fingerprint` (sorted by id), so an
- * analysis cache key changes exactly when the indexed source of a candidate
- * changes.
- */
-export function fingerprintDigest(symbols: DuplicateCandidateRow[]): string {
-	const hash = createHash("sha256");
-	const rows = [...symbols].sort((a, b) => a.id.localeCompare(b.id));
-	for (const row of rows) hash.update(`${row.id}:${row.source_fingerprint ?? ""}\n`);
-	return hash.digest("hex");
-}
-
-/** Build the whole-analysis cache key. */
-export function buildAnalysisCacheKey(
-	repo: string,
-	symbols: DuplicateCandidateRow[],
-	minSimilarity: number,
-	minLines: number,
-	limit: number
-): string {
-	return `${repo}|${minSimilarity}|${minLines}|${limit}|${fingerprintDigest(symbols)}`;
-}
-
-/** Clear both caches (tests / operations). */
-export function clearDuplicatesCaches(): void {
-	derivedCache.clear();
-	analysisCache.clear();
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -272,7 +233,7 @@ function compareGroups(a: DuplicateGroup, b: DuplicateGroup): number {
  * @param options Candidate symbols, a file reader, and the analysis thresholds.
  */
 export async function analyzeDuplicates(options: AnalyzeDuplicatesOptions): Promise<DuplicateAnalysisResult> {
-	const { repo, symbols, languageByFile, readFile, minSimilarity, minLines, limit } = options;
+	const { repo, repoRoot, symbols, languageByFile, readFile, minSimilarity, minLines, limit } = options;
 
 	const candidates = symbols.filter(
 		(symbol) =>
@@ -282,9 +243,14 @@ export async function analyzeDuplicates(options: AnalyzeDuplicatesOptions): Prom
 			symbol.end_line - symbol.start_line + 1 >= minLines
 	);
 
-	const cacheKey = buildAnalysisCacheKey(repo, candidates, minSimilarity, minLines, limit);
-	const cached = analysisCache.get(cacheKey);
-	if (cached) {
+	// A cache entry is only reusable when every candidate's fingerprint proves
+	// its indexed source is unchanged. Without that proof, analyze fresh and do
+	// not store (a stored entry would be served for later, unproven content).
+	const cacheable = canProveFreshness(candidates);
+	const cacheKey = cacheable ? buildAnalysisCacheKey(repo, repoRoot, candidates, minSimilarity, minLines, limit) : null;
+
+	const cached = cacheKey === null ? undefined : analysisCache.get(cacheKey);
+	if (cacheKey !== null && cached) {
 		lruSet(analysisCache, cacheKey, cached, DUPLICATES_CACHE_MAX_ENTRIES);
 		// This call read no files; the cached counters describe the run that
 		// produced the groups (including its unreadable-file coverage gap).
@@ -309,7 +275,7 @@ export async function analyzeDuplicates(options: AnalyzeDuplicatesOptions): Prom
 	let filesRead = 0;
 	for (const [filePath, fileSymbols] of byFile) {
 		const language = languageByFile(filePath);
-		const missing = fileSymbols.filter((symbol) => !derivedCache.has(derivedCacheKey(symbol, language)));
+		const missing = fileSymbols.filter((symbol) => !derivedCache.has(derivedCacheKey(symbol, language, repoRoot)));
 		if (missing.length > 0) {
 			const content = await readFile(filePath);
 			if (content === null) {
@@ -332,11 +298,11 @@ export async function analyzeDuplicates(options: AnalyzeDuplicatesOptions): Prom
 					language,
 					lines: symbol.end_line! - symbol.start_line! + 1
 				};
-				lruSet(derivedCache, derivedCacheKey(symbol, language), entry, DUPLICATES_SYMBOL_CACHE_MAX_ENTRIES);
+				lruSet(derivedCache, derivedCacheKey(symbol, language, repoRoot), entry, DUPLICATES_SYMBOL_CACHE_MAX_ENTRIES);
 			}
 		}
 		for (const symbol of fileSymbols) {
-			const entry = derivedCache.get(derivedCacheKey(symbol, language));
+			const entry = derivedCache.get(derivedCacheKey(symbol, language, repoRoot));
 			if (entry) derived.push(entry);
 		}
 	}
@@ -474,6 +440,6 @@ export async function analyzeDuplicates(options: AnalyzeDuplicatesOptions): Prom
 		unreadable_files: unreadableFiles.sort()
 	};
 
-	lruSet(analysisCache, cacheKey, result, DUPLICATES_CACHE_MAX_ENTRIES);
+	if (cacheKey !== null) lruSet(analysisCache, cacheKey, result, DUPLICATES_CACHE_MAX_ENTRIES);
 	return result;
 }

@@ -585,6 +585,7 @@ describe("duplicates near-pass coverage reporting", () => {
 		const content = lines.join("\n");
 		return analyzeDuplicates({
 			repo: "dups-crowd",
+			repoRoot: "/fixture/crowd",
 			symbols,
 			languageByFile: () => "typescript",
 			readFile: async () => content,
@@ -655,6 +656,7 @@ describe("duplicates near-pass coverage reporting", () => {
 
 		const result = await analyzeDuplicates({
 			repo: "dups-selective",
+			repoRoot: "/fixture/selective",
 			symbols,
 			languageByFile: () => "typescript",
 			readFile: async () => lines.join("\n"),
@@ -673,5 +675,106 @@ describe("duplicates near-pass coverage reporting", () => {
 			limit: 20
 		});
 		expect(text).not.toContain("Near coverage is partial");
+	});
+});
+
+// ── FIX-022: analysis cache identity ────────────────────────────────────
+
+describe("duplicates analysis cache identity", () => {
+	/** Build one file from two symbol bodies and the matching candidate rows. */
+	function fixture(bodies: string[][]) {
+		const lines: string[] = [];
+		const rows: DuplicateCandidateRow[] = bodies.map((body, index) => {
+			const start = lines.length + 1;
+			lines.push(...body);
+			return {
+				id: `root-${index + 1}`,
+				name: index === 0 ? "first" : "second",
+				kind: "function",
+				file_path: "src/x.ts",
+				signature: null,
+				start_line: start,
+				end_line: lines.length,
+				source_fingerprint: `fp-root-${index + 1}`
+			};
+		});
+		return { content: lines.join("\n"), rows };
+	}
+
+	const ACCUMULATE = [
+		"function first(items: number[]) {",
+		"\tlet total = 0;",
+		"\tfor (const item of items) {",
+		"\t\ttotal += item;",
+		"\t}",
+		"\treturn total;",
+		"}"
+	];
+	const UNRELATED = [
+		"function second(words: string[]) {",
+		"\tconst parts: string[] = [];",
+		"\twhile (words.length > 0) {",
+		"\t\tparts.push(words.pop() as string);",
+		"\t}",
+		'\treturn parts.join(",");',
+		"}"
+	];
+
+	it("does not serve one repo root's cached result for another root", async () => {
+		// Root A: both symbols share a body → one exact group.
+		const same = fixture([ACCUMULATE, ACCUMULATE]);
+		// Root B: same repo name, same indexed rows, different file content.
+		const different = fixture([ACCUMULATE, UNRELATED]);
+		const base = {
+			repo: "dups-roots",
+			symbols: same.rows,
+			languageByFile: () => "typescript",
+			minSimilarity: 0.9,
+			minLines: 1,
+			limit: 20
+		};
+
+		const rootA = await analyzeDuplicates({ ...base, repoRoot: "/roots/a", readFile: async () => same.content });
+		expect(rootA.summary.cache_hit).toBe(false);
+		expect(rootA.groups).toHaveLength(1);
+		expect(rootA.groups[0].class).toBe("exact");
+
+		const rootB = await analyzeDuplicates({
+			...base,
+			repoRoot: "/roots/b",
+			readFile: async () => different.content
+		});
+		expect(rootB.summary.cache_hit).toBe(false);
+		expect(rootB.groups).toHaveLength(0);
+
+		// The first root's entry is still reusable.
+		const rootAAgain = await analyzeDuplicates({
+			...base,
+			repoRoot: "/roots/a",
+			readFile: async () => same.content
+		});
+		expect(rootAAgain.summary.cache_hit).toBe(true);
+		expect(rootAAgain.groups).toHaveLength(1);
+	});
+
+	it("never reuses a cached analysis when a candidate has no source_fingerprint", async () => {
+		const same = fixture([ACCUMULATE, ACCUMULATE]);
+		const rows: DuplicateCandidateRow[] = [{ ...same.rows[0], source_fingerprint: null }, same.rows[1]];
+		const options = {
+			repo: "dups-null-fingerprint",
+			repoRoot: "/roots/null",
+			symbols: rows,
+			languageByFile: () => "typescript",
+			readFile: async () => same.content,
+			minSimilarity: 0.9,
+			minLines: 1,
+			limit: 20
+		};
+
+		const first = await analyzeDuplicates(options);
+		const second = await analyzeDuplicates(options);
+		expect(first.summary.cache_hit).toBe(false);
+		expect(second.summary.cache_hit).toBe(false);
+		expect(second.groups).toEqual(first.groups);
 	});
 });
