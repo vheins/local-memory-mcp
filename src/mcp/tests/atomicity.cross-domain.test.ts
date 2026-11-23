@@ -178,8 +178,10 @@ describe("TASK-429 cross-domain atomicity (ADR-011 item 3)", () => {
 			// with the rest of the entity transaction.
 			expect(db.standards.getById(a.id)).not.toBeNull();
 			expect(db.standards.getById(b.id)).not.toBeNull();
-			// Phase 1 committed first, so neither job survives; the retry below
-			// finishes the purge without re-creating them.
+			// Phase 1 committed first, so neither job survives even though the
+			// entity transaction rolled back. These assertions are the whole
+			// proof; no second purge call runs here. Calling it again would be
+			// safe: the phase-1 deletes are idempotent no-ops on absent rows.
 			expect(countQueueJobs(db, "standard", a.id)).toBe(0);
 			expect(countQueueJobs(db, "standard", b.id)).toBe(0);
 		});

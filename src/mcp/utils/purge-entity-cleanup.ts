@@ -78,16 +78,21 @@ const KIND_PLURALS: Record<PurgeEntityKind, string> = {
  * Phase 1 of the purge contract: delete the pending embedding-queue jobs of
  * `items`, in its own transaction.
  *
- * ORDER IS THE SAFETY MECHANISM (FIX-006). `queue_jobs` lives in `memory.db`
- * (core) while task/standard rows live in `tasks.db` / `standards.db`
- * (ADR-012), and a transaction spanning attached databases is NOT atomic under
- * WAL — the repo records that in `domain-migration.ts` / `derived-db.ts`.
- * Running this phase FIRST makes the crash residue safe: should the process die
- * right after it, the entity still exists and simply has no pending job (it
- * stops being re-embedded), whereas the reverse order could leave a job that
- * points at a deleted/canceled row and re-embeds its vector or re-runs KG
- * extraction afterwards (TASK-042 / MEM-427). Never move this after the entity
- * mutation.
+ * ORDER IS THE SAFETY MECHANISM (FIX-006), and this phase guards all three
+ * kinds. `queue_jobs` lives in `memory.db` (core), which is also the file the
+ * `memory` mutation writes; task/standard rows live in `tasks.db` /
+ * `standards.db` (ADR-012), so for those two the ordering additionally crosses
+ * files, and a transaction spanning attached databases is NOT atomic under WAL
+ * — the repo records that in `domain-migration.ts` / `derived-db.ts`. For
+ * `memory` the row and its job share `memory.db` and each phase runs its own
+ * transaction, so the cross-file argument does not apply there; the ordering
+ * still matters because it is what keeps the job from outliving its entity.
+ * Running this phase FIRST makes the crash residue safe in every kind: should
+ * the process die right after it, the entity still exists and simply has no
+ * pending job (it stops being re-embedded), whereas the reverse order could
+ * leave a job that points at a deleted/canceled row and re-embeds its vector or
+ * re-runs KG extraction afterwards (TASK-042 / MEM-427). Never move this after
+ * the entity mutation.
  *
  * Idempotent by construction: deleting an already-absent job row is a no-op, so
  * repeating the purge after a later-phase failure converges.
