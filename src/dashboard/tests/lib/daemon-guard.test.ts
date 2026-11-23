@@ -7,7 +7,7 @@
  * stale PID file is left behind. All filesystem fixtures live in a temp dir —
  * never in the repo tree and never in the real config dir.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -228,6 +228,31 @@ describe("guard-before-store invariant (FIX-013 / N4)", () => {
 		return specifiers;
 	};
 
+	/**
+	 * Import specifiers that are EVALUATED at runtime.
+	 *
+	 * Same shape as {@link staticImportSources} minus the `import type` form:
+	 * a type-only import is erased by the compiler, so it can never pull a
+	 * module (and therefore a store) into the runtime graph.
+	 *
+	 * Three runtime forms are covered:
+	 *   - `import … from "x"` / `export … from "x"` (a re-export evaluates the
+	 *     target module too),
+	 *   - `import "x"` (side-effect import — no `from` clause at all).
+	 *
+	 * Dynamic `import("x")` is NOT followed: it is evaluated at CALL time
+	 * (after the guard has already run), not at module-evaluation time, which
+	 * is the ordering this invariant protects.
+	 */
+	const runtimeImportSources = (source: string): string[] => {
+		const specifiers: string[] = [];
+		const fromForm = /^[ \t]*(?:import|export)\s+(?!type\s)[^;]*?\bfrom\s+["']([^"']+)["']/gm;
+		for (const match of source.matchAll(fromForm)) specifiers.push(match[1]);
+		const sideEffectForm = /^[ \t]*import\s+["']([^"']+)["']/gm;
+		for (const match of source.matchAll(sideEffectForm)) specifiers.push(match[1]);
+		return specifiers;
+	};
+
 	it("keeps ./lib/context and ./app out of server.ts's static imports", () => {
 		const file = path.resolve(import.meta.dirname, "../../server.ts");
 		const sources = staticImportSources(readFileSync(file, "utf8"));
@@ -245,6 +270,71 @@ describe("guard-before-store invariant (FIX-013 / N4)", () => {
 
 		for (const source of sources) {
 			expect(source).not.toMatch(/(^|\/)context$|storage\/sqlite|write-lock/);
+		}
+	});
+
+	/**
+	 * Repo-relative pattern matching a module that constructs or reaches the
+	 * store (`lib/context`, `storage/sqlite`, `write-lock`).
+	 *
+	 * The direct-import pin above only sees the guard's own specifiers, so an
+	 * intermediary could pull the store in transitively (`daemon-guard.ts` →
+	 * `mcp/cli/daemon.ts` → `…/storage/sqlite.ts`) and the guard would be
+	 * evaluated AFTER the store — reopening exactly the second-writer path this
+	 * module defends. The transitive walk below closes that hole.
+	 */
+	const STORAGE_MODULE_PATTERN = /(^|\/)context$|storage\/sqlite|write-lock/;
+
+	/** Resolve a relative import specifier to the file it points at, if any. */
+	const resolveImport = (fromFile: string, specifier: string): string | null => {
+		if (!specifier.startsWith(".")) return null;
+		const base = path.resolve(path.dirname(fromFile), specifier);
+		const candidates = [base, `${base}.ts`, `${base}.tsx`, path.join(base, "index.ts")];
+		for (const candidate of candidates) {
+			if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+		}
+		return null;
+	};
+
+	/**
+	 * Every module reachable from `entryFile` through relative RUNTIME imports.
+	 *
+	 * Bare/aliased package specifiers are skipped: they resolve outside the
+	 * repository, so they cannot pull in a repo-local storage module. Type-only
+	 * imports are skipped too — `import type` is erased at compile time, so it
+	 * never evaluates (and never constructs) the store.
+	 */
+	const transitiveImports = (entryFile: string): string[] => {
+		const seen = new Set<string>();
+		const queue = [entryFile];
+		while (queue.length > 0) {
+			const current = queue.pop() as string;
+			for (const specifier of runtimeImportSources(readFileSync(current, "utf8"))) {
+				const resolved = resolveImport(current, specifier);
+				if (resolved === null || seen.has(resolved)) continue;
+				seen.add(resolved);
+				queue.push(resolved);
+			}
+		}
+		return [...seen];
+	};
+
+	it("keeps the guard's transitive import graph free of storage modules", () => {
+		const file = path.resolve(import.meta.dirname, "../../lib/daemon-guard.ts");
+		const repoRoot = path.resolve(import.meta.dirname, "../../../..");
+		const graph = transitiveImports(file);
+
+		// Sanity: the walk really followed the chain (otherwise the assertion
+		// below would pass vacuously).
+		expect(graph.map((module) => path.relative(repoRoot, module))).toEqual(
+			expect.arrayContaining([
+				path.join("src", "mcp", "cli", "daemon.ts"),
+				path.join("src", "mcp", "cli", "dashboard-takeover.ts")
+			])
+		);
+
+		for (const module of graph) {
+			expect(path.relative(repoRoot, module).split(path.sep).join("/")).not.toMatch(STORAGE_MODULE_PATTERN);
 		}
 	});
 });

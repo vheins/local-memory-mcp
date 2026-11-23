@@ -22,6 +22,10 @@
  * tools run under `db.withWrite`, reads do not. That fast path takes no
  * proper-lockfile target for a single mutation, so this process remains the one
  * and only writer.
+ *
+ * What this dispatch mirrors is the SDK transport's audit / telemetry / outcome
+ * semantics (FIX-025). What it does NOT do is resolve http-scope context —
+ * see the session note below.
  */
 import type { McpResponse } from "../../mcp/utils/mcp-response";
 import { createSessionContext } from "../../mcp/session";
@@ -39,11 +43,32 @@ import { db, vectors } from "./context";
 
 /**
  * The dashboard acts as ONE local MCP client, so it gets one session for the
- * process's lifetime. `transport: "http"` keeps scope resolution explicit-only
- * (roots/env/args) instead of deriving an owner/repo from the dashboard's own
- * CWD — the dashboard mutates rows by id/code, never by an inferred CWD scope.
+ * process's lifetime.
+ *
+ * `transport: "http"` is a LOCAL GUARD LABEL, not a scope resolver: there is no
+ * HTTP request here, no client-declared MCP roots, and no per-request session.
+ * It only switches `normalizeToolArguments` to the HTTP write fail-loud rule —
+ * a write whose owner/repo cannot be determined refuses to fall back to the
+ * process CWD instead of silently targeting the dashboard's directory. The
+ * dashboard mutates rows by id/code, never by an inferred CWD scope.
+ *
+ * In-process dispatch mirrors ONLY the SDK transport's audit / telemetry /
+ * outcome semantics (FIX-025: `logToolAction`, `reuseTelemetry`, `metrics`).
+ * It does NOT resolve http-scope context: a call's scope is what the caller
+ * passes (explicit owner/repo), with the local session's CWD-derived owner/repo
+ * only as a fallback.
  */
 const session: SessionContext = { ...createSessionContext("http"), clientName: "dashboard" };
+
+/**
+ * The executor map, built ONCE for the process lifetime.
+ *
+ * `buildExecutors` is a pure factory: it closes over the session and returns
+ * the same handlers every transport dispatches, with no per-call state. Building
+ * it once at module load keeps executor identity stable and stops every call
+ * from paying for a rebuild.
+ */
+const executors = buildExecutors(session);
 
 /**
  * Dispatch a canonical MCP tool name in-process against the dashboard store.
@@ -64,7 +89,7 @@ const session: SessionContext = { ...createSessionContext("http"), clientName: "
 export async function callLocalTool(toolName: string, args: Record<string, unknown> = {}): Promise<unknown> {
 	const rawName = toolName.replace(/\./g, "-");
 	const name = TOOL_ALIASES[rawName] ?? rawName;
-	const executor = buildExecutors(session)[name];
+	const executor = executors[name];
 	if (!executor) {
 		throw new ToolError("NOT_FOUND", `Unknown tool: ${toolName}`);
 	}

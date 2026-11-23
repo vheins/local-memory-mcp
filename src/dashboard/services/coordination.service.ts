@@ -95,8 +95,9 @@ export const CoordinationService = {
 	async createHandoff(attributes: Record<string, unknown>): Promise<unknown> {
 		// FIX-013: in-process dispatch through the dashboard's own store — the
 		// old `mcpClient.start()` opened a second writer over the same memory.db.
-		const result = await callLocalTool("handoff-write", { ...attributes, structured: true });
-		return (result as { structuredContent?: Record<string, unknown> } | undefined)?.structuredContent ?? result;
+		// `callLocalTool` already returns the tool's final structured payload, so
+		// there is no envelope left to unwrap here.
+		return callLocalTool("handoff-write", attributes);
 	},
 
 	async releaseClaim(attributes: Record<string, unknown>): Promise<Record<string, unknown>> {

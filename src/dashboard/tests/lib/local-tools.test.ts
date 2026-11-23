@@ -15,13 +15,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
 	const executor = vi.fn();
+	const executors = { "task-write": executor, "handoff-write": executor, "memory-read": executor } as Record<
+		string,
+		ReturnType<typeof vi.fn>
+	>;
 	return {
 		executor,
-		executors: { "task-write": executor, "handoff-write": executor, "memory-read": executor } as Record<
-			string,
-			ReturnType<typeof vi.fn>
-		>,
-		buildExecutors: vi.fn(),
+		executors,
+		// The dispatcher builds the executor map ONCE at module load (FIX-026),
+		// so the factory must already return the map when the module evaluates —
+		// a `beforeEach` return value would arrive after import.
+		buildExecutors: vi.fn(() => executors),
 		db: { withWrite: vi.fn((fn: () => unknown) => fn()), actions: { logAction: vi.fn() } },
 		vectors: { search: vi.fn() },
 		ensureSemantic: vi.fn(),
@@ -65,7 +69,6 @@ import { ToolError } from "../../../mcp/utils/mcp-error";
 
 beforeEach(() => {
 	vi.clearAllMocks();
-	mocks.buildExecutors.mockReturnValue(mocks.executors);
 	mocks.executor.mockResolvedValue({ structuredContent: { ok: true }, isError: false });
 });
 

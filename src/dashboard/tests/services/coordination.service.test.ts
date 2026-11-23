@@ -219,7 +219,7 @@ describe("CoordinationService.updateHandoffStatus", () => {
 });
 
 describe("CoordinationService.createHandoff", () => {
-	it("dispatches in-process (no embedded MCP client) with structured: true", async () => {
+	it("dispatches in-process (no embedded MCP client) without the legacy structured flag", async () => {
 		vi.mocked(mocks.callLocalTool).mockResolvedValue({ id: "h-9" });
 
 		const result = await CoordinationService.createHandoff({ summary: "hello" });
@@ -227,19 +227,24 @@ describe("CoordinationService.createHandoff", () => {
 		// FIX-013: the lazy second writer is gone — no child process is spawned.
 		expect(mocks.mcpClient.start).not.toHaveBeenCalled();
 		expect(mocks.mcpClient.callTool).not.toHaveBeenCalled();
-		expect(mocks.callLocalTool).toHaveBeenCalledWith("handoff-write", { summary: "hello", structured: true });
+		// FIX-026: `structured: true` was a pre-FIX-013 client flag that the
+		// handler never read (Zod strips unknown keys), so it is not sent anymore.
+		expect(mocks.callLocalTool).toHaveBeenCalledWith("handoff-write", { summary: "hello" });
 		expect(result).toEqual({ id: "h-9" });
 	});
 
-	it("unwraps a structuredContent payload when the tool wraps it", async () => {
+	it("returns the tool payload verbatim (no second structuredContent unwrap)", async () => {
+		// callLocalTool already returns `McpResponse.structuredContent`, so a
+		// payload carrying its own `structuredContent` key must not be unwrapped
+		// a second time here (FIX-026 removed the vestigial unwrap).
 		vi.mocked(mocks.callLocalTool).mockResolvedValue({ structuredContent: { id: "h-10" } });
 
 		const result = await CoordinationService.createHandoff({ summary: "hello" });
 
-		expect(result).toEqual({ id: "h-10" });
+		expect(result).toEqual({ structuredContent: { id: "h-10" } });
 	});
 
-	it("falls back to the raw result when the tool returns no structuredContent", async () => {
+	it("returns the tool payload unchanged when it carries no structuredContent", async () => {
 		vi.mocked(mocks.callLocalTool).mockResolvedValue({ content: [] });
 
 		const result = await CoordinationService.createHandoff({ summary: "hello" });
