@@ -264,26 +264,33 @@ describe("guard-before-store invariant (FIX-013 / N4)", () => {
 		expect(sources.some((source) => source.includes("/app"))).toBe(false);
 	});
 
+	/**
+	 * Matches any form that names a module which constructs or reaches the
+	 * store (`lib/context`, `storage/sqlite`, `write-lock`).
+	 *
+	 * Two shapes reach this test: relative import SPECIFIERS read from source
+	 * (extension-less: `./lib/context`) and REPO-RELATIVE FILE PATHS resolved
+	 * by the transitive walk (`src/dashboard/lib/context.ts`), so the pattern
+	 * must accept both — a `context` path segment with an optional extension
+	 * (`.[cm]?[jt]s`), and the storage filenames with or without theirs.
+	 *
+	 * The direct-import pin below only sees the guard's own specifiers, so an
+	 * intermediary could pull the store in transitively (`daemon-guard.ts` →
+	 * `mcp/cli/daemon.ts` → `…/storage/sqlite.ts`) and the guard would be
+	 * evaluated AFTER the store — reopening exactly the second-writer path this
+	 * module defends. The transitive walk below closes that hole; both checks
+	 * share this one constant.
+	 */
+	const STORAGE_MODULE_PATTERN = /(^|\/)context(\.[cm]?[jt]s)?$|storage\/(sqlite|write-lock)/;
+
 	it("keeps the guard module free of storage imports", () => {
 		const file = path.resolve(import.meta.dirname, "../../lib/daemon-guard.ts");
 		const sources = staticImportSources(readFileSync(file, "utf8"));
 
 		for (const source of sources) {
-			expect(source).not.toMatch(/(^|\/)context$|storage\/sqlite|write-lock/);
+			expect(source).not.toMatch(STORAGE_MODULE_PATTERN);
 		}
 	});
-
-	/**
-	 * Repo-relative pattern matching a module that constructs or reaches the
-	 * store (`lib/context`, `storage/sqlite`, `write-lock`).
-	 *
-	 * The direct-import pin above only sees the guard's own specifiers, so an
-	 * intermediary could pull the store in transitively (`daemon-guard.ts` →
-	 * `mcp/cli/daemon.ts` → `…/storage/sqlite.ts`) and the guard would be
-	 * evaluated AFTER the store — reopening exactly the second-writer path this
-	 * module defends. The transitive walk below closes that hole.
-	 */
-	const STORAGE_MODULE_PATTERN = /(^|\/)context$|storage\/sqlite|write-lock/;
 
 	/** Resolve a relative import specifier to the file it points at, if any. */
 	const resolveImport = (fromFile: string, specifier: string): string | null => {
