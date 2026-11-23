@@ -12,18 +12,22 @@ interface CachedFileContent {
 	sizeBytes: number;
 }
 
-const cacheKey = (repo: string, filePath: string): string => `${repo}\u0000${filePath}`;
+const cacheKey = (repo: string, repoPath: string, filePath: string): string =>
+	`${repo}\u0000${repoPath}\u0000${filePath}`;
 
 /**
  * Bounded, process-shared LRU cache for indexed file contents (TASK-316).
  *
  * - Shared across ALL agent connections (module singleton) — never per-agent
  *   state, so multi-agent MCP sessions reuse each other's reads.
- * - Keyed by repo+file_path; the codebase_files ROW checksum is the validity
- *   key. A re-index updates the row (new checksum) ⇒ next access reloads from
- *   disk. A file edited on disk WITHOUT a re-index keeps serving the cached
- *   indexed content — the index is deliberately the source of truth, so
- *   content always matches what the symbol index describes.
+ * - Keyed by repo + resolved repo ROOT + file_path; the codebase_files ROW
+ *   checksum is the validity key. The root belongs in the key because one repo
+ *   name can be registered against different roots whose file contents differ
+ *   (FIX-022 pattern) — without it the first root's content would be served for
+ *   the second. A re-index updates the row (new checksum) ⇒ next access reloads
+ *   from disk. A file edited on disk WITHOUT a re-index keeps serving the cached
+ *   indexed content — the index is deliberately the source of truth, so content
+ *   always matches what the symbol index describes.
  * - Bounded by CODE_SEARCH_CACHE_MAX_FILES + CODE_SEARCH_CACHE_MAX_BYTES,
  *   evicting least-recently-used until both caps hold.
  * - Thread-safety: Node is single-threaded, so Map mutations are atomic. The
@@ -44,9 +48,18 @@ export class CodeSearchCache {
 	 * single-flight read resolves, the insert path reconciles against the
 	 * CURRENT map state (not the pre-await snapshot), so N simultaneous
 	 * callers for one key subtract/add totalBytes exactly once.
+	 * @param repoPath The RESOLVED repo root the content is read at — part of
+	 *   the cache key (two roots under one repo name are distinct entries).
+	 *   Callers must pass the validated root; it is never defaulted.
 	 */
-	async getContent(repo: string, filePath: string, rowChecksum: string | null, absolutePath: string): Promise<string> {
-		const key = cacheKey(repo, filePath);
+	async getContent(
+		repo: string,
+		repoPath: string,
+		filePath: string,
+		rowChecksum: string | null,
+		absolutePath: string
+	): Promise<string> {
+		const key = cacheKey(repo, repoPath, filePath);
 		const cached = this.entries.get(key);
 
 		// Validity keyed to the codebase_files row checksum (see class docs).

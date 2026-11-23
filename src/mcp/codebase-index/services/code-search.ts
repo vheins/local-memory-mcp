@@ -261,7 +261,7 @@ async function grepIndexedFile(
 
 	let content: string;
 	try {
-		content = await codeSearchCache.getContent(repo, file.file_path, file.checksum ?? null, absolutePath);
+		content = await codeSearchCache.getContent(repo, repoPath, file.file_path, file.checksum ?? null, absolutePath);
 	} catch (err) {
 		warnSkipOnce(repo, repoPath, "[CodeSearch] Skipping unreadable indexed file", {
 			repo,

@@ -163,7 +163,13 @@ export async function handleDuplicatesMode(validated: CodebaseReadInput, db: SQL
 		const absolutePath = resolveRepoFilePath(repoPath, filePath);
 		if (!absolutePath) return null;
 		try {
-			return await codeSearchCache.getContent(repo, filePath, checksumByPath.get(filePath) ?? null, absolutePath);
+			return await codeSearchCache.getContent(
+				repo,
+				repoPath,
+				filePath,
+				checksumByPath.get(filePath) ?? null,
+				absolutePath
+			);
 		} catch (err) {
 			logger.debug("[handleDuplicatesMode] file read failed", {
 				repo,

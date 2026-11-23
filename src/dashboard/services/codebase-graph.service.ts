@@ -99,7 +99,7 @@ export async function readFileContent(repoRoot: string, repo: string, filePath: 
 		if (indexed) {
 			// Cache-reuse path (TASK-324 reuses the TASK-316 CODE-mode cache):
 			// the codebase_files row checksum is the validity key.
-			content = await codeSearchCache.getContent(repo, filePath, indexed.checksum ?? null, absolutePath);
+			content = await codeSearchCache.getContent(repo, repoRoot, filePath, indexed.checksum ?? null, absolutePath);
 		} else {
 			content = await fs.promises.readFile(absolutePath, "utf-8");
 		}

@@ -212,7 +212,7 @@ describe("readFileContent — traversal security boundary", () => {
 
 		expect(result.content).toBe("cached body");
 		expect(result.language).toBe("rust"); // authoritative from the index row
-		expect(mocks.getContent).toHaveBeenCalledWith("app", "src/util.ts", "abc123", expect.any(String));
+		expect(mocks.getContent).toHaveBeenCalledWith("app", repoRoot, "src/util.ts", "abc123", expect.any(String));
 	});
 
 	it("truncates content to FILE_CONTENT_MAX_LINES and flags truncated", async () => {

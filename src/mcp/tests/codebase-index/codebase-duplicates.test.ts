@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import fs from "node:fs";
+import path from "node:path";
 import { handleCodebaseRead } from "../../tools/codebase.read";
 import { CodebaseReadSchema } from "../../tools/schemas/codebase-read.js";
 import { data, setupIntegrationFixture } from "./mcp-tools.integration.shared.js";
 import { clearDuplicatesCaches } from "../../codebase-index/services/duplicates.js";
+import { clearCodeSearchCache } from "../../codebase-index/services/code-search.js";
 import { BODY, FixtureFile, makeIndexer, makeRunDuplicates } from "./codebase-duplicates.helpers.js";
 import type { SQLiteStore } from "../../storage/sqlite.js";
 import type { VectorStore } from "../../types.js";
@@ -315,6 +317,98 @@ describe("handleCodebaseRead (duplicates mode)", () => {
 		const cachedSummary = secondRun.d.summary as Record<string, unknown>;
 		expect(cachedSummary.cache_hit).toBe(true);
 		expect(cachedSummary.files_read).toBe(0);
+	});
+
+	// The content cache is shared process-wide and used to be keyed by
+	// repo+file_path only, so a second root registered under the same repo name
+	// (the watcher root guard is skipped for unregistered repos) would be served
+	// the FIRST root's file content (TASK-007, FIX-022 pattern).
+	it("two roots under one repo name read their own file content, never the other root's", async () => {
+		const repo = "dups-two-roots";
+		const filePath = "src/twin.ts";
+
+		// Root A: two identical bodies → one duplicate group.
+		const rootA = fs.mkdtempSync(path.join(tempDir, "rootA-"));
+		// Root B: same file_path, second body differs → no duplicate group.
+		const rootB = fs.mkdtempSync(path.join(tempDir, "rootB-"));
+
+		try {
+			const fileA = new FixtureFile();
+			const leftA = fileA.add(BODY("first", "items: number[]", "+="));
+			fileA.gap();
+			const rightA = fileA.add(BODY("second", "items: number[]", "+="));
+			fs.mkdirSync(path.dirname(path.join(rootA, filePath)), { recursive: true });
+			fs.writeFileSync(path.join(rootA, filePath), fileA.toString(), "utf-8");
+
+			const fileB = new FixtureFile();
+			const leftB = fileB.add(BODY("first", "items: number[]", "+="));
+			fileB.gap();
+			// A structurally different body (product instead of sum) so the pair
+			// falls below the 0.9 near-duplicate threshold at root B.
+			const rightB = fileB.add([
+				"export function second(items: number[]): number {",
+				"\tlet acc = 1;",
+				"\tfor (const item of items) {",
+				"\t\tacc = acc * item;",
+				"\t}",
+				"\treturn acc;",
+				"}"
+			]);
+			fs.mkdirSync(path.dirname(path.join(rootB, filePath)), { recursive: true });
+			fs.writeFileSync(path.join(rootB, filePath), fileB.toString(), "utf-8");
+
+			// One indexed row shared by both roots: identical checksum, which is
+			// exactly the validity key that could not tell the roots apart.
+			store.codebaseFiles.upsertFile({
+				repo,
+				file_path: filePath,
+				language: "typescript",
+				checksum: `${repo}:${filePath}:sum`,
+				lines: fileA.lines.length,
+				size_bytes: Buffer.byteLength(fileA.toString(), "utf-8")
+			});
+			store.codebaseSymbols.bulkUpsertSymbols(
+				[
+					{ name: "first", kind: "function", span: leftA },
+					{ name: "second", kind: "function", span: rightA }
+				].map((symbol) => ({
+					repo,
+					file_path: filePath,
+					name: symbol.name,
+					kind: symbol.kind,
+					exported: true,
+					start_line: symbol.span.start,
+					end_line: symbol.span.end,
+					signature: null,
+					source_fingerprint: `${repo}:${symbol.name}:${symbol.span.start}`
+				}))
+			);
+			// Spans are line-identical in both roots (same body shapes).
+			expect(leftB).toEqual(leftA);
+			expect(rightB).toEqual(rightA);
+
+			clearCodeSearchCache();
+			const runAt = async (repoPath: string) => {
+				const resp = await handleCodebaseRead(
+					{ owner: "vheins", json: true, repo, repoPath, action: "duplicates" },
+					store,
+					vectors
+				);
+				return data(resp);
+			};
+
+			// Root A first: populates the shared content cache for this repo+path.
+			const a = await runAt(rootA);
+			expect(a.groups).toHaveLength(1);
+
+			// Root B must read ROOT B's file: the second body is not a duplicate.
+			// Pre-fix the cached root-A body was served, producing a false group.
+			const b = await runAt(rootB);
+			expect(b.groups).toHaveLength(0);
+		} finally {
+			fs.rmSync(rootA, { recursive: true, force: true });
+			fs.rmSync(rootB, { recursive: true, force: true });
+		}
 	});
 
 	it("requires repo and repoPath", async () => {

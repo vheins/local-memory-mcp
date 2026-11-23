@@ -122,7 +122,7 @@ describe("codeSearchCache", () => {
 		fs.writeFileSync(absolutePath, content, "utf-8");
 
 		const results = await Promise.all(
-			Array.from({ length: 8 }, () => codeSearchCache.getContent(repo, filePath, "sum-v1", absolutePath))
+			Array.from({ length: 8 }, () => codeSearchCache.getContent(repo, repoRoot, filePath, "sum-v1", absolutePath))
 		);
 
 		expect(results).toEqual(Array(8).fill(content));
@@ -141,14 +141,14 @@ describe("codeSearchCache", () => {
 		fs.writeFileSync(absolutePath, oldContent, "utf-8");
 
 		// Populate the cache under checksum v1 (stale entry).
-		await codeSearchCache.getContent(repo, filePath, "sum-v1", absolutePath);
+		await codeSearchCache.getContent(repo, repoRoot, filePath, "sum-v1", absolutePath);
 		expect(codeSearchCache.bytes).toBe(Buffer.byteLength(oldContent, "utf-8"));
 
 		// Simulate re-index: disk content grows AND the row checksum changes.
 		fs.writeFileSync(absolutePath, newContent, "utf-8");
 
 		const results = await Promise.all(
-			Array.from({ length: 8 }, () => codeSearchCache.getContent(repo, filePath, "sum-v2", absolutePath))
+			Array.from({ length: 8 }, () => codeSearchCache.getContent(repo, repoRoot, filePath, "sum-v2", absolutePath))
 		);
 
 		expect(results).toEqual(Array(8).fill(newContent));
@@ -156,5 +156,57 @@ describe("codeSearchCache", () => {
 		// Pre-fix: every caller subtracted the stale snapshot → totalBytes
 		// under-counted (8×new − 7×old). Must reflect exactly the one entry.
 		expect(codeSearchCache.bytes).toBe(Buffer.byteLength(newContent, "utf-8"));
+	});
+
+	// ── Repo-root cache identity (TASK-007, FIX-022 pattern) ────────────────
+	// One repo name can be registered against different roots (the watcher
+	// guard is skipped for unregistered repos), so the content cache key must
+	// pin the resolved root, not just repo+file_path+checksum.
+
+	it("two roots, same repo/file_path/checksum: never cross-serves the other root's content", async () => {
+		const repo = freshRepo();
+		const filePath = "same.ts";
+		const rootA = fs.mkdtempSync(path.join(os.tmpdir(), `${REPO_ROOT}-rootA-`));
+		const rootB = fs.mkdtempSync(path.join(os.tmpdir(), `${REPO_ROOT}-rootB-`));
+		try {
+			fs.writeFileSync(path.join(rootA, filePath), "ROOT_A_CONTENT\n", "utf-8");
+			fs.writeFileSync(path.join(rootB, filePath), "ROOT_B_CONTENT\n", "utf-8");
+
+			const a = await codeSearchCache.getContent(repo, rootA, filePath, "same-sum", path.join(rootA, filePath));
+			const b = await codeSearchCache.getContent(repo, rootB, filePath, "same-sum", path.join(rootB, filePath));
+
+			// Pre-fix (key = repo+file_path): b returned root A's content.
+			expect(a).toBe("ROOT_A_CONTENT\n");
+			expect(b).toBe("ROOT_B_CONTENT\n");
+			expect(codeSearchCache.size).toBe(2);
+		} finally {
+			fs.rmSync(rootA, { recursive: true, force: true });
+			fs.rmSync(rootB, { recursive: true, force: true });
+		}
+	});
+
+	it("repeat CODE-mode calls within one root hit the cache (disk file removed ⇒ cached snapshot still served)", async () => {
+		const repo = freshRepo();
+		const filePath = `${repo}/hit.ts`;
+		const content = "cached snapshot line\n";
+		writeIndexedFile(repo, filePath, content, "typescript", "sum-stable");
+
+		const first = await searchCodeInRepo(store, repo, repoRoot, { needle: "cached", limit: 10, offset: 0 });
+		expect(first.total).toBe(1);
+		expect(codeSearchCache.size).toBe(1);
+		const cachedBytes = codeSearchCache.bytes;
+		expect(cachedBytes).toBe(Buffer.byteLength(content, "utf-8"));
+
+		// Independent hit oracle: delete the file from disk. A miss would fail
+		// the read and CODE mode would skip the file (0 matches); a hit serves
+		// the cached snapshot with no disk access at all.
+		fs.rmSync(path.join(repoRoot, filePath), { force: true });
+
+		const second = await searchCodeInRepo(store, repo, repoRoot, { needle: "cached", limit: 10, offset: 0 });
+		expect(second.total).toBe(1);
+		expect(second.filesScanned).toBe(1);
+		// Cache entry survived the repeat call unchanged (no reload, no re-accounting).
+		expect(codeSearchCache.size).toBe(1);
+		expect(codeSearchCache.bytes).toBe(cachedBytes);
 	});
 });
