@@ -51,7 +51,7 @@ If unsure, run `git remote -v` in the project directory — the remote URL (e.g.
 | `owner` | tool arg → `owner` segment of `owner/repo` → session context (git remote / MCP roots) → CWD remote |
 | `repo`  | tool arg → session context (MCP root basename) → CWD basename                                      |
 | `agent` | tool arg → session context (last-seen agent, client name, `MCP_CLIENT_NAME` env)                   |
-| `model` | tool arg → session context (last-seen model, `MCP_MODEL` env)                                       |
+| `model` | tool arg → session context (last-seen model, `MCP_MODEL` env)                                      |
 
 Setting these explicitly in the tool call always takes priority over session defaults.
 
@@ -122,7 +122,8 @@ A `memory-write` update accepts the same fields as create but all are optional (
 - `codebase-index(repo)` = status (freshness + count); `codebase-index(repoPath + repo)` = index (tree-sitter scan).
 - Always check status first. If stale, trigger index before querying.
 - **`repoPath` MUST be the repo ROOT** — the exact same absolute path passed to `codebase-index`, never a subdirectory (e.g. `modules/PurchaseDistributor/Lang`). Indexed `file_path`s are relative to the root, so a subdirectory path makes every file miss (`REPO_PATH_NOT_ROOT` / `REPO_FILES_MISSING`).
-- `codebase-read`: `query` → search, `name` → symbol trace, `filePath` → file symbols, `content` → grep indexed file contents, none → architecture. `depth` only applies inside architecture mode.
+- `codebase-read`: `query` → search, `name` → symbol trace, `filePath` → file symbols, `content` → grep indexed file contents, `action:"duplicates"` → duplicate-body report, none → architecture. `depth` only applies inside architecture mode.
+  - DUPLICATES: `repo` + `repoPath` required (same root as the index). Defaults `min_similarity:0.9`, `min_lines:5`, `limit:20`; `kind` defaults to `function,method` (pass `class`/`interface`/… to widen). Exact-normalized groups (identical body after comments/whitespace/identifier/literal normalization) are reported first with similarity 1; near groups follow with a Jaccard score and a `merge_hint` naming the parameter difference — the DRY case "same body, params a vs a, b → merge into one function with optional params". Results are cached against each symbol's `source_fingerprint`, so a re-index invalidates them; no schema change.
 - **STRICT PRIORITY**: ALL agents (orchestrator + sub-agents) MUST start every codebase context search with `codebase-index`/`codebase-read` — symbols, files, architecture, trace, and content grep.
 - **FORBIDDEN as first resort**: `rg` / `grep` / `glob` / `seed` / `cat` / `bash cat` / `find` / `ls` / brute-force filesystem search — NEVER use before `codebase-read`. Allowed ONLY as fallback after index returns empty/stale or cannot answer, and ONLY via `explore` sub-agent (which itself tries index first before `glob`/`grep`/`cat`). Direct `rg`/`grep`/`cat` without prior `codebase-read` is a violation. `cat` is for reading a **known** file only — never for blind exploration.
 
@@ -156,32 +157,32 @@ A `memory-write` update accepts the same fields as create but all are optional (
 
 ## Who / When
 
-| Operation                         | When                                                                                                                           | Who                                                          |
-| :-------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------- |
-| `memory-read(query)`              | Start of task, during work — find past decisions, patterns, code facts                                                         | All agents (orchestrator + sub-agents)                       |
-| `memory-write`                    | After completing work — persist decisions, patterns, code facts                                                                | All agents (orchestrator + sub-agents)                       |
-| `memory-read(id/code)`            | When task prompt includes a memory code — retrieve full context                                                                | Sub-agents only                                              |
-| `memory-write` (acknowledge)      | After consuming a memory — mark it as used/reviewed                                                                            | Sub-agents only                                              |
-| `memory-read` (recap)             | At macro-workflow start — summary of recent memory activity                                                                    | Orchestrator                                                 |
-| `memory-write` (`type=decision`)  | Log a structured architectural decision (importance=4)                                                                         | All agents                                                   |
-| `task-read`                       | Sync — list/search/detail of pending, backlog, in_progress                                                                     | Orchestrator + sub-agents                                    |
-| `claim-manage`                    | Claim task start (`task_code` + `agent`) → `in_progress`                                                                       | Agent executing the task                                     |
-| `task-write(status=completed)`    | Mark task done — auto-releases claim, expires linked handoffs                                                                  | Agent executing the task                                     |
-| `handoff-read`                    | Check incoming handoffs at workflow start; search/list pending                                                                 | Orchestrator                                                 |
-| `handoff-write`                   | Create handoff ONLY for unfinished work (concrete next owner + steps)                                                          | Agent leaving work behind                                    |
-| `standard-read(query)`            | Hydrate — load applicable coding standards before implementation                                                               | All agents                                                   |
-| `standard-write`                  | After discovering a durable reusable pattern/convention worth persisting (check `standard-read` first)                         | Any agent that produced code/docs and found a normative rule |
-| `standard-delete`                 | Delete coding standards (single/bulk, UUID or code)                                                                            | All agents                                                   |
-| `memory-delete`                   | Soft-delete memories (single/bulk, UUID or code)                                                                               | All agents                                                   |
-| `task-delete`                     | Soft-delete tasks → canceled, release claims, expire handoffs                                                                  | All agents                                                   |
-| `repo-summarize`                  | Archive session signals as task_archive summary                                                                                | All agents                                                   |
-| `synthesize`                      | Composite synthesis via sampling (requires client sampling)                                                                    | All agents                                                   |
-| `agent-context`                   | Compile token-budgeted cross-source context for an objective                                                                   | All agents                                                   |
-| `observation-write`               | Create/update/bulk/refresh exploration observations with fingerprints                                                          | All agents                                                   |
-| `observation-read`                | Read observations by scope, subject, task, file, symbol, confidence                                                            | All agents                                                   |
-| `codebase-index`                  | Check index freshness/status before querying; refresh a stale index; `warmup:true` initializes the engine                      | All agents                                                   |
-| `codebase-read`                   | Primary codebase exploration (symbol/NL search, trace, file symbols, architecture, content grep)                               | All agents                                                   |
-| `prompt-read(name?)`              | Before executing a skill/workflow — load its definition/template (LIST catalog when no name, DETAIL with {{var}} substitution) | Orchestrator + sub-agents needing guided execution           |
+| Operation                        | When                                                                                                                           | Who                                                          |
+| :------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------- |
+| `memory-read(query)`             | Start of task, during work — find past decisions, patterns, code facts                                                         | All agents (orchestrator + sub-agents)                       |
+| `memory-write`                   | After completing work — persist decisions, patterns, code facts                                                                | All agents (orchestrator + sub-agents)                       |
+| `memory-read(id/code)`           | When task prompt includes a memory code — retrieve full context                                                                | Sub-agents only                                              |
+| `memory-write` (acknowledge)     | After consuming a memory — mark it as used/reviewed                                                                            | Sub-agents only                                              |
+| `memory-read` (recap)            | At macro-workflow start — summary of recent memory activity                                                                    | Orchestrator                                                 |
+| `memory-write` (`type=decision`) | Log a structured architectural decision (importance=4)                                                                         | All agents                                                   |
+| `task-read`                      | Sync — list/search/detail of pending, backlog, in_progress                                                                     | Orchestrator + sub-agents                                    |
+| `claim-manage`                   | Claim task start (`task_code` + `agent`) → `in_progress`                                                                       | Agent executing the task                                     |
+| `task-write(status=completed)`   | Mark task done — auto-releases claim, expires linked handoffs                                                                  | Agent executing the task                                     |
+| `handoff-read`                   | Check incoming handoffs at workflow start; search/list pending                                                                 | Orchestrator                                                 |
+| `handoff-write`                  | Create handoff ONLY for unfinished work (concrete next owner + steps)                                                          | Agent leaving work behind                                    |
+| `standard-read(query)`           | Hydrate — load applicable coding standards before implementation                                                               | All agents                                                   |
+| `standard-write`                 | After discovering a durable reusable pattern/convention worth persisting (check `standard-read` first)                         | Any agent that produced code/docs and found a normative rule |
+| `standard-delete`                | Delete coding standards (single/bulk, UUID or code)                                                                            | All agents                                                   |
+| `memory-delete`                  | Soft-delete memories (single/bulk, UUID or code)                                                                               | All agents                                                   |
+| `task-delete`                    | Soft-delete tasks → canceled, release claims, expire handoffs                                                                  | All agents                                                   |
+| `repo-summarize`                 | Archive session signals as task_archive summary                                                                                | All agents                                                   |
+| `synthesize`                     | Composite synthesis via sampling (requires client sampling)                                                                    | All agents                                                   |
+| `agent-context`                  | Compile token-budgeted cross-source context for an objective                                                                   | All agents                                                   |
+| `observation-write`              | Create/update/bulk/refresh exploration observations with fingerprints                                                          | All agents                                                   |
+| `observation-read`               | Read observations by scope, subject, task, file, symbol, confidence                                                            | All agents                                                   |
+| `codebase-index`                 | Check index freshness/status before querying; refresh a stale index; `warmup:true` initializes the engine                      | All agents                                                   |
+| `codebase-read`                  | Primary codebase exploration (symbol/NL search, trace, file symbols, architecture, content grep, duplicate-body analysis)      | All agents                                                   |
+| `prompt-read(name?)`             | Before executing a skill/workflow — load its definition/template (LIST catalog when no name, DETAIL with {{var}} substitution) | Orchestrator + sub-agents needing guided execution           |
 
 ## Rules
 

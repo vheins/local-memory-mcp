@@ -582,6 +582,28 @@ export const CODE_SEARCH_READ_CONCURRENCY = 16;
 // without code changes.
 export const CODE_SEARCH_MAX_REGEX_LENGTH = envInt("CODE_SEARCH_MAX_REGEX_LENGTH", 200);
 
+// ── Codebase DUPLICATES mode (FEAT-001) ───────────────────────────────────
+// Exact-normalized duplicate detection, then a bounded near pass, over the
+// indexed symbols of one repo. Thresholds are tool parameters with these
+// defaults; the rest are hard analysis bounds (no env override — the output is
+// a read-only report, and a caller can always narrow with `kind`/`limit`).
+export const DUPLICATES_DEFAULT_MIN_SIMILARITY = 0.9;
+export const DUPLICATES_DEFAULT_MIN_LINES = 5;
+export const DUPLICATES_DEFAULT_LIMIT = 20;
+/** Token-shingle width used for near-pass similarity (Jaccard over shingle sets). */
+export const DUPLICATES_SHINGLE_SIZE = 3;
+/**
+ * Near-pass candidate bound: a posting list longer than this is skipped (too
+ * common a shingle to be selective), and pairs scored per call are capped at
+ * DUPLICATES_MAX_PAIRS — the 21k-symbol repo stays bounded instead of O(n²).
+ */
+export const DUPLICATES_POSTING_CAP = 200;
+export const DUPLICATES_MAX_PAIRS = 50_000;
+/** Whole-analysis result cache entries (keyed by repo + thresholds + symbol fingerprints). */
+export const DUPLICATES_CACHE_MAX_ENTRIES = 4;
+/** Derived per-symbol body cache entries (keyed by symbol id + source_fingerprint). */
+export const DUPLICATES_SYMBOL_CACHE_MAX_ENTRIES = 20_000;
+
 // ── Codebase graph + file-content bounds (TASK-324, phase codebase-graph-ui) ──
 // Dashboard graph endpoints (GET /api/codebase/graph, /symbol/callers,
 // /file/content). Edge cap for the code-graph payload: the graph is assembled

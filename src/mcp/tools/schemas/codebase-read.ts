@@ -164,6 +164,28 @@ export const CodebaseReadSchema = z.object({
 	/** Pagination offset. */
 	offset: z.coerce.number().min(0).default(0),
 
+	// ── Duplicates (FEAT-001) ──────────────────────────────────────────────
+	/**
+	 * Explicit mode selector. `action: "duplicates"` runs the duplicate-symbol
+	 * analysis and takes precedence over the other infer rules. Any other value
+	 * is ignored (historical `action:*` strings in the tool description never
+	 * selected a mode — inference always came from the other params), so no
+	 * existing call changes behavior.
+	 */
+	action: z.string().min(1).optional(),
+	/**
+	 * DUPLICATES near-pass minimum similarity in (0, 1]. Exact-normalized
+	 * duplicates (similarity 1) are always reported regardless of this value.
+	 * Default `DUPLICATES_DEFAULT_MIN_SIMILARITY` (0.9).
+	 */
+	min_similarity: z.coerce.number().gt(0).max(1).optional(),
+	/**
+	 * DUPLICATES minimum symbol line span (`end_line - start_line + 1`, the
+	 * indexed range including the declaration header). Filters trivial
+	 * one-liners that would otherwise dominate the report. Default 5.
+	 */
+	min_lines: z.coerce.number().int().min(1).max(10000).optional(),
+
 	// ── Output ─────────────────────────────────────────────────────────────
 	/** Include machine-readable structuredContent alongside the always-present compact text summary. */
 	json: z.boolean().default(false),
@@ -178,4 +200,4 @@ export const CodebaseReadSchema = z.object({
 });
 
 export type CodebaseReadInput = z.infer<typeof CodebaseReadSchema>;
-export type CodebaseReadMode = "trace" | "search" | "file" | "architecture" | "code";
+export type CodebaseReadMode = "trace" | "search" | "file" | "architecture" | "code" | "duplicates";

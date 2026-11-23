@@ -3,6 +3,7 @@ import {
 	CodebaseSymbol,
 	CodebaseSymbolRow,
 	CodebaseSymbolInsert,
+	DuplicateCandidateRow,
 	SymbolCountGroupRow,
 	SymbolSearchQuery,
 	SymbolSearchResult,
@@ -200,6 +201,23 @@ export class CodebaseSymbolEntity extends BaseEntity {
 			params.push(limit);
 		}
 		return this.all<CodebaseSymbolRow>(sql, params).map((r) => this.rowToSymbol(r));
+	}
+
+	/**
+	 * Slim candidate projection for DUPLICATES analysis: scoped to a single repo
+	 * and the requested kinds, ordered deterministically for stable reporting.
+	 * Symbols without an indexed line range cannot be compared and are excluded.
+	 */
+	getDuplicateCandidates(repo: string, kinds: string[]): DuplicateCandidateRow[] {
+		if (kinds.length === 0) return [];
+		const placeholders = kinds.map(() => "?").join(", ");
+		return this.all<DuplicateCandidateRow>(
+			`SELECT id, name, kind, file_path, signature, start_line, end_line, source_fingerprint
+			 FROM derived.codebase_symbols
+			 WHERE repo = ? AND kind IN (${placeholders}) AND start_line IS NOT NULL AND end_line IS NOT NULL
+			 ORDER BY file_path ASC, start_line ASC, id ASC`,
+			[repo, ...kinds]
+		);
 	}
 
 	getSymbolCountByRepo(repo: string): number {

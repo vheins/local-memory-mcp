@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import type { CodebaseReadInput } from "../schemas/codebase-read";
 import { SQLiteStore } from "../../storage/sqlite";
 import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
@@ -13,21 +11,7 @@ import { CODE_SEARCH_DEFAULT_LIMIT } from "../../utils/constants";
 import { docSuffix } from "../../utils/doc-comment-format";
 import { logger } from "../../utils/logger";
 import { parseTaggedQuery, CODEBASE_READ_TAG_KEYS } from "../../utils/query-tags";
-import { listWatchedRepos } from "../../codebase-index/services/file-watcher";
-
-/**
- * Best-effort path identity check: resolves symlinks when possible, otherwise
- * falls back to `path.resolve` (mirrors the watcher registry's own
- * `path.resolve(repoPath)` normalization). Used to tell a repo ROOT apart from
- * a subdirectory of it.
- */
-function samePath(a: string, b: string): boolean {
-	try {
-		return fs.realpathSync.native(a) === fs.realpathSync.native(b);
-	} catch {
-		return path.resolve(a) === path.resolve(b);
-	}
-}
+import { resolveRepoRootScope } from "./repo-root";
 
 // ── CODE (content grep) ─────────────────────────────────────────────────
 
@@ -114,62 +98,13 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 		);
 	}
 
-	const repo = validated.repo;
-	if (!repo) {
-		return createMcpErrorResponse({
-			code: "REPO_REQUIRED",
-			message: "Mode 'code' requires a concrete 'repo'.",
-			retryable: false
-		});
-	}
-
-	const repoPath = validated.repoPath?.trim();
-	if (!repoPath) {
-		return createMcpErrorResponse({
-			code: "REPO_PATH_REQUIRED",
-			message:
-				"Code search requires `repoPath`: pass the same absolute path used with index_repository, or run index_repository first.",
-			retryable: false
-		});
-	}
-
-	const resolvedPath = path.resolve(repoPath);
-	let stat: fs.Stats;
-	try {
-		stat = fs.statSync(resolvedPath);
-	} catch {
-		return createMcpErrorResponse({
-			code: "REPO_PATH_NOT_FOUND",
-			message: `Repository path not found: ${resolvedPath}. Re-run index_repository or pass the correct repoPath.`,
-			retryable: false
-		});
-	}
-	if (!stat.isDirectory()) {
-		return createMcpErrorResponse({
-			code: "NOT_A_DIRECTORY",
-			message: `Repository path is not a directory: ${resolvedPath}`,
-			retryable: false
-		});
-	}
-
-	// Root-path guard (FIX-CODESEARCH-STORM): `codebase_files.file_path` is
-	// relative to the repo ROOT, so a subdirectory `repoPath` makes every file
-	// resolve outside it → ENOENT for the whole repo. The watcher registry
-	// (populated by startup auto-index + every index_repository call) knows the
-	// registered root; reject a mismatch up front instead of logging one
-	// warning per file. Absent registry entry (e.g. dashboard process) ⇒ skip
-	// the guard — `statSync` above already confirmed the path exists.
-	const registered = listWatchedRepos().get(repo);
-	if (registered && !samePath(registered.repoPath, resolvedPath)) {
-		return createMcpErrorResponse({
-			code: "REPO_PATH_NOT_ROOT",
-			message:
-				`repoPath must be the repository ROOT registered for "${repo}", not a subdirectory: got ${resolvedPath}, expected ${registered.repoPath}. ` +
-				`Pass the same absolute path used with index_repository.`,
-			retryable: false,
-			details: { repo, supplied: resolvedPath, expected: registered.repoPath }
-		});
-	}
+	const scope = resolveRepoRootScope(
+		validated,
+		"code",
+		"Code search requires `repoPath`: pass the same absolute path used with index_repository, or run index_repository first."
+	);
+	if ("error" in scope) return scope.error;
+	const { repo, repoPath: resolvedPath } = scope;
 
 	const limit = validated.limit ?? CODE_SEARCH_DEFAULT_LIMIT;
 	const offset = validated.offset;

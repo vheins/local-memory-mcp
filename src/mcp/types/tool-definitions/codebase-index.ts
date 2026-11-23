@@ -47,6 +47,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 			"`action:trace` or `name` w/o `query` → trace symbol (was trace_symbol); " +
 			"`action:file` or `filePath` → file symbols (was get_file_symbols); " +
 			"`action:architecture` or `depth` → architecture tree (was get_architecture); " +
+			"`action:duplicates` → duplicate-body report (exact-normalized groups first, then near groups with a parameter-list merge hint; needs `repo` + `repoPath`); " +
 			"`query` with spaces → NL search (was codebase_search); " +
 			"`query` single term → symbol search (was search_symbols).",
 		annotations: {

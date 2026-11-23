@@ -6,6 +6,7 @@
  *
  * Modes (auto-inferred from mutual-exclusive params — all use non-empty
  * presence, so an empty-string param falls through to ARCHITECTURE):
+ *   action   → DUPLICATES (FEAT-001 — action:"duplicates", explicit selector)
  *   name     → TRACE  (was trace_symbol)
  *   filePath → FILE   (was get_file_symbols)
  *   content  → CODE   (TASK-316 — grep indexed file contents)
@@ -27,6 +28,7 @@ import { handleFileMode } from "./codebase-read/file";
 import { handleSearchMode } from "./codebase-read/search";
 import { handleArchitectureMode } from "./codebase-read/architecture";
 import { handleCodeSearchMode } from "./codebase-read/code";
+import { handleDuplicatesMode } from "./codebase-read/duplicates";
 import { logger } from "../utils/logger";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -37,6 +39,8 @@ import { logger } from "../utils/logger";
  * Determine which mode to run based on the provided parameters.
  *
  * ADR-005 auto-infer rules (first match wins):
+ * 0. `action`   → DUPLICATES (explicit selector — FEAT-001; checked first so
+ *    any other param present alongside it does not redirect the mode)
  * 1. `name`     → TRACE
  * 2. `filePath` → FILE
  * 3. `content`  → CODE (TASK-316 — grep indexed file contents)
@@ -44,6 +48,11 @@ import { logger } from "../utils/logger";
  * 5. (nothing)  → ARCHITECTURE (tree overview)
  */
 function inferMode(params: CodebaseReadInput): CodebaseReadMode {
+	// FEAT-001: the only `action` value this tool honors is `duplicates`. Legacy
+	// `action:*` strings stay inert (they never selected a mode before), so the
+	// explicit selector is checked here rather than as a generic presence rule.
+	if ((params.action ?? "").trim().toLowerCase() === "duplicates") return "duplicates";
+
 	// Shared auto-infer engine (OPT-DRY-06). `name`/`filePath` keep truthy
 	// presence (an empty string is already "not provided"); `query`/`content`
 	// use non-empty presence so an empty string is "not provided"
@@ -69,6 +78,7 @@ function inferMode(params: CodebaseReadInput): CodebaseReadMode {
  * Unified codebase-read handler.
  *
  * Auto-infers the mode from the provided parameters per ADR-005 rules:
+ * - `action`   → DUPLICATES (FEAT-001 — explicit selector)
  * - `name`     → TRACE (exact symbol match with disambiguation)
  * - `filePath` → FILE (symbols in a file)
  * - `content`  → CODE (TASK-316 — grep indexed file contents, symbol-enriched)
@@ -111,5 +121,7 @@ export async function handleCodebaseRead(
 			return handleArchitectureMode(validated, db);
 		case "code":
 			return handleCodeSearchMode(validated, db);
+		case "duplicates":
+			return handleDuplicatesMode(validated, db);
 	}
 }

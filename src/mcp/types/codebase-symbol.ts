@@ -141,3 +141,21 @@ export interface SymbolSearchResult {
 	total: number;
 	hasMore: boolean;
 }
+
+/**
+ * Slim symbol projection for the codebase-read DUPLICATES analysis (FEAT-001):
+ * only the columns duplicate detection needs, omitting doc/semantic payloads so
+ * the candidate load stays small on a 20k+ symbol repo.
+ */
+export interface DuplicateCandidateRow {
+	id: string;
+	name: string;
+	kind: string;
+	file_path: string;
+	signature: string | null;
+	/** Null when the parser recorded no range; such symbols cannot be compared. */
+	start_line: number | null;
+	end_line: number | null;
+	/** SHA-256 of the symbol's raw source range — cache-validity key, not a content hash of the normalized body. */
+	source_fingerprint: string | null;
+}
