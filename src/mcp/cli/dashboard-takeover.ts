@@ -187,12 +187,19 @@ function lockFileExists(dbPath: string): boolean {
 /**
  * Remove the write lock a confirmed-dead holder left behind.
  *
- * Only safe under conditions the takeover already established: the holder was
- * identity-checked and is confirmed dead, and proper-lockfile permits exactly
- * one holder, so a lock directory that existed BEFORE the kill and whose mtime
- * is not newer than the kill cannot belong to another live process. A lock that
- * appeared or was refreshed after the kill belongs to someone else and is left
- * untouched.
+ * What the guards PROVE: the lock directory existed before the kill and its
+ * mtime is not newer than the kill. What they do NOT prove: that the lock
+ * belonged to the killed process. A second writer on the same database (e.g. a
+ * `DASHBOARD_ENABLE_MCP` child, or another MCP server) refreshes its lock mtime
+ * every `stale / 2`, so its LIVE lock can pass both guards and be removed.
+ *
+ * Removing that lock is accepted only under the single-writer invariant: one
+ * writer process per database is the supported topology (FIX-008), so any
+ * second writer found holding this lock is a misconfiguration, not a state
+ * this takeover is designed to protect.
+ *
+ * A lock that appeared or was refreshed after the kill belongs to someone else
+ * and is left untouched.
  *
  * @returns Whether the orphaned lock was removed.
  */
@@ -337,6 +344,8 @@ export function formatUnknownLockHolder(dbPath: string, waitedMs: number): strin
 		`Cannot start the daemon: ${dbPath} is write-locked by a process this start cannot identify.`,
 		`No dashboard PID marker (${DASHBOARD_PID_FILENAME}) exists, so no PID is guessed and nothing is signalled.`,
 		`Waited ${waitedMs}ms for the lock to clear.`,
+		`If the holder is already dead, its orphaned lock reads as free once it ages past the staleness window`,
+		`(${Math.round(LOCK_STALE_MS / 1000)}s), so retrying the start after that succeeds.`,
 		"",
 		"Find the holder, stop it, then retry `local-memory-mcp daemon start`:",
 		`  lsof ${dbPath}`,
