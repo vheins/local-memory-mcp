@@ -14,12 +14,18 @@
  * optional parameters. The raw parameter declarations are kept for the diff
  * and merge hint.
  *
+ * The declaration's OWN NAME token is always canonicalized to `ID`, even when
+ * it collides with another language's keyword (`double`, `type`, `match`, …):
+ * a name is never a reason two identical bodies fail to group. Keywords in BODY
+ * position stay verbatim, so a control-flow change (`if` vs `while`) still
+ * separates symbols.
+ *
  * Everything here is pure and deterministic: same source + language ⇒ same
  * token stream, same key, same parameter names.
  */
 
 import { DUPLICATES_SHINGLE_SIZE } from "../../utils/constants";
-import { findParameterGroup, parameterNames, splitParameterList } from "./duplicates-params";
+import { findDeclarationHeader, findParameterGroup, parameterNames, splitParameterList } from "./duplicates-params";
 
 // Re-exported for consumers that operate on parameter groups without touching
 // the tokenizer (single source of truth stays in duplicates-params.ts).
@@ -333,7 +339,16 @@ export function normalizeSymbolBody(
 	signature?: string | null
 ): NormalizedSymbolBody {
 	const tokens = tokenizeNormalized(source, language);
-	const group = findParameterGroup(tokens);
+	const header = findDeclarationHeader(tokens);
+	const group = header.group;
+
+	// The declaration's own name never decides whether two bodies match: a name
+	// that collides with ANOTHER language's keyword (`double`, `type`, `from`,
+	// `match`, …) would otherwise stay verbatim while its peer canonicalizes to
+	// ID, hiding an exact duplicate (FIX-023). Body keywords keep their verbatim
+	// treatment, so `if` vs `while` still separates.
+	const values = tokens.map((token) => token.value);
+	if (header.nameIndex !== null) values[header.nameIndex] = "ID";
 
 	let paramNames: string[] = [];
 	if (group) {
@@ -350,11 +365,11 @@ export function normalizeSymbolBody(
 
 	const canonicalTokens: string[] = [];
 	if (group) {
-		for (let i = 0; i < group.openIndex; i++) canonicalTokens.push(tokens[i].value);
+		for (let i = 0; i < group.openIndex; i++) canonicalTokens.push(values[i]);
 		canonicalTokens.push("(", "PARAMS", ")");
-		for (let i = group.closeIndex + 1; i < tokens.length; i++) canonicalTokens.push(tokens[i].value);
+		for (let i = group.closeIndex + 1; i < values.length; i++) canonicalTokens.push(values[i]);
 	} else {
-		for (const token of tokens) canonicalTokens.push(token.value);
+		canonicalTokens.push(...values);
 	}
 
 	return { canonicalTokens, paramNames, shingles: buildShingles(canonicalTokens) };

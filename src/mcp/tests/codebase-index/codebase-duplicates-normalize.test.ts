@@ -78,4 +78,28 @@ describe("duplicates normalization", () => {
 		expect(buildMergeHint("function", "exact", 1, diff)).toContain("optional params (extra optional)");
 		expect(buildMergeHint("function", "exact", 1, diff)).toContain("same body");
 	});
+
+	it("canonicalizes the declaration's own name when it collides with a keyword", () => {
+		const a = normalizeSymbolBody(["function double(a) {", "\treturn a + 1;", "}"].join("\n"), "typescript");
+		const b = normalizeSymbolBody(["function doubleAll(a) {", "\treturn a + 1;", "}"].join("\n"), "typescript");
+		expect(a.canonicalTokens).toEqual(b.canonicalTokens);
+	});
+
+	it("canonicalizes keyword-named arrow declarators", () => {
+		const a = normalizeSymbolBody("type = (a) => a + 1;", "typescript");
+		const b = normalizeSymbolBody("typeOf = (a) => a + 1;", "typescript");
+		expect(a.canonicalTokens).toEqual(b.canonicalTokens);
+	});
+
+	it("still separates a body-level keyword change", () => {
+		const a = normalizeSymbolBody(
+			["function first(a) {", "\tif (a) {", "\t\treturn a;", "\t}", "}"].join("\n"),
+			"typescript"
+		);
+		const b = normalizeSymbolBody(
+			["function second(a) {", "\twhile (a) {", "\t\treturn a;", "\t}", "}"].join("\n"),
+			"typescript"
+		);
+		expect(a.canonicalTokens).not.toEqual(b.canonicalTokens);
+	});
 });
