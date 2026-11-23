@@ -41,7 +41,8 @@ import { EnclosingSymbol, grepContent, findEnclosingSymbol } from "./code-search
 // dashboard service, codebase.read, and tests import from this module path).
 export { CodeSearchCache, codeSearchCache, clearCodeSearchCache } from "./code-search-cache";
 export { InvalidCodeSearchRegexError, compileCodeSearchRegex } from "./code-search-regex";
-export { LineMatch, EnclosingSymbol, grepContent, findEnclosingSymbol } from "./code-search-grep";
+export { grepContent, findEnclosingSymbol } from "./code-search-grep";
+export type { LineMatch, EnclosingSymbol } from "./code-search-grep";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
