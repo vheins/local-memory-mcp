@@ -109,7 +109,14 @@ describe("SQLiteStore derived schema", () => {
 
 			// Durable knowledge stays in the hot DB.
 			expect(mainTables.has("memories")).toBe(true);
-			expect(mainTables.has("coding_standards")).toBe(true);
+
+			// Standards live in their own domain file (five-file split, TASK-001):
+			// absent from `main`, present in the attached `standards` schema.
+			const standardsTables = tablesIn(store, "standards");
+			for (const table of ["coding_standards", "standard_tags", "standard_stack", "coding_standards_fts"]) {
+				expect(mainTables.has(table)).toBe(false);
+				expect(standardsTables.has(table)).toBe(true);
+			}
 		} finally {
 			store.close();
 		}

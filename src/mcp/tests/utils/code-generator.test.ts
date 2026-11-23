@@ -52,11 +52,14 @@ describe("generateNextCode", () => {
 		expect(sql).toContain("code");
 	});
 
-	it("uses the standard prefix and table", () => {
+	it("uses the standard prefix and the schema-qualified standards table", () => {
 		const { storage, prepare } = makeStorage(0);
 		expect(generateNextCode("o", "r", "standard", storage)).toBe("STD-001");
 		const sql = String(prepare.mock.calls[0][0]);
-		expect(sql).toContain("FROM coding_standards");
+		// `standards` is a non-core domain file (five-file split, TASK-001), so the
+		// emitted table is qualified per schema. The `memory` case above proves the
+		// `main` table stays unqualified — qualification is not globally switched off.
+		expect(sql).toContain("FROM standards.coding_standards");
 		expect(sql).toContain("code");
 	});
 

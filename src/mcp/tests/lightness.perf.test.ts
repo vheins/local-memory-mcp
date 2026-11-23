@@ -33,7 +33,7 @@ import { Outbox } from "../embedding-queue/outbox";
 import { memoryJobPayload } from "../embedding-queue/payloads";
 import { embedPayloadContentHash } from "../embedding-queue/content-hash";
 import { currentEmbeddingModelVersion } from "../storage/embedding-model";
-import { getVacuumState, shouldVacuum } from "../services/vacuum";
+import { getVacuumState, ensureIncrementalAutoVacuum, shouldVacuum } from "../services/vacuum";
 import { VACUUM_FREELIST_RATIO_THRESHOLD } from "../utils/constants";
 import {
 	RECALL_CORPUS,
@@ -158,7 +158,13 @@ describe("PERF-008 — startup backfill determinism (PERF-003)", () => {
 			expect(state.pageCount).toBeGreaterThan(0);
 			// freelistBytes is derived, not guessed.
 			expect(state.freelistBytes).toBe(state.freelistCount * state.pageSize);
-			expect(shouldVacuum(state, { freelistRatioThreshold: VACUUM_FREELIST_RATIO_THRESHOLD })).toBe(false);
+			// A brand-new store is NOT compact: the five-file domain migration
+			// (TASK-001) creates the domain tables in `main`, copies them out and
+			// drops the originals, so the drop residue becomes freelist pages. The
+			// baseline is measured from that behaviour (never a hard 0), and the
+			// helper must flag it at the default threshold.
+			expect(state.freelistCount).toBeGreaterThan(0);
+			expect(shouldVacuum(state, { freelistRatioThreshold: VACUUM_FREELIST_RATIO_THRESHOLD })).toBe(true);
 
 			// Delete a batch to free pages into the freelist, then confirm the
 			// helper reports growth (a fresh DB has a non-trivial schema, so the
@@ -178,6 +184,14 @@ describe("PERF-008 — startup backfill determinism (PERF-003)", () => {
 			console.log(
 				`[PERF-008] temp db bytes=${fileBytes} pageCount=${after.pageCount} freelist=${after.freelistCount} freelistBytes=${after.freelistBytes}`
 			);
+
+			// The reclamation path clears the flag: the guarded conversion
+			// (`auto_vacuum=INCREMENTAL` + full VACUUM) rewrites `main` compactly, so
+			// the post-migration steady state no longer trips the threshold.
+			expect(ensureIncrementalAutoVacuum(db)).toEqual({ changed: true, skipped: false });
+			const compacted = getVacuumState(db);
+			expect(compacted.freelistCount).toBe(0);
+			expect(shouldVacuum(compacted, { freelistRatioThreshold: VACUUM_FREELIST_RATIO_THRESHOLD })).toBe(false);
 		} finally {
 			db.close();
 		}
