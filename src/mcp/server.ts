@@ -45,6 +45,22 @@ if (process.argv.includes("--daemon-worker")) {
 	await runDaemonWorker();
 	// runDaemonWorker never resolves — unreachable
 }
+
+// --- Root CLI (TASK-011) ---
+// The user-facing command surface — `help`, `--version`, `about`, `tools …` and
+// every MCP tool as its own top-level command — is resolved HERE, before any
+// store is opened and before the daemon/doctor/--index branches below.
+//
+// `runRootCli` answers `{ handled: false }` for anything it does not own, so
+// those branches and the no-arg stdio server keep their exact pre-CLI behaviour.
+// The length guard keeps a zero-argument launch (the normal MCP client path)
+// from paying for the import at all.
+if (process.argv.length > 2) {
+	const { runRootCli } = await import("./cli/root");
+	const rootResult = await runRootCli(process.argv.slice(2));
+	if (rootResult.handled) process.exit(rootResult.exitCode);
+}
+
 if (process.argv.includes("daemon")) {
 	const { runDaemonCli } = await import("./cli/daemon");
 	// runDaemonCli always calls process.exit — unreachable

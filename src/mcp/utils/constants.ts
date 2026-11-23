@@ -762,6 +762,13 @@ export const LOCAL_MEMORY_DEFAULT_REPO = envStr("LOCAL_MEMORY_DEFAULT_REPO");
 // "owner/repo". Accepted as a single combined source (split on the first "/").
 export const GITHUB_REPOSITORY = envStr("GITHUB_REPOSITORY");
 
+// ── Combined daemon / dashboard listener port (FEAT-DAEMON-001, TASK-011) ────
+// The combined dashboard + MCP daemon and the standalone dashboard both bind
+// this port by default (`PORT` overrides it). Declared once here so the CLI's
+// daemon MCP URL (`cli/tool-transport.ts`) and the listener itself
+// (`cli/combined-server.ts`, which re-exports this value) can never drift apart.
+export const DAEMON_DEFAULT_PORT = 3456;
+
 // ── MCP Streamable HTTP transport (opt-in) ────────────────────────────────
 // A single long-lived daemon can serve MANY MCP clients over Streamable HTTP
 // instead of each client spawning its own stdio server process, removing

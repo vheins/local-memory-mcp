@@ -48,7 +48,12 @@ import { scheduleDeferredSemanticWarmup } from "../services/startup-warmup";
 import { scheduleDeferredStartupPasses } from "../services/startup-deferral";
 import type { DeferredStartupPass } from "../services/startup-deferral";
 import { kickOffStartupAutoIndex } from "../services/startup-auto-index";
-import { EMBEDDING_LAZY_WARMUP, MCP_DAEMON_SESSION_IDLE_TTL_MS, VACUUM_ON_STARTUP } from "../utils/constants";
+import {
+	DAEMON_DEFAULT_PORT,
+	EMBEDDING_LAZY_WARMUP,
+	MCP_DAEMON_SESSION_IDLE_TTL_MS,
+	VACUUM_ON_STARTUP
+} from "../utils/constants";
 import { getCodebaseParserPool } from "../codebase-index/parser/singleton";
 import { closeProcessPools } from "../services/shutdown-teardown";
 import { FileWatcher } from "../codebase-index/services/file-watcher";
@@ -58,8 +63,14 @@ import type { SQLiteStore } from "../storage/sqlite";
 import type { RuntimeCapabilityRegistry } from "../runtime-capabilities";
 import type { VectorStore } from "../types";
 
-/** Default combined-server port — shared with the standalone dashboard. */
-export const DAEMON_DEFAULT_PORT = 3456;
+/**
+ * Default combined-server port — shared with the standalone dashboard.
+ *
+ * The value is owned by `utils/constants.ts` (TASK-011) so the CLI's daemon MCP
+ * URL resolves the same default; re-exported here because every caller in this
+ * module (and the daemon tests) imports it from the combined-server surface.
+ */
+export { DAEMON_DEFAULT_PORT };
 
 /** The minimal worker surface the combined server needs for lifecycle control. */
 interface WorkerLike {

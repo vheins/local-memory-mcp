@@ -25,7 +25,7 @@ import { SessionContext } from "./session";
 import { logger } from "./utils/logger";
 import { logToolAction } from "./utils/action-log";
 import { getPrompt, listPrompts } from "./prompts/registry";
-import { TOOL_DEFINITIONS } from "./tools/tool-definitions";
+import { getAvailableToolDefinitions } from "./tools/tool-availability";
 import { complete, type CompletionRequest } from "./completion";
 import { normalizeToolArguments } from "./utils/normalize-args";
 import { buildExecutors } from "./tools";
@@ -272,12 +272,8 @@ function listTools(session: SessionContext | undefined, params: Record<string, u
 	};
 }
 
-function getAvailableToolDefinitions(session?: SessionContext) {
-	return TOOL_DEFINITIONS.filter((tool) => {
-		if (tool.name === "synthesize" && !session?.supportsSampling) {
-			return false;
-		}
-
-		return true;
-	});
-}
+/**
+ * Removed: the capability filter now lives in `tools/tool-availability.ts`,
+ * beside the definitions it filters, so the root CLI can build its command
+ * surface without loading this router's executor graph.
+ */

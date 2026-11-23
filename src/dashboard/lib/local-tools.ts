@@ -1,5 +1,6 @@
 /**
- * In-process MCP tool dispatch for the dashboard (FIX-013).
+ * In-process MCP tool dispatch for the dashboard (FIX-013) and the root CLI
+ * (TASK-011).
  *
  * A standalone dashboard (`src/dashboard/server.ts`) is the single owner of its
  * `SQLiteStore` (FIX-008). Its MCP-dependent routes — task update, bulk status,
@@ -58,20 +59,63 @@ import { db, vectors } from "./context";
  * passes (explicit owner/repo), with the local session's CWD-derived owner/repo
  * only as a fallback.
  */
-const session: SessionContext = { ...createSessionContext("http"), clientName: "dashboard" };
-
 /**
- * The executor map, built ONCE for the process lifetime.
+ * Extra knobs for a caller that is not the dashboard itself (TASK-011).
  *
- * `buildExecutors` is a pure factory: it closes over the session and returns
- * the same handlers every transport dispatches, with no per-call state. Building
- * it once at module load keeps executor identity stable and stops every call
- * from paying for a rebuild.
+ * The dashboard's default session keeps the historical `http` label: its write
+ * guard refuses an undeterminable scope instead of guessing the daemon CWD. The
+ * root CLI is the opposite shape of caller — one client per process, whose
+ * working directory IS that client's project — so it asks for the `stdio` label,
+ * which is exactly what an MCP client that spawns the stdio server gets.
  */
-const executors = buildExecutors(session);
+export interface LocalToolCallOptions {
+	/** Session label driving the scope-resolution rules (default `"http"`). */
+	transport?: "stdio" | "http";
+	/** Attribution name recorded on writes (default `"dashboard"`). */
+	clientName?: string;
+}
+
+/** One session plus the executor map built for it. */
+interface Dispatch {
+	session: SessionContext;
+	executors: ReturnType<typeof buildExecutors>;
+}
+
+/** Build a session-labelled executor set. */
+function buildDispatch(transport: "stdio" | "http", clientName: string): Dispatch {
+	const session: SessionContext = { ...createSessionContext(transport), clientName };
+	return { session, executors: buildExecutors(session) };
+}
 
 /**
- * Dispatch a canonical MCP tool name in-process against the dashboard store.
+ * Dispatches are keyed by (transport, clientName) and built at most once each.
+ *
+ * `buildExecutors` is a pure factory: it closes over the session and returns the
+ * same handlers every transport dispatches, with no per-call state. The
+ * dashboard default is resolved at MODULE LOAD (FIX-026) so executor identity
+ * stays stable for every request; the CLI adds one further entry on its first
+ * call, and that process exits right after.
+ */
+const dispatchCache = new Map<string, Dispatch>();
+
+/** Resolve (and memoize) the dispatch for the requested caller identity. */
+function resolveDispatch(options?: LocalToolCallOptions): Dispatch {
+	const transport = options?.transport ?? "http";
+	const clientName = options?.clientName ?? "dashboard";
+	const key = `${transport}\u0000${clientName}`;
+	const cached = dispatchCache.get(key);
+	if (cached) return cached;
+	const dispatch = buildDispatch(transport, clientName);
+	dispatchCache.set(key, dispatch);
+	return dispatch;
+}
+
+// The dashboard's own dispatch, built at module load exactly as before FIX-026.
+resolveDispatch();
+
+/**
+ * Dispatch a canonical MCP tool name in-process and return the FULL MCP
+ * response envelope (`content` + `structuredContent` + `isError`).
  *
  * Legacy names are normalized first (`task-update` → `task-write`,
  * `claim-release` → `claim-manage`, dots → hyphens), matching the router, so
@@ -79,14 +123,23 @@ const executors = buildExecutors(session);
  *
  * Failures are surfaced as a thrown {@link ToolError} carrying the canonical
  * envelope's `code` + `message` and the sanitized (non-secret) message, so a
- * caller can map the failure to its own error shape.
+ * caller can map the failure to its own error shape. A handler that RETURNS an
+ * error envelope is not a throw: it comes back with `isError: true`, which is
+ * why the CLI needs this variant instead of {@link callLocalTool}.
  *
  * @param toolName Canonical or legacy tool name (`memory-read`, `task-update`, …).
  * @param args     Raw tool arguments, normalized exactly as an MCP client would.
- * @returns The tool's structured payload (`McpResponse.structuredContent`).
+ * @param options  Caller identity (session label + attribution name); defaults
+ *                 to the dashboard's own dispatch.
+ * @returns The tool's {@link McpResponse}, error envelopes included.
  * @throws {ToolError} When the tool is unknown or the handler fails.
  */
-export async function callLocalTool(toolName: string, args: Record<string, unknown> = {}): Promise<unknown> {
+export async function callLocalToolResponse(
+	toolName: string,
+	args: Record<string, unknown> = {},
+	options: LocalToolCallOptions = {}
+): Promise<McpResponse> {
+	const { session, executors } = resolveDispatch(options);
 	const rawName = toolName.replace(/\./g, "-");
 	const name = TOOL_ALIASES[rawName] ?? rawName;
 	const executor = executors[name];
@@ -154,5 +207,19 @@ export async function callLocalTool(toolName: string, args: Record<string, unkno
 	});
 	reuseTelemetry.flushIfNeeded(db);
 
-	return response.structuredContent;
+	return response;
+}
+
+/**
+ * Dispatch a canonical MCP tool name in-process and return only its structured
+ * payload (`McpResponse.structuredContent`) — the dashboard's historical
+ * contract, unchanged.
+ *
+ * @param toolName Canonical or legacy tool name (`memory-read`, `task-update`, …).
+ * @param args     Raw tool arguments, normalized exactly as an MCP client would.
+ * @returns The tool's structured payload, or `undefined` when it produced none.
+ * @throws {ToolError} When the tool is unknown or the handler fails.
+ */
+export async function callLocalTool(toolName: string, args: Record<string, unknown> = {}): Promise<unknown> {
+	return (await callLocalToolResponse(toolName, args)).structuredContent;
 }

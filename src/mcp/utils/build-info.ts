@@ -166,3 +166,46 @@ export function formatBuildInfo(info: BuildInfo = getBuildInfo()): string {
 	const built = info.builtAt !== null ? ` built ${info.builtAt}` : "";
 	return `${info.version}${sha} [${info.source}${built}]`;
 }
+
+/** Package identity the CLI prints in `--version` and `about` (TASK-011). */
+export interface PackageMeta {
+	/** Package name as published, e.g. `@vheins/local-memory-mcp`. */
+	name: string;
+	/** Semver from `package.json`, or the build identity's version as fallback. */
+	version: string;
+	/** SPDX license identifier, or `null` when unreadable. */
+	license: string | null;
+	/** Browseable repository URL, or `null` when unreadable. */
+	repository: string | null;
+	/** Documentation/homepage URL, or `null` when unreadable. */
+	homepage: string | null;
+}
+
+/** Normalize a `repository` field (string or `{url}` object) to an https URL. */
+function asRepositoryUrl(value: unknown): string | null {
+	const raw =
+		typeof value === "string"
+			? value
+			: value !== null && typeof value === "object"
+				? asNonEmptyString((value as { url?: unknown }).url)
+				: null;
+	if (!raw) return null;
+	return raw
+		.replace(/^git\+/, "")
+		.replace(/^git:\/\//, "https://")
+		.replace(/^ssh:\/\/git@/, "https://")
+		.replace(/\.git$/, "")
+		.replace(/^git@github\.com:/, "https://github.com/");
+}
+
+/** Resolve package metadata by walking up to `package.json`. Never throws. */
+export function resolvePackageMeta(startDir: string = MODULE_DIR): PackageMeta {
+	const pkg = readJsonObject(findUpwards(startDir, "package.json") ?? "") ?? {};
+	return {
+		name: asNonEmptyString(pkg.name) ?? "local-memory-mcp",
+		version: asNonEmptyString(pkg.version) ?? getBuildInfo().version,
+		license: asNonEmptyString(pkg.license),
+		repository: asRepositoryUrl(pkg.repository),
+		homepage: asNonEmptyString(pkg.homepage)
+	};
+}

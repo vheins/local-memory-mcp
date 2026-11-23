@@ -174,10 +174,10 @@ wins). `configDir` defaults to `~/.config/local-memory-mcp`.
 
 #### Environment variables
 
-| Variable                    | Default | Description                                    |
-| :-------------------------- | :------ | :--------------------------------------------- |
-| `PORT`                      | `3456`  | Port for the combined daemon (MCP + dashboard) |
-| `MEMORY_DB_BUSY_TIMEOUT_MS` | `30000` | SQLite busy timeout in ms                      |
+| Variable                    | Default | Description                                                                                                                                                            |
+| :-------------------------- | :------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                      | `3456`  | Port for the combined daemon (MCP + dashboard)                                                                                                                         |
+| `MEMORY_DB_BUSY_TIMEOUT_MS` | `30000` | SQLite busy timeout in ms                                                                                                                                              |
 | `LOCAL_MEMORY_DISPLAY_TZ`   | —       | IANA zone (e.g. `Asia/Jakarta`) for timestamps in tool text output, rendered as `YYYY-MM-DD HH:mm:ss ±HH:MM`. Unset/invalid keeps raw ISO-8601 UTC. Storage stays UTC. |
 
 #### Notes
@@ -185,6 +185,50 @@ wins). `configDir` defaults to `~/.config/local-memory-mcp`.
 - The daemon binds to `127.0.0.1` (loopback) only — not accessible from other machines.
 - All sessions share one SQLite database; concurrent writes use bounded jittered retry so `SQLITE_BUSY` errors no longer surface under multi-client load.
 - Logs are written to `~/.config/local-memory-mcp/daemon.log`.
+
+### ⌨️ Command line
+
+Every MCP tool is also a shell command, so you can query and maintain the database
+without wiring up an MCP client:
+
+```bash
+local-memory-mcp --help                 # every command, grouped by category
+local-memory-mcp help memory-read       # one tool's generated flag table
+local-memory-mcp about --json           # version, build stamp, DB path, daemon status
+
+# Tool parameters are named flags derived from the tool's input schema
+local-memory-mcp memory-read --code MEM-024
+local-memory-mcp memory-read --query auth --limit 5 --json
+local-memory-mcp task-write --title "Wire the parser" --phase Implementation
+local-memory-mcp codebase-read --content "callLocalTool" --repo vheins/local-memory-mcp
+```
+
+Whole arguments can also come from one place — `--args '<json>'` or
+`--input <file|->` — and `--arg key=value` reaches a key the schema does not
+declare. Named flags win over the payload key by key, and the CLI says so on
+stderr unless you pass `--quiet`.
+
+```bash
+cat args.json | local-memory-mcp task-read --input -
+local-memory-mcp tools call task-read --args '{"status":"pending","limit":3}'
+```
+
+The `tools` group is the generic form of the same command (`tools list`,
+`tools describe <name>`, `tools call <name>`), handy for scripts that build
+argument payloads dynamically. `--json` prints the tool's `structuredContent`;
+where a tool declares its own `json` field, the CLI sets it for you.
+
+| Exit | Meaning                                                  |
+| :--- | :------------------------------------------------------- |
+| `0`  | success                                                  |
+| `1`  | runtime error (tool error, unreachable daemon)           |
+| `2`  | usage error (unknown command/flag, missing required arg) |
+
+Data goes to stdout and diagnostics to stderr. If the daemon is running the
+command talks to its MCP endpoint (`http://127.0.0.1:$PORT/mcp`, with
+`DASHBOARD_TOKEN` when set) instead of opening the database: a second writer over
+the same SQLite file stalls every client, so a failed connection is an error, not
+a fallback. With no daemon the command runs in-process against the same dispatcher.
 
 ### 🧠 How It Works (Important Insight)
 
