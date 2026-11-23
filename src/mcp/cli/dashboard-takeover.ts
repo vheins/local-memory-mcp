@@ -169,6 +169,48 @@ export function isDbWriteLockHeld(dbPath: string): boolean {
 	}
 }
 
+/**
+ * Path of the proper-lockfile lock directory for a database file.
+ *
+ * proper-lockfile creates `<db>.lock` as a DIRECTORY (`mkdir` is its atomic
+ * acquire), so the takeover must clean that exact path, not a sibling file.
+ */
+function resolveLockFilePath(dbPath: string): string {
+	return `${dbPath}.lock`;
+}
+
+/** Whether the write-lock directory exists, regardless of staleness. */
+function lockFileExists(dbPath: string): boolean {
+	return fs.existsSync(resolveLockFilePath(dbPath));
+}
+
+/**
+ * Remove the write lock a confirmed-dead holder left behind.
+ *
+ * Only safe under conditions the takeover already established: the holder was
+ * identity-checked and is confirmed dead, and proper-lockfile permits exactly
+ * one holder, so a lock directory that existed BEFORE the kill and whose mtime
+ * is not newer than the kill cannot belong to another live process. A lock that
+ * appeared or was refreshed after the kill belongs to someone else and is left
+ * untouched.
+ *
+ * @returns Whether the orphaned lock was removed.
+ */
+function removeOrphanedLockFile(dbPath: string, existedBeforeKill: boolean, killConfirmedAt: number): boolean {
+	if (!existedBeforeKill) return false;
+	const lockPath = resolveLockFilePath(dbPath);
+	try {
+		const { mtimeMs } = fs.statSync(lockPath);
+		if (mtimeMs > killConfirmedAt) return false;
+		// The lock is a directory; rmdir fails (and we leave it alone) if a foreign
+		// entry appeared inside it.
+		fs.rmdirSync(lockPath);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 /** Injectable seams for {@link takeOverDatabaseFromStandaloneDashboard}. */
 export interface DashboardTakeoverIo {
 	env?: NodeJS.ProcessEnv;
@@ -269,13 +311,21 @@ export function formatSurvivedSignals(pid: number): string {
 	].join("\n");
 }
 
-/** Fail-fast message: the process is gone but the write lock is still held. */
-export function formatLockStillHeld(dbPath: string, pid: number): string {
+/**
+ * Fail-fast message: the confirmed dashboard is gone but the database is still
+ * write-locked.
+ *
+ * The PID is named as the process that was stopped, never as the current holder:
+ * it is confirmed dead, so it cannot be holding anything.
+ */
+export function formatLockStillHeld(dbPath: string, stoppedPid: number): string {
 	return [
-		`Cannot start the daemon: ${dbPath} is still write-locked after stopping the standalone dashboard (pid ${pid}).`,
-		`Lock file: ${dbPath}.lock`,
+		`Cannot start the daemon: ${dbPath} is still write-locked.`,
+		`The standalone dashboard (pid ${stoppedPid}) this start stopped is confirmed dead, so it is not the holder.`,
+		`Lock file: ${resolveLockFilePath(dbPath)}. It appeared or was refreshed after the dashboard exited,`,
+		"or it could not be removed.",
 		"",
-		"Find and stop the remaining holder, then retry `local-memory-mcp daemon start`:",
+		"Another process now owns the database. Find it and stop it, then retry `local-memory-mcp daemon start`:",
 		`  lsof ${dbPath}`,
 		""
 	].join("\n");
@@ -371,6 +421,9 @@ export async function takeOverDatabaseFromStandaloneDashboard(
 	}
 
 	// Identity confirmed: SIGTERM, then bounded wait for the process to exit.
+	// Record whether a lock already exists first: only a lock that predates the
+	// kill can be the dead holder's orphan (a later one belongs to someone else).
+	const lockExistedBeforeKill = lockFileExists(dbPath);
 	const startedAt = Date.now();
 	try {
 		kill(markerPid, "SIGTERM");
@@ -398,6 +451,15 @@ export async function takeOverDatabaseFromStandaloneDashboard(
 
 	// The process is gone; its marker is stale whichever signal ended it.
 	removePidFileIfOwner(pidFile, markerPid);
+
+	// A dashboard killed mid-`withExclusiveLock` leaves its lock directory behind,
+	// and that directory still reads "held" for the full staleness window (30s).
+	// Waiting it out would break the <10s takeover budget, so drop the orphan when
+	// the guards in `removeOrphanedLockFile` prove it is the dead holder's.
+	const killConfirmedAt = Date.now();
+	if (removeOrphanedLockFile(dbPath, lockExistedBeforeKill, killConfirmedAt)) {
+		log(`[takeover] removed the orphaned write lock left by pid ${markerPid} (${resolveLockFilePath(dbPath)})`);
+	}
 
 	// The database must be free before the caller forks a second writer.
 	const lockCleared = await waitFor(() => !isLockHeld(dbPath), lockTimeoutMs, pollIntervalMs, sleep);

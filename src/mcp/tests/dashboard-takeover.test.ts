@@ -376,7 +376,81 @@ describe("daemon start takeover (FIX-009)", () => {
 			takeOverDatabaseFromStandaloneDashboard(
 				takeoverIo({ env, dbPath, kill, isAlive: () => alive, isLockHeld: () => true })
 			)
-		).rejects.toThrow(new RegExp(`still write-locked after stopping the standalone dashboard \\(pid 4242\\)`));
+		).rejects.toThrow(/still write-locked[\s\S]*pid 4242[\s\S]*confirmed dead/);
+	});
+
+	it("removes the orphaned lock the stopped dashboard left behind", async () => {
+		const { marker, dbPath, env } = setup();
+		writePidFile(marker, 4242);
+		// The killed holder refreshed the lock a second before it died.
+		const lockDir = `${dbPath}.lock`;
+		mkdirSync(lockDir);
+		const refreshed = new Date(Date.now() - 1_000);
+		utimesSync(lockDir, refreshed, refreshed);
+		let alive = true;
+		const kill = vi.fn(() => {
+			alive = false;
+		});
+		const logs: string[] = [];
+
+		const outcome = await takeOverDatabaseFromStandaloneDashboard(
+			takeoverIo({
+				env,
+				dbPath,
+				kill,
+				isAlive: () => alive,
+				isLockHeld: isDbWriteLockHeld,
+				log: (line) => logs.push(line)
+			})
+		);
+
+		expect(outcome).toMatchObject({ kind: "taken-over", pid: 4242, signal: "SIGTERM" });
+		expect(existsSync(lockDir)).toBe(false);
+		expect(logs.join("\n")).toMatch(/removed the orphaned write lock left by pid 4242/);
+	});
+
+	it("never removes a lock that appeared after the kill", async () => {
+		const { marker, dbPath, env } = setup();
+		writePidFile(marker, 4242);
+		const lockDir = `${dbPath}.lock`;
+		let alive = true;
+		const kill = vi.fn((_pid: number, signal: NodeJS.Signals) => {
+			if (signal !== "SIGTERM") return;
+			alive = false;
+			// A third writer takes the database while the dashboard dies.
+			mkdirSync(lockDir);
+		});
+
+		const error = await takeOverDatabaseFromStandaloneDashboard(
+			takeoverIo({ env, dbPath, kill, isAlive: () => alive, isLockHeld: isDbWriteLockHeld })
+		).catch((caught: Error) => caught);
+
+		expect(error).toBeInstanceOf(Error);
+		// The stopped PID is dead, so the message must not name it as the holder.
+		expect((error as Error).message).toMatch(/confirmed dead, so it is not the holder/);
+		expect(existsSync(lockDir)).toBe(true);
+	});
+
+	it("never removes a lock refreshed after the kill", async () => {
+		const { marker, dbPath, env } = setup();
+		writePidFile(marker, 4242);
+		const lockDir = `${dbPath}.lock`;
+		mkdirSync(lockDir);
+		let alive = true;
+		const kill = vi.fn((_pid: number, signal: NodeJS.Signals) => {
+			if (signal !== "SIGTERM") return;
+			alive = false;
+			// Another process refreshed the same path after the dashboard died.
+			const later = new Date(Date.now() + 5_000);
+			utimesSync(lockDir, later, later);
+		});
+
+		await expect(
+			takeOverDatabaseFromStandaloneDashboard(
+				takeoverIo({ env, dbPath, kill, isAlive: () => alive, isLockHeld: isDbWriteLockHeld })
+			)
+		).rejects.toThrow(/confirmed dead, so it is not the holder/);
+		expect(existsSync(lockDir)).toBe(true);
 	});
 
 	it("treats an absent lock file as free", () => {
