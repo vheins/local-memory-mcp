@@ -13,9 +13,10 @@
  * Uses createTestStore (in-memory SQLite, migrations incl. v15 FTS index).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { SQLiteStore, createTestStore } from "../storage/sqlite";
 import { KG_MAX_CONTEXT_ENTITIES } from "../utils/constants";
+import { logger } from "../utils/logger";
 
 let db: SQLiteStore;
 const REPO = "repo-alpha";
@@ -111,6 +112,11 @@ describe("getEntityNamesByText — repo scoping", () => {
 });
 
 describe("getEntityNamesByText — no-index INSTR fallback", () => {
+	// The production warn (queries.ts:211) is emitted once per fallback query.
+	// Assert it fired so the test proves the fallback PATH was taken, and
+	// suppress the emission so the suite log stays clean.
+	const FALLBACK_WARN = "[KG] FTS entity-name lookup failed, falling back to bounded INSTR";
+
 	function dropFtsIndex(): void {
 		db.db.exec(`
 			DROP TRIGGER IF EXISTS entity_names_fts_ai;
@@ -120,6 +126,10 @@ describe("getEntityNamesByText — no-index INSTR fallback", () => {
 		`);
 	}
 
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it("falls back to a LIMIT-bounded INSTR scan when the FTS index is absent", () => {
 		createEntity("Alpha");
 		createEntity("Beta");
@@ -128,9 +138,13 @@ describe("getEntityNamesByText — no-index INSTR fallback", () => {
 		createEntity("Epsilon");
 		dropFtsIndex();
 
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
 		// Queries the entities table with LIMIT even when 100% match.
 		const result = db.knowledgeGraph.getEntityNamesByText(REPO, "Alpha Beta Gamma Delta Epsilon", 3);
 		expect(result).toHaveLength(3);
+		// The logger.warn proves the fallback PATH ran (index absent), not only the shape.
+		expect(warnSpy).toHaveBeenCalledWith(FALLBACK_WARN, expect.objectContaining({ error: expect.any(String) }));
 	});
 
 	it("keeps the fallback repo-scoped", () => {
@@ -139,17 +153,23 @@ describe("getEntityNamesByText — no-index INSTR fallback", () => {
 		createEntity("Alpha Gateway", "repoB");
 		dropFtsIndex();
 
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
 		const result = db.knowledgeGraph.getEntityNamesByText("repoA", "Alpha", 5);
 		expect(result).toEqual(["Alpha"]);
+		expect(warnSpy).toHaveBeenCalledWith(FALLBACK_WARN, expect.objectContaining({ error: expect.any(String) }));
 	});
 
 	it("INSTR fallback is substring-based (retains old semantics when index missing)", () => {
 		createEntity("Payment Service");
 		dropFtsIndex();
 
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
 		// INSTR is a contiguous substring match of the raw text — the name is a
 		// substring of the text → matched (keyword boundary not required).
 		const result = db.knowledgeGraph.getEntityNamesByText(REPO, "Check the Payment Service subsystem", 10);
 		expect(result).toContain("Payment Service");
+		expect(warnSpy).toHaveBeenCalledWith(FALLBACK_WARN, expect.objectContaining({ error: expect.any(String) }));
 	});
 });
