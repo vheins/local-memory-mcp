@@ -18,8 +18,8 @@ export const RESERVED_GLOBALS: readonly ReservedGlobal[] = [
 	{ name: "verbose", alias: "debug", takesValue: false, description: "Extra diagnostics on stderr" },
 	{ name: "no-color", alias: "plain", takesValue: false, description: "No colour (also honoured via NO_COLOR)" },
 	{ name: "timeout", alias: "timeout-ms", takesValue: true, description: "Per-call timeout in milliseconds" },
-	{ name: "help", alias: "usage", takesValue: false, description: "Print help for this command" },
-	{ name: "version", alias: "ver", takesValue: false, description: "Print '<name> <semver>'" },
+	{ name: "help", alias: "usage", short: "h", takesValue: false, description: "Print help for this command" },
+	{ name: "version", alias: "ver", short: "V", takesValue: false, description: "Print '<name> <semver>'" },
 	{ name: "args", alias: "args-json", takesValue: true, description: "Whole argument payload as one JSON object" },
 	{
 		name: "input",
@@ -50,6 +50,7 @@ export function toEffective(global: ReservedGlobal): EffectiveGlobal {
 		name: global.name,
 		flag: `--${global.name}`,
 		alias: `--${global.alias}`,
+		short: global.short ? `-${global.short}` : null,
 		takesValue: global.takesValue,
 		description: global.description,
 		shadowed: false

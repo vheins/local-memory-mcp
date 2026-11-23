@@ -69,6 +69,8 @@ export interface ReservedGlobal {
 	name: string;
 	/** Spelling used when a tool property claims `name`. */
 	alias: string;
+	/** Conventional single-dash spelling (`-h`, `-V`), when the global has one. */
+	short?: string;
 	/** Whether the flag consumes the next token (or an `=value`). */
 	takesValue: boolean;
 	/** Help text for the flag table. */
@@ -104,6 +106,8 @@ export interface EffectiveGlobal {
 	flag: string;
 	/** The secondary spelling, equal to `flag` when the canonical one is owned by a param. */
 	alias: string;
+	/** Conventional single-dash spelling (`-h`, `-V`), or null when it has none. */
+	short: string | null;
 	takesValue: boolean;
 	description: string;
 	/** Whether a tool parameter claimed the default spelling. */
@@ -175,6 +179,7 @@ export function deriveToolFlagModel(tool: CliTool): ToolFlagModel {
 			name: global.name,
 			flag: shadowed ? `--${global.alias}` : `--${global.name}`,
 			alias: `--${global.alias}`,
+			short: global.short ? `-${global.short}` : null,
 			takesValue: global.takesValue,
 			description: global.description,
 			shadowed
@@ -202,6 +207,11 @@ export function deriveToolFlagModel(tool: CliTool): ToolFlagModel {
 		if (!lookup.has(bare(global.flag))) lookup.set(bare(global.flag), { kind: "global", global });
 		const alias = `--${aliasFor(global.name)}`;
 		if (!lookup.has(bare(alias))) lookup.set(bare(alias), { kind: "global", global });
+		// `-h` / `-V` are real globals, not decoration: they must resolve here too,
+		// or `memory-read -h` would fail as an unknown flag.
+		if (global.short !== null && !lookup.has(bare(global.short))) {
+			lookup.set(bare(global.short), { kind: "global", global });
+		}
 	}
 
 	return { flags, globals, lookup, collisions };
@@ -270,13 +280,14 @@ export function parseToolInvocation(
 			);
 		}
 		const eq = token.indexOf("=");
-		const spelling = bare(eq === -1 ? token : token.slice(0, eq));
+		const head = eq === -1 ? token : token.slice(0, eq);
+		const spelling = bare(head);
 		const inline = eq === -1 ? null : token.slice(eq + 1);
 		const entry = model.lookup.get(spelling);
 		if (!entry) throw new UsageError(unknownFlagMessage(spelling, model));
 
 		if (entry.kind === "global") {
-			index += applyGlobal(entry.global as EffectiveGlobal, inline, tokens, index, state, ctx);
+			index += applyGlobal(head, entry.global as EffectiveGlobal, inline, tokens, index, state, ctx);
 			continue;
 		}
 
@@ -319,8 +330,9 @@ export function parseToolInvocation(
 /**
  * Consume leading global flags before a built-in command word.
  *
- * Built-ins have no schema, so no relocation applies: the reserved spellings are
- * used verbatim and the first non-global token ends the scan.
+ * Built-ins have no schema, so no relocation applies: every reserved spelling is
+ * accepted under its canonical name, its alias (`--json-out`) and its short form
+ * (`-h`, `-V`), and the first non-flag token ends the scan.
  *
  * @returns The index of the first token that is not a leading global flag.
  */
@@ -336,16 +348,24 @@ export function scanLeadingGlobals(tokens: readonly string[], flags: GlobalFlags
 	let index = 0;
 	while (index < tokens.length) {
 		const token = tokens[index];
-		if (!token.startsWith("--")) break;
 		const eq = token.indexOf("=");
-		const spelling = bare(eq === -1 ? token : token.slice(0, eq));
-		const reserved = RESERVED_GLOBALS.find((candidate) => candidate.name === spelling);
+		const head = eq === -1 ? token : token.slice(0, eq);
+		// Only flag-shaped tokens are globals: the bare words `help` and `version`
+		// are commands, not flags.
+		if (!head.startsWith("-")) break;
+		const name = bare(head);
+		// Long spellings match by name or relocation alias; `-h` / `-V` match their
+		// conventional short form.
+		const reserved =
+			RESERVED_GLOBALS.find((candidate) => candidate.short !== undefined && `-${candidate.short}` === head) ??
+			RESERVED_GLOBALS.find((candidate) => candidate.name === name) ??
+			RESERVED_GLOBALS.find((candidate) => candidate.alias === name);
 		if (!reserved) break;
 		const inline = eq === -1 ? null : token.slice(eq + 1);
 		// The flag token itself is consumed here; `applyGlobal` reports only the
 		// EXTRA tokens a space-separated value takes. Without the +1 a bare switch
 		// would leave `index` unchanged and spin forever.
-		index += 1 + applyGlobal(toEffective(reserved), inline, tokens, index, state, ctx);
+		index += 1 + applyGlobal(head, toEffective(reserved), inline, tokens, index, state, ctx);
 	}
 	return index;
 }
@@ -353,10 +373,13 @@ export function scanLeadingGlobals(tokens: readonly string[], flags: GlobalFlags
 /**
  * Apply one global flag token to the parse state.
  *
+ * @param typed - The token as the user typed it (no `=value`), used to name the
+ *                flag in errors so an alias or `-h` is reported as typed.
  * @returns How many EXTRA tokens the flag consumed (0 for switches, 1 for a
  *          space-separated value).
  */
 function applyGlobal(
+	typed: string,
 	global: EffectiveGlobal,
 	inline: string | null,
 	tokens: readonly string[],
@@ -366,22 +389,22 @@ function applyGlobal(
 ): number {
 	switch (global.name) {
 		case "json":
-			state.flags.json = true;
+			state.flags.json = inline === null ? true : coerceBoolean(inline, typed);
 			return 0;
 		case "quiet":
-			state.flags.quiet = true;
+			state.flags.quiet = inline === null ? true : coerceBoolean(inline, typed);
 			return 0;
 		case "verbose":
-			state.flags.verbose = true;
+			state.flags.verbose = inline === null ? true : coerceBoolean(inline, typed);
 			return 0;
 		case "no-color":
-			state.flags.noColor = true;
+			state.flags.noColor = inline === null ? true : coerceBoolean(inline, typed);
 			return 0;
 		case "help":
-			state.flags.help = true;
+			state.flags.help = inline === null ? true : coerceBoolean(inline, typed);
 			return 0;
 		case "version":
-			state.flags.version = true;
+			state.flags.version = inline === null ? true : coerceBoolean(inline, typed);
 			return 0;
 		case "timeout": {
 			const raw = inline ?? takeFlagValue(global.name, tokens, index + 1);

@@ -14,7 +14,9 @@ import {
 	RESERVED_GLOBAL_NAMES,
 	UsageError,
 	deriveToolFlagModel,
+	emptyGlobalFlags,
 	parseToolInvocation,
+	scanLeadingGlobals,
 	type ToolFlagModel
 } from "../../cli/flags";
 import { loadToolInventory, type CliTool } from "../../cli/tool-registry";
@@ -257,6 +259,60 @@ describe("parseToolInvocation — global flags", () => {
 
 	it("rejects a non-numeric timeout", () => {
 		expect(() => parse("memory-read", ["--timeout", "soon"])).toThrow(/positive number of milliseconds/);
+	});
+});
+
+describe("global flags — short spellings and explicit falses (FIX-028)", () => {
+	it("registers -h and -V as real globals after a tool name", () => {
+		const help = parse("memory-read", ["-h"]);
+		expect(help.help).toBe(true);
+		expect(help.args).toEqual({});
+
+		const version = parse("memory-read", ["-V"]);
+		expect(version.flags.version).toBe(true);
+
+		// Mixed with a real parameter: the short global still resolves.
+		const mixed = parse("memory-read", ["--query", "auth", "-h"]);
+		expect(mixed.help).toBe(true);
+		expect(mixed.args).toEqual({ query: "auth" });
+	});
+
+	it("keeps -h/-V available on a tool whose own field shadows --json", () => {
+		const model = deriveToolFlagModel(tool("handoff-write"));
+		expect([...model.lookup.keys()]).toContain("h");
+		expect([...model.lookup.keys()]).toContain("V");
+		expect(parse("handoff-write", ["-h"]).help).toBe(true);
+	});
+
+	it("honours an explicit false on a boolean global", () => {
+		expect(parse("memory-read", ["--json-out"]).flags.json).toBe(true);
+		expect(parse("memory-read", ["--json-out=false"]).flags.json).toBe(false);
+		expect(parse("memory-read", ["--json-out=0"]).flags.json).toBe(false);
+		expect(parse("memory-read", ["--json-out=true"]).flags.json).toBe(true);
+	});
+
+	it("honours --silent=false so diagnostics stay on", () => {
+		expect(parse("memory-read", ["--quiet"]).flags.quiet).toBe(true);
+		expect(parse("memory-read", ["--silent=false"]).flags.quiet).toBe(false);
+		expect(parse("memory-read", ["--no-color=0"]).flags.noColor).toBe(false);
+	});
+
+	it("accepts the boolean vocabulary and rejects anything else, naming the typed spelling", () => {
+		expect(parse("memory-read", ["--json-out=yes"]).flags.json).toBe(true);
+		expect(parse("memory-read", ["--json-out=no"]).flags.json).toBe(false);
+		expect(() => parse("memory-read", ["--json-out=maybe"])).toThrow(/--json-out expects true or false, got 'maybe'/);
+	});
+
+	it("consumes short and inline-valued globals before a built-in command word", () => {
+		const flags = emptyGlobalFlags();
+		const consumed = scanLeadingGlobals(["-h", "about"], flags, { readStdin: () => "" });
+		expect(consumed).toBe(1);
+		expect(flags.help).toBe(true);
+
+		const valued = emptyGlobalFlags();
+		scanLeadingGlobals(["--json=false", "-V"], valued, { readStdin: () => "" });
+		expect(valued.json).toBe(false);
+		expect(valued.version).toBe(true);
 	});
 });
 

@@ -135,10 +135,10 @@ export function toolHelp(tool: CliTool): string {
 	lines.push("");
 	lines.push("GLOBAL OPTIONS");
 	for (const global of model.globals) {
-		if (global.name === "help") continue;
-		const spellings = global.alias === global.flag ? global.flag : `${global.flag}, ${global.alias}`;
+		const parts = global.alias === global.flag ? [global.flag] : [global.flag, global.alias];
+		if (global.short !== null) parts.push(global.short);
 		const shadow = global.shadowed ? "  (tool field owns the default spelling)" : "";
-		lines.push(`  ${pad(spellings, 26)}${collapse(global.description)}${shadow}`);
+		lines.push(`  ${pad(parts.join(", "), 26)}${collapse(global.description)}${shadow}`);
 	}
 	if (model.flags.some((flag) => flag.param === "json" && flag.kind === "boolean")) {
 		lines.push(`  ${pad("", 26)}--json also sets ${tool.name}.json, which is what emits structuredContent`);

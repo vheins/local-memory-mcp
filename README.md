@@ -200,7 +200,7 @@ local-memory-mcp about --json           # version, build stamp, DB path, daemon 
 local-memory-mcp memory-read --code MEM-024
 local-memory-mcp memory-read --query auth --limit 5 --json
 local-memory-mcp task-write --title "Wire the parser" --phase Implementation
-local-memory-mcp codebase-read --content "callLocalTool" --repo vheins/local-memory-mcp
+local-memory-mcp codebase-read --content "callLocalTool" --repo vheins/local-memory-mcp --repoPath .   # disk-reading mode needs its root
 ```
 
 Whole arguments can also come from one place — `--args '<json>'` or

@@ -105,6 +105,41 @@ describe("runRootCli — help and version", () => {
 		}
 	});
 
+	it("answers the short globals after a tool name, without issuing a call", async () => {
+		const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
+			name: string;
+			version: string;
+		};
+
+		const helped = await run(["memory-read", "-h"]);
+		expect(helped.result).toEqual({ handled: true, exitCode: 0 });
+		expect(helped.stdout).toContain("--query");
+		expect(helped.calls).toEqual([]);
+
+		const versioned = await run(["memory-read", "--query", "auth", "-V"]);
+		expect(versioned.result).toEqual({ handled: true, exitCode: 0 });
+		expect(versioned.stdout).toBe(`${pkg.name} ${pkg.version}`);
+		expect(versioned.calls).toEqual([]);
+
+		const generic = await run(["tools", "call", "memory-read", "-h"]);
+		expect(generic.result).toEqual({ handled: true, exitCode: 0 });
+		expect(generic.stdout).toContain("JSON SCHEMA");
+		expect(generic.calls).toEqual([]);
+	});
+
+	it("honours an explicit false on the output global instead of printing JSON", async () => {
+		const off = await run(["memory-read", "--query", "auth", "--json-out=false"]);
+		expect(off.result).toEqual({ handled: true, exitCode: 0 });
+		expect(off.stdout).toBe("ok");
+
+		const on = await run(["memory-read", "--query", "auth", "--json-out"]);
+		expect(on.stdout).toBe(JSON.stringify({ ok: true }, null, 2));
+
+		const leading = await run(["--json-out=false", "tools", "list"]);
+		expect(leading.stdout).toContain("memory-read");
+		expect(leading.stdout).not.toContain('"count"');
+	});
+
 	it("prints '<name> <semver>' for --version/-V/version, without the build stamp", async () => {
 		const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
 			name: string;

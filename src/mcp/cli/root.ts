@@ -252,6 +252,11 @@ async function runToolCall(
 		io.stdout(toolHelp(tool));
 		return 0;
 	}
+	if (flags.version) {
+		// `-V` / `--version` are globals: they answer before any call is made.
+		io.stdout(versionLine());
+		return 0;
+	}
 	if (!parsed.flags.quiet) for (const note of parsed.notes) io.stderr(note);
 	if (!tool.available) {
 		io.stderr(`${name} is not callable from the CLI: ${tool.unavailableReason ?? "unavailable"}`);

@@ -72,6 +72,13 @@ describe("toolHelp", () => {
 		expect(text).toContain("handoff-write.json");
 	});
 
+	it("shows the short global spellings (-h, -V) in a tool's flag table", () => {
+		const text = toolHelp(tools.find((tool) => tool.name === "memory-read")!);
+
+		expect(text).toMatch(/--help, --usage, -h/);
+		expect(text).toMatch(/--version, --ver, -V/);
+	});
+
 	it("marks required parameters", () => {
 		const text = toolHelp(tools.find((tool) => tool.name === "codebase-index")!);
 		expect(text).toMatch(/\*--repo\b/);
