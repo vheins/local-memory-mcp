@@ -86,7 +86,7 @@
 		"qs": "^6.15.0",
 		"sweetalert2": "^11.26.25",
 		"typescript": "^6.0.3",
-		"web-tree-sitter": "^0.26.11",
+		"web-tree-sitter": "^0.27.2",
 		"zod": "^4.3.5"
 	},
 	"devDependencies": {
