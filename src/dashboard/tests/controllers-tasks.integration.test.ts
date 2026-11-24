@@ -15,7 +15,7 @@ import { randomUUID } from "crypto";
 // Resolves to the mocked context module (vi.mock lives in controllers.shared.ts,
 // which must be imported before any route module). `db` is re-exported from the
 // shared module so the test seeds the SAME in-memory store the route mounts.
-import { db, mcpClient } from "./controllers.shared";
+import { db } from "./controllers.shared";
 import { startControllersServer } from "./controllers.shared";
 
 describe("Dashboard Controllers — Tasks API", () => {
@@ -128,7 +128,6 @@ describe("Dashboard Controllers — Tasks API", () => {
 
 		beforeEach(async () => {
 			exclusiveSpy = vi.spyOn(db, "withExclusiveWrite").mockImplementation(async (fn) => fn());
-			(mcpClient.callTool as ReturnType<typeof vi.fn>).mockClear();
 		});
 
 		afterEach(() => {
@@ -178,9 +177,13 @@ describe("Dashboard Controllers — Tasks API", () => {
 				expect(body.data.attributes.count).toBe(0);
 			});
 
-			it("status/update routes each id through mcpClient.callTool('task-update', …)", async () => {
-				const id1 = seedTask();
-				const id2 = seedTask();
+			it("status/update applies each id in-process through the real task-update state machine", async () => {
+				// FIX-013: TaskService.bulkAction dispatches in-process via
+				// callLocalTool — there is no embedded MCP child to assert on.
+				// FIX-033's state machine rejects pending -> completed, so seed a
+				// legal predecessor status (in_progress -> completed is allowed).
+				const id1 = seedTask({ status: "in_progress" });
+				const id2 = seedTask({ status: "in_progress" });
 
 				const res = await postAction("/api/tasks/action", {
 					action: "status",
@@ -191,17 +194,10 @@ describe("Dashboard Controllers — Tasks API", () => {
 				const body = (await res.json()) as Record<string, any>;
 				expect(body.data.attributes.count).toBe(2);
 
-				// The dashboard delegates task mutations to the MCP client —
-				// assert the mocked callTool got the right tool + per-id args.
-				expect(mcpClient.callTool).toHaveBeenCalledTimes(2);
-				expect(mcpClient.callTool).toHaveBeenCalledWith(
-					"task-update",
-					expect.objectContaining({ id: id1, status: "completed", agent: "dashboard", structured: true })
-				);
-				expect(mcpClient.callTool).toHaveBeenCalledWith(
-					"task-update",
-					expect.objectContaining({ id: id2, status: "completed", agent: "dashboard", structured: true })
-				);
+				// Observable outcome proves the real in-process executor ran: both
+				// rows transitioned through the canonical task-write state machine.
+				expect(db.tasks.getTaskById(id1)?.status).toBe("completed");
+				expect(db.tasks.getTaskById(id2)?.status).toBe("completed");
 			});
 
 			it("update with no updates payload → 400", async () => {
