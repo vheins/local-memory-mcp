@@ -232,12 +232,18 @@ export function createFileSink(logDir: string, maxFiles = 5): LogSink {
  *   1. copy the newest `maxBytes` of the live file to `<name>.<epoch>`;
  *   2. truncate the live file to zero — the next `O_APPEND` write lands at
  *      offset 0 of the SAME inode, so the worker keeps logging with no reopen;
- *   3. delete rotated siblings beyond `maxFiles`.
+ *   3. delete rotated siblings beyond `maxFiles`; then, when `appendAfterRotate`
+ *      is provided, append that sentinel to the live file — used to re-plant
+ *      the daemon's `DAEMON_READY <url>` discovery line, which daemon-guard.ts
+ *      reads from this file's tail.
  *
  * Lines appended in the tiny window between the copy and the truncate are
  * lost; that is the accepted copytruncate trade-off (this file duplicates the
  * rotated `mcp-*.log` content). Best effort by design — every failure returns
  * `skipped` and never throws, so rotation can never break the daemon.
+ *
+ * @param appendAfterRotate Sentinel re-appended to the live file ONLY after a
+ *   rotation actually happened; a file under the cap is never touched.
  *
  * @returns `noop` when the file is absent or under the cap; `rotated` with the
  *   source/rotated paths when the copy+truncate+prune ran; `skipped` with a
@@ -246,7 +252,8 @@ export function createFileSink(logDir: string, maxFiles = 5): LogSink {
 export function rotateOversizedLogFile(
 	logFile: string,
 	maxBytes: number,
-	maxFiles = 5
+	maxFiles = 5,
+	appendAfterRotate?: string
 ): { action: "rotated" | "noop" | "skipped"; from?: string; to?: string; reason?: string } {
 	try {
 		if (maxBytes <= 0 || maxFiles < 1) {
@@ -279,6 +286,17 @@ export function rotateOversizedLogFile(
 		fs.writeFileSync(rotated, tail);
 		// Offsets are not reset by truncate; O_APPEND makes that irrelevant.
 		fs.truncateSync(logFile, 0);
+
+		// Caller-supplied sentinel (FIX-038: the daemon's `DAEMON_READY <url>`
+		// discovery line). Appended ONLY here — i.e. only on an actual
+		// rotation — so a file under the cap is never touched or duplicated.
+		if (appendAfterRotate !== undefined && appendAfterRotate !== "") {
+			try {
+				fs.appendFileSync(logFile, appendAfterRotate.endsWith("\n") ? appendAfterRotate : `${appendAfterRotate}\n`);
+			} catch {
+				/* best effort — discovery falls back to the port default */
+			}
+		}
 
 		// Prune oldest-first (lexicographic order == chronological for the
 		// epoch-prefixed names). `maxFiles` counts rotated siblings only; the

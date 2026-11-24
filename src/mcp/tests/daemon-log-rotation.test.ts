@@ -121,4 +121,39 @@ describe("rotateOversizedLogFile (FIX-038)", () => {
 		const retained = fs.readFileSync(result.to!, "utf8");
 		expect(retained.endsWith("TAIL")).toBe(true);
 	});
+
+	it("keeps the DAEMON_READY discovery line in the live file after a rotation", () => {
+		const dir = makeTempDir();
+		const logFile = path.join(dir, "daemon.log");
+		// A boot line that a rotation would otherwise truncate away, plus
+		// enough noise to cross the cap.
+		fs.writeFileSync(logFile, `${"z".repeat(1024)}2026-01-01T00:00:00.000Z DAEMON_READY http://127.0.0.1:3456\n`);
+
+		const ready = "2026-01-01T01:00:00.000Z DAEMON_READY http://127.0.0.1:3999 (pid 42, build test)\n";
+		const result = rotateOversizedLogFile(logFile, 256, 5, ready);
+
+		expect(result.action).toBe("rotated");
+		// The discovery line is present in the LIVE file (what daemon-guard.ts
+		// tails), not only in the rotated sibling.
+		const live = fs.readFileSync(logFile, "utf8");
+		expect(live).toContain("DAEMON_READY http://127.0.0.1:3999");
+		// Exactly one DAEMON_READY line — the re-append must not duplicate.
+		expect(live.match(/DAEMON_READY/g)).toHaveLength(1);
+		// The discovery regex used by dashboard/lib/daemon-guard.ts still
+		// resolves the non-default port from the live file.
+		const matches = [...live.matchAll(/DAEMON_READY\s+(https?:\/\/\S+)/g)];
+		expect(matches.at(-1)?.[1]).toBe("http://127.0.0.1:3999");
+	});
+
+	it("does not append the sentinel line when the file is under the cap", () => {
+		const dir = makeTempDir();
+		const logFile = path.join(dir, "daemon.log");
+		fs.writeFileSync(logFile, "small\n");
+
+		const result = rotateOversizedLogFile(logFile, 1024, 5, "DAEMON_READY http://127.0.0.1:3999\n");
+
+		expect(result.action).toBe("noop");
+		// No rotation -> no append -> the file is untouched (no duplicate line).
+		expect(fs.readFileSync(logFile, "utf8")).toBe("small\n");
+	});
 });

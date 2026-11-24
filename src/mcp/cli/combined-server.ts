@@ -522,16 +522,24 @@ export async function runDaemonWorker(options: RunDaemonWorkerOptions = {}): Pro
 	// FIX-038: daemon.log is written by a raw fd redirect (`stdio: ["ignore",
 	// fd, fd]` in startDaemon), so unlike the rotated mcp-*.log sink it has no
 	// size bound — observed growing to ~126 MB. Rotate on a schedule while the
-	// worker runs (the fd is O_APPEND, so a logrotate-style rename keeps the
-	// same inode and no lines are lost; see rotateOversizedLogFile).
+	// worker runs (copytruncate: the newest bytes are copied to a sibling and
+	// the live file is truncated in place, so the O_APPEND fd needs no reopen;
+	// the small copy window can drop a few lines — see rotateOversizedLogFile).
+	// Every actual rotation re-appends `DAEMON_READY <url>`: daemon-guard.ts
+	// resolves the serving URL by tailing daemon.log for that line, so without
+	// the re-append a daemon on a non-default `PORT` would fall back to the
+	// wrong port once the boot line scrolls into a rotated sibling.
 	const daemonLog = resolveDaemonPaths().logFile;
-	rotateOversizedLogFile(daemonLog, DAEMON_LOG_MAX_BYTES, DAEMON_LOG_MAX_FILES);
-	const rotationTimer = setInterval(() => {
-		const result = rotateOversizedLogFile(daemonLog, DAEMON_LOG_MAX_BYTES, DAEMON_LOG_MAX_FILES);
+	const readyLine = (): string =>
+		`${new Date().toISOString()} DAEMON_READY ${handle.url} (pid ${process.pid}, build ${formatBuildInfo()})\n`;
+	const rotateDaemonLog = (): void => {
+		const result = rotateOversizedLogFile(daemonLog, DAEMON_LOG_MAX_BYTES, DAEMON_LOG_MAX_FILES, readyLine());
 		if (result.action === "rotated") {
 			logger.info("[Daemon] daemon.log rotated", { from: result.from, to: result.to });
 		}
-	}, DAEMON_LOG_ROTATE_INTERVAL_MS);
+	};
+	rotateDaemonLog();
+	const rotationTimer = setInterval(rotateDaemonLog, DAEMON_LOG_ROTATE_INTERVAL_MS);
 	// Never keep the process alive for the timer alone.
 	rotationTimer.unref();
 
