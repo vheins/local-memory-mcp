@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.53.0] — 2026-11-24
+
+### Added
+
+- **Root CLI command surface with tool flags (TASK-011):** the `local-memory-mcp` CLI now exposes the MCP tool set as direct subcommands with per-tool flags, so scripts can call a single tool without a full MCP session.
+- **`codebase-read` DUPLICATES mode (FEAT-001):** exact and near duplicate-body analysis over indexed file content, for dedup review and consolidation.
+- **Daemon database takeover (TASK-004):** on start, the daemon takes over the database from a manually started dashboard process, so the two no longer fight over the SQLite file.
+
+### Changed
+
+- **Per-domain `memory.db` split into five files (TASK-002/003, ADR-012 supersedes ADR-011):** data-preserving; `main` is untouched until the drop phase, consumers get new `*.db` files alongside `memory.db`.
+- **Domain migration split into copy / disk-guard / orchestration modules (REFACTOR-001).**
+
+### Fixed
+
+- **Orphaned-lock cleanup after daemon takeover.**
+- **Standalone dashboard refuses to start when the daemon owns the DB.**
+- **Embedded MCP child writer guard.**
+- **Standard vector cleanup moved to purge phase 3.**
+- **Half-archived task archives reconciled on startup.**
+- **DUPLICATES cache, name, and near-pass corrections.**
+- **Content-cache key includes the resolved repo root.**
+- **`task-write` exports `TaskWriteOptions` as a type.**
+- **Dashboard dispatches tool calls with `json:true`.**
+- **Short CLI globals and explicit falses honoured.**
+
+## [0.52.5] — 2026-11-18
+
+Dependency-maintenance release only; no consumer-facing behaviour change.
+
+### Changed
+
+- Bump `express` to 5.3.0, `chart.js` to 4.6.1, `compromise-dates` to 3.11.0, `typescript-eslint` to 8.72.2, `@sveltejs/vite-plugin-svelte` to 7.3.1, `softprops/action-gh-release` to 3.0.4.
+- Security bumps: `sharp` ^0.35.5, `minimatch` ^11.0.1, `vitest` ^5.0.3.
+
 ## [0.52.4] — 2026-11-05
 
 ### Changed
