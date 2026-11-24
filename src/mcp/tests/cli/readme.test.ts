@@ -19,6 +19,12 @@
  * keeps the LAST pipeline segment that invokes the CLI binary, so the command the
  * dispatcher runs is the documented one however it is spelled.
  *
+ * Fence rule (TASK-017): a fenced block is scanned when its info string starts with
+ * `bash`, `sh` or `console` (case-insensitive, trailing attributes allowed). A CLI
+ * line inside any other fence language FAILS the test — naming that line — unless
+ * the language is listed in `SKIPPED_FENCE_LANGUAGES` with a reason, so a runnable
+ * example cannot hide behind an unusual fence either.
+ *
  * Substitution rule: the codebase-read example writes its root as `.` (run from
  * the repo root). The test replaces that one token with its fixture directory and
  * indexes the fixture under the same `--repo` name the README uses, so the flags,
@@ -61,6 +67,16 @@ const ROOT_PLACEHOLDERS = new Set([".", "<repo-root>", "$REPO_ROOT"]);
 
 /** The CLI binary names a documented example may invoke. */
 const CLI_BINARIES = ["local-memory-mcp", "mcp-memory-server"];
+
+/** Fence info strings whose bodies hold executable commands (lowercased first token). */
+const SHELL_FENCE_LANGUAGES = new Set(["bash", "sh", "console"]);
+
+/**
+ * Fence languages that may hold CLI-looking text without being executed, with the
+ * reason. Empty on purpose: every entry re-opens the silent-skip hole this test
+ * closes, so add one only when the language's body can never be a command.
+ */
+const SKIPPED_FENCE_LANGUAGES: Record<string, string> = {};
 
 /** One documented example: the fence line as written and the command it holds. */
 interface DocumentedExample {
@@ -151,26 +167,43 @@ function mentionsBinary(line: string): boolean {
 	return CLI_BINARIES.some((binary) => new RegExp(`\\b${binary}\\b`).test(line));
 }
 
-/** Every example line from the README's "Command line" section. */
+/** Lowercased first token of a fence's info string (` ```bash title=x ` → `bash`). */
+function fenceInfoLanguage(openingLine: string): string {
+	const info = openingLine.replace(/^`+/, "").trim();
+	return (info.split(/\s+/)[0] ?? "").toLowerCase();
+}
+
+/** Every example line from the README's "Command line" section, plus loud failures. */
 function documentedExamples(markdown: string): DocumentedExample[] {
 	const lines = markdown.split("\n");
 	const start = lines.findIndex((line) => line.startsWith("### ") && line.includes("Command line"));
 	expect(start, "README is missing its '### ⌨️ Command line' section").toBeGreaterThanOrEqual(0);
 
 	const examples: DocumentedExample[] = [];
-	let inBashFence = false;
+	const offenders: string[] = [];
+	let open: string | null = null; // fence language while a block is open
 	for (const line of lines.slice(start + 1)) {
 		if (line.startsWith("### ")) break;
-		if (line.trimStart().startsWith("```")) {
-			inBashFence = inBashFence ? false : line.trimStart() === "```bash";
+		const trimmed = line.trimStart();
+		if (trimmed.startsWith("```")) {
+			open = open === null ? fenceInfoLanguage(trimmed) : null;
 			continue;
 		}
-		if (!inBashFence) continue;
+		if (open === null) continue;
 		const raw = stripComment(line);
 		if (raw.length === 0 || raw.startsWith("#")) continue;
 		if (!mentionsBinary(raw)) continue;
-		examples.push({ raw, command: normalizeCommand(raw) });
+		const language = open.toLowerCase();
+		if (SHELL_FENCE_LANGUAGES.has(language)) {
+			examples.push({ raw, command: normalizeCommand(raw) });
+		} else if (!(language in SKIPPED_FENCE_LANGUAGES)) {
+			offenders.push(raw);
+		}
 	}
+	expect(
+		offenders,
+		`CLI lines in unrecognized fences — classify them: execute via a bash/sh/console fence, or list the language in SKIPPED_FENCE_LANGUAGES with a reason:\n${offenders.join("\n")}`
+	).toEqual([]);
 	return examples;
 }
 
@@ -194,6 +227,20 @@ const PREFIX_FORMS: ReadonlyArray<{ note: string; line: string; command: string 
 	{ note: "pipeline", line: "cat args.json | local-memory-mcp about --json", command: "local-memory-mcp about --json" },
 	{ note: "other binary name", line: "mcp-memory-server about --json", command: "mcp-memory-server about --json" }
 ];
+
+/** The fence languages a documented example may live in, with the opening line. */
+const FENCE_FORMS: ReadonlyArray<{ note: string; opening: string; line: string }> = [
+	{ note: "bash fence", opening: "```bash", line: "local-memory-mcp about --json" },
+	{ note: "sh fence", opening: "```sh", line: "local-memory-mcp about --json" },
+	{ note: "console fence", opening: "```console", line: "local-memory-mcp about --json" },
+	{ note: "uppercase fence", opening: "```SH", line: "local-memory-mcp about --json" },
+	{ note: "fence with attributes", opening: '```bash title="cli"', line: "local-memory-mcp about --json" }
+];
+
+/** A README-shaped markdown document holding one fenced block. */
+function fenced(opening: string, body: string[]): string {
+	return ["### ⌨️ Command line", "", opening, ...body, "```", ""].join("\n");
+}
 
 describe("README — command line examples", () => {
 	it("executes every documented example a temp fixture can serve", async () => {
@@ -261,7 +308,7 @@ describe("README — command line examples", () => {
 
 	it("extracts and runs a documented command under every supported prefix", async () => {
 		for (const form of PREFIX_FORMS) {
-			const markdown = ["### ⌨️ Command line", "", "```bash", form.line, "```", ""].join("\n");
+			const markdown = fenced("```bash", [form.line]);
 			const examples = documentedExamples(markdown);
 
 			expect(
@@ -275,4 +322,38 @@ describe("README — command line examples", () => {
 			expect(result, `the ${form.note} form failed to run\n${stderr}`).toEqual({ handled: true, exitCode: 0 });
 		}
 	}, 120_000);
+
+	it("extracts and runs a documented command from every recognized fence language", async () => {
+		for (const form of FENCE_FORMS) {
+			const markdown = fenced(form.opening, [form.line]);
+			const examples = documentedExamples(markdown);
+
+			expect(
+				examples.map((entry) => entry.raw),
+				`the ${form.note} must be extracted`
+			).toEqual([form.line]);
+			expect(examples[0]?.command, `the ${form.note} must yield the CLI command`).toBe(form.line);
+
+			const argv = tokenize(form.line).slice(1);
+			const { result, stderr } = await run(argv);
+			expect(result, `the ${form.note} failed to run\n${stderr}`).toEqual({ handled: true, exitCode: 0 });
+		}
+	}, 120_000);
+
+	it("fails loudly when a CLI line hides in an unrecognized fence language", () => {
+		const markdown = fenced("```text", ["local-memory-mcp about --json"]);
+		expect(() => documentedExamples(markdown)).toThrow(/unrecognized fences[\s\S]*local-memory-mcp about --json/);
+	});
+
+	it("skips a listed fence language only while its reason stands", () => {
+		const markdown = fenced("```text", ["local-memory-mcp about --json"]);
+		SKIPPED_FENCE_LANGUAGES.text = "synthetic fixture: this language is never a shell";
+		try {
+			expect(documentedExamples(markdown)).toEqual([]);
+		} finally {
+			delete SKIPPED_FENCE_LANGUAGES.text;
+		}
+		// The allowlist entry is gone again: the same line must be loud once more.
+		expect(() => documentedExamples(markdown)).toThrow(/unrecognized fences/);
+	});
 });
