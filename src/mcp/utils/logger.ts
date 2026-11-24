@@ -272,8 +272,9 @@ export function rotateOversizedLogFile(
 
 		// Timestamped sibling; a same-millisecond collision gets a numeric
 		// suffix so a fast second rotation never overwrites the first.
-		let rotated = `${logFile}.${Date.now()}`;
-		for (let n = 1; fs.existsSync(rotated); n++) rotated = `${logFile}.${Date.now()}-${n}`;
+		const stamp = Date.now();
+		let rotated = `${logFile}.${stamp}`;
+		for (let n = 1; fs.existsSync(rotated); n++) rotated = `${logFile}.${stamp}-${n}`;
 
 		fs.writeFileSync(rotated, tail);
 		// Offsets are not reset by truncate; O_APPEND makes that irrelevant.
