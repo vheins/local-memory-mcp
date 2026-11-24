@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.53.1] — 2026-11-24
+
+### Fixed
+
+- **Daemon.log size-bounded via copytruncate rotation (`FIX-038`):** an unbounded `daemon.log` grew without limit; it is now rotated with the existing rotation policy when it exceeds its size cap. The daemon log is kept separate from the MCP log because it uniquely carries the `DAEMON_READY` line read by the dashboard's daemon guard.
+
 ## [0.53.0] — 2026-11-24
 
 ### Added
