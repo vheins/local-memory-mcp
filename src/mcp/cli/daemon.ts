@@ -42,6 +42,8 @@ import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { loadConfigFileEnv, resolveConfigDir, type EnvMap } from "../utils/config-file";
 import { isProcessAlive, readPidFile, removePidFile, writePidFile } from "../utils/pid-file";
+import { rotateOversizedLogFile } from "../utils/logger";
+import { DAEMON_LOG_MAX_BYTES, DAEMON_LOG_MAX_FILES } from "../utils/constants";
 import { takeOverDatabaseFromStandaloneDashboard } from "./dashboard-takeover";
 
 /** Absolute paths the daemon manages. */
@@ -309,6 +311,10 @@ export function startDaemon(options: { paths?: DaemonPaths; io?: Partial<DaemonI
 
 	let child: ChildProcess;
 	try {
+		// FIX-038: bound the log before forking — a previous run may have left
+		// the raw-redirect file over the size cap (launchd/systemd write to the
+		// same path without any rotation of their own).
+		rotateOversizedLogFile(paths.logFile, DAEMON_LOG_MAX_BYTES, DAEMON_LOG_MAX_FILES);
 		const logFd = fs.openSync(paths.logFile, "a");
 		try {
 			child = io.spawnFn(io.execPath, [io.workerArg, "--daemon-worker"], {

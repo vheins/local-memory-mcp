@@ -39,7 +39,7 @@ import { CAPABILITIES } from "../capabilities";
 import { resolveDaemonPaths, removeLock } from "./daemon";
 import { isRecoverableLockError } from "../storage/write-lock";
 import { formatBuildInfo, getBuildInfo } from "../utils/build-info";
-import { logger } from "../utils/logger";
+import { logger, rotateOversizedLogFile } from "../utils/logger";
 import { bugCapture } from "../utils/bug-capture";
 import { reuseTelemetry } from "../utils/reuse-telemetry";
 import { runStartupMaintenance } from "../services/maintenance-job";
@@ -50,6 +50,9 @@ import type { DeferredStartupPass } from "../services/startup-deferral";
 import { kickOffStartupAutoIndex } from "../services/startup-auto-index";
 import {
 	DAEMON_DEFAULT_PORT,
+	DAEMON_LOG_MAX_BYTES,
+	DAEMON_LOG_MAX_FILES,
+	DAEMON_LOG_ROTATE_INTERVAL_MS,
 	EMBEDDING_LAZY_WARMUP,
 	MCP_DAEMON_SESSION_IDLE_TTL_MS,
 	VACUUM_ON_STARTUP
@@ -515,6 +518,22 @@ export async function runDaemonWorker(options: RunDaemonWorkerOptions = {}): Pro
 		process.on("SIGINT", () => void shutdown("SIGINT"));
 		process.on("SIGTERM", () => void shutdown("SIGTERM"));
 	}
+
+	// FIX-038: daemon.log is written by a raw fd redirect (`stdio: ["ignore",
+	// fd, fd]` in startDaemon), so unlike the rotated mcp-*.log sink it has no
+	// size bound — observed growing to ~126 MB. Rotate on a schedule while the
+	// worker runs (the fd is O_APPEND, so a logrotate-style rename keeps the
+	// same inode and no lines are lost; see rotateOversizedLogFile).
+	const daemonLog = resolveDaemonPaths().logFile;
+	rotateOversizedLogFile(daemonLog, DAEMON_LOG_MAX_BYTES, DAEMON_LOG_MAX_FILES);
+	const rotationTimer = setInterval(() => {
+		const result = rotateOversizedLogFile(daemonLog, DAEMON_LOG_MAX_BYTES, DAEMON_LOG_MAX_FILES);
+		if (result.action === "rotated") {
+			logger.info("[Daemon] daemon.log rotated", { from: result.from, to: result.to });
+		}
+	}, DAEMON_LOG_ROTATE_INTERVAL_MS);
+	// Never keep the process alive for the timer alone.
+	rotationTimer.unref();
 
 	// Park forever (see the "Never resolves" note above): returning here would
 	// re-enter server.ts's normal boot path and double-boot the store + worker.

@@ -1,4 +1,5 @@
-import fs from "fs";
+import fs from "node:fs";
+import path from "node:path";
 
 type LogLevel = "debug" | "info" | "notice" | "warning" | "error" | "critical" | "alert" | "emergency";
 
@@ -217,4 +218,84 @@ export function createFileSink(logDir: string, maxFiles = 5): LogSink {
 			/* best effort */
 		}
 	};
+}
+
+/**
+ * Bound a raw-append log file (FIX-038): rotate it once past `maxBytes` and
+ * keep only the newest `maxFiles` rotated siblings (oldest deleted first).
+ *
+ * Built for files written by an EXTERNAL writer through a long-lived fd (the
+ * daemon worker's redirected stdout/stderr), which Node cannot re-point at a
+ * new file mid-run. The rotation therefore uses the classic copytruncate
+ * sequence that respects that fd's `O_APPEND` semantics:
+ *
+ *   1. copy the newest `maxBytes` of the live file to `<name>.<epoch>`;
+ *   2. truncate the live file to zero — the next `O_APPEND` write lands at
+ *      offset 0 of the SAME inode, so the worker keeps logging with no reopen;
+ *   3. delete rotated siblings beyond `maxFiles`.
+ *
+ * Lines appended in the tiny window between the copy and the truncate are
+ * lost; that is the accepted copytruncate trade-off (this file duplicates the
+ * rotated `mcp-*.log` content). Best effort by design — every failure returns
+ * `skipped` and never throws, so rotation can never break the daemon.
+ *
+ * @returns `noop` when the file is absent or under the cap; `rotated` with the
+ *   source/rotated paths when the copy+truncate+prune ran; `skipped` with a
+ *   `reason` on invalid arguments or any filesystem failure.
+ */
+export function rotateOversizedLogFile(
+	logFile: string,
+	maxBytes: number,
+	maxFiles = 5
+): { action: "rotated" | "noop" | "skipped"; from?: string; to?: string; reason?: string } {
+	try {
+		if (maxBytes <= 0 || maxFiles < 1) {
+			return { action: "skipped", reason: "invalid_arguments" };
+		}
+		if (!fs.existsSync(logFile)) return { action: "noop" };
+		const size = fs.statSync(logFile).size;
+		if (size < maxBytes) return { action: "noop" };
+
+		const dir = path.dirname(logFile);
+		const base = path.basename(logFile);
+
+		// Read only the newest `maxBytes` so an already-huge file (the reported
+		// 126 MB case) is trimmed in one pass instead of copied whole.
+		const keep = Math.min(size, maxBytes);
+		const tail = Buffer.alloc(keep);
+		const fd = fs.openSync(logFile, "r");
+		try {
+			fs.readSync(fd, tail, 0, keep, size - keep);
+		} finally {
+			fs.closeSync(fd);
+		}
+
+		// Timestamped sibling; a same-millisecond collision gets a numeric
+		// suffix so a fast second rotation never overwrites the first.
+		let rotated = `${logFile}.${Date.now()}`;
+		for (let n = 1; fs.existsSync(rotated); n++) rotated = `${logFile}.${Date.now()}-${n}`;
+
+		fs.writeFileSync(rotated, tail);
+		// Offsets are not reset by truncate; O_APPEND makes that irrelevant.
+		fs.truncateSync(logFile, 0);
+
+		// Prune oldest-first (lexicographic order == chronological for the
+		// epoch-prefixed names). `maxFiles` counts rotated siblings only; the
+		// live file is separate.
+		const siblings = fs
+			.readdirSync(dir)
+			.filter((f) => f.startsWith(`${base}.`) && /^\d+(?:-\d+)?$/.test(f.slice(base.length + 1)))
+			.sort();
+		while (siblings.length > maxFiles) {
+			try {
+				fs.unlinkSync(path.join(dir, siblings.shift()!));
+			} catch {
+				break;
+			}
+		}
+
+		return { action: "rotated", from: logFile, to: rotated };
+	} catch (error) {
+		return { action: "skipped", reason: String((error as Error)?.message ?? error) };
+	}
 }

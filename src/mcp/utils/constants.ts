@@ -830,6 +830,18 @@ export const MCP_HTTP_SSE_IDLE_TIMEOUT_MS = envInt("MCP_HTTP_SSE_IDLE_TIMEOUT_MS
 // the stream is still bounded. Env-overridable; `0` disables the pings.
 export const MCP_HTTP_SSE_KEEPALIVE_INTERVAL_MS = envInt("MCP_HTTP_SSE_KEEPALIVE_INTERVAL_MS", 25 * 1000);
 
+// ── Daemon log rotation (FIX-038) ─────────────────────────────────────────
+// daemon.log is written by a raw fd redirect (the forked worker's stdio), so
+// unlike the date-stamped mcp-*.log sink it had NO size bound — observed at
+// 126 MB and growing on every request log line. These knobs bound it:
+// rotate when the live file passes the size cap (rename keeps the fd's
+// O_APPEND inode, so the worker keeps writing without a reopen), and keep
+// only the newest N rotated files. Checked at worker boot and on the
+// interval below; env-overridable per repo convention. `0` disables a knob.
+export const DAEMON_LOG_MAX_BYTES = envInt("DAEMON_LOG_MAX_BYTES", 10 * 1024 * 1024);
+export const DAEMON_LOG_MAX_FILES = envInt("DAEMON_LOG_MAX_FILES", 5);
+export const DAEMON_LOG_ROTATE_INTERVAL_MS = envInt("DAEMON_LOG_ROTATE_INTERVAL_MS", 60 * 1000);
+
 // ── Generic worker_threads pool (FEAT-DAEMON-002B) ────────────────────────
 // Size of the generic bounded `node:worker_threads` pool (src/mcp/workers/
 // pool.ts). A pool of N keeps N OS threads busy on CPU-bound work (tree-sitter
